@@ -17,11 +17,9 @@ from unittest.mock import AsyncMock, MagicMock
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants import G8EE_COMPONENT, LogLevel
 from app.constants.generated_paths import PortConstants
-from app.db.db_service import DBService
-from app.db.kv_service import KVService
+from app.db.document_service import DocumentService
 from app.models.cache import CacheOperationResult
 from app.models.settings import G8eeAppSettings
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.execution_service import OperatorExecutionService
 from app.services.operator.file_service import OperatorFileService
@@ -36,7 +34,6 @@ from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 from tests.fakes.fake_operator_clients import (
     FakeDBClient,
     FakeG8eClient,
-    FakeKVClient,
 )
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -47,71 +44,42 @@ from .fake_execution_service import FakeExecutionService
 from .fake_investigation_service import FakeInvestigationService
 
 
-def create_pure_mock_cache_aside() -> MagicMock:
-    """Returns a MagicMock spec'd to CacheAsideService with AsyncMock methods.
+def create_pure_mock_document_service() -> MagicMock:
+    """Returns a MagicMock spec'd to DocumentService with AsyncMock methods.
 
-    Use this for pure unit tests of services that depend on CacheAsideService
+    Use this for pure unit tests of services that depend on DocumentService
     where you only want to assert on the service-level interface calls.
     """
-    mock = MagicMock(spec=CacheAsideService)
-    # CRUD operations
+    mock = MagicMock(spec=DocumentService)
     mock.create_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.get_document = AsyncMock(return_value=None)
-    mock.get_document_with_cache = AsyncMock(return_value=None)
+    mock.get_document_data = AsyncMock(return_value=None)
     mock.update_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.delete_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.query_documents = AsyncMock(return_value=[])
     mock.append_to_array = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.batch_create_documents = AsyncMock(return_value=CacheOperationResult(success=True))
 
-    # KV operations
-    mock.kv_get = AsyncMock()
-    mock.kv_set = AsyncMock()
-    mock.kv_delete = AsyncMock()
-    mock.kv_exists = AsyncMock()
-    mock.kv_lrange = AsyncMock()
-    mock.kv_rpush = AsyncMock()
-    mock.kv_ltrim = AsyncMock()
-
-    # Query cache
-    mock.get_query_result = AsyncMock()
-    mock.set_query_result = AsyncMock()
-    mock.invalidate_query_cache = AsyncMock()
-
-    # Misc
-    mock.get_stats = AsyncMock()
-    mock.clear_all = AsyncMock()
-    mock.invalidate_collection = AsyncMock()
-
     return mock
 
 
-class FakeWiredCacheAsideService(CacheAsideService):
-    """Real CacheAsideService wired to in-memory fake clients.
+class FakeWiredDocumentService(DocumentService):
+    """Real DocumentService wired to an in-memory fake DB client.
 
-    Exposes the raw fake clients as ``kv_cache_client`` / ``db_client`` so
-    tests can seed or inspect the underlying stores directly.
+    Exposes the fake client as ``db_client`` so tests can seed or inspect the
+    underlying store directly.
     """
 
-    def __init__(self, kv_cache_client: FakeKVClient, db_client: FakeDBClient) -> None:
-        super().__init__(
-            kv=KVService(kv_cache_client),
-            db=DBService(db_client),
-            component_name=G8EE_COMPONENT,
-        )
-        self.kv_cache_client = kv_cache_client
+    def __init__(self, db_client: FakeDBClient) -> None:
+        super().__init__(db_client, component_name=G8EE_COMPONENT)
         self.db_client = db_client
 
 
-def create_mock_cache_aside_service(
-    kv_cache_client: FakeKVClient | None = None,
+def create_fake_document_service(
     db_client: FakeDBClient | None = None,
-) -> FakeWiredCacheAsideService:
-    """Wired CacheAsideService with fake KV/DB for tests."""
-    return FakeWiredCacheAsideService(
-        kv_cache_client=kv_cache_client or FakeKVClient(),
-        db_client=db_client or FakeDBClient(),
-    )
+) -> FakeWiredDocumentService:
+    """Wired DocumentService with a fake DB client for tests."""
+    return FakeWiredDocumentService(db_client=db_client or FakeDBClient())
 
 
 def create_mock_tool_executor() -> MagicMock:

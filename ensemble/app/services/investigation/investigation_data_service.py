@@ -20,6 +20,7 @@ from app.constants import (
     HistoryActor,
 )
 from app.constants.message_sender import MessageSender
+from app.db.document_service import DocumentService
 from app.errors import ResourceNotFoundError
 from app.models.base import TypeAdapter
 from app.models.cache import FieldFilter
@@ -37,7 +38,6 @@ from app.models.investigations import (
 from app.models.operators import CommandInternalResult
 from app.models.pubsub_messages import G8eMessage
 from app.models.tool_results import FileEditResult
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
 from app.utils.keyed_lock import KeyedAsyncLock
@@ -49,7 +49,7 @@ _CONVERSATION_HISTORY_ADAPTER = TypeAdapter(list[ConversationHistoryMessage])
 
 
 class InvestigationDataService(InvestigationDataServiceProtocol):
-    def __init__(self, cache: CacheAsideService, governance_client: GovernanceClient):
+    def __init__(self, cache: DocumentService, governance_client: GovernanceClient):
         self.cache = cache
         self.collection = DB_COLLECTION_INVESTIGATIONS
         self._history_lock = KeyedAsyncLock()
@@ -116,7 +116,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
         """Fetch a single investigation document by ID."""
-        doc_data = await self.cache.get_document_with_cache(
+        doc_data = await self.cache.get_document_data(
             collection=self.collection,
             document_id=investigation_id,
         )
@@ -469,7 +469,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
         """Retrieve full conversation history for an investigation."""
-        data = await self.cache.get_document_with_cache(
+        data = await self.cache.get_document_data(
             collection=self.collection,
             document_id=investigation_id,
         )

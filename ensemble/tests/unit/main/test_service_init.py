@@ -9,8 +9,8 @@
 Unit tests for initialize_g8e_service.
 
 Covers:
-- use_db_config=True: loads config from operator via cache_aside_service
-- use_db_config=True without cache_aside_service: raises ValueError
+- use_db_config=True: loads config from operator via document_service
+- use_db_config=True without document_service: raises ValueError
 - use_db_config=False with explicit settings: uses supplied settings object
 - use_db_config=False without settings: creates G8eeAppSettings()
 """
@@ -27,7 +27,7 @@ from app.utils.service_init import initialize_g8e_service
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
-def _make_cache_aside_service():
+def _make_document_service():
     return MagicMock()
 
 
@@ -36,17 +36,17 @@ def _make_settings():
 
 
 class TestUseDbConfigTrue:
-    async def test_requires_cache_aside_service(self):
-        with pytest.raises(ConfigurationError, match="cache_aside_service"):
+    async def test_requires_document_service(self):
+        with pytest.raises(ConfigurationError, match="document_service"):
             await initialize_g8e_service(
                 "test-service",
                 settings=MagicMock(),
-                cache_aside_service=None,
+                document_service=None,
                 use_db_config=True,
             )
 
     async def test_loads_settings_from_db(self):
-        cache_svc = _make_cache_aside_service()
+        cache_svc = _make_document_service()
         expected_settings = _make_settings()
 
         with patch(
@@ -57,7 +57,7 @@ class TestUseDbConfigTrue:
             result = await initialize_g8e_service(
                 "test-service",
                 settings=MagicMock(),
-                cache_aside_service=cache_svc,
+                document_service=cache_svc,
                 use_db_config=True,
             )
 
@@ -65,7 +65,7 @@ class TestUseDbConfigTrue:
         assert result is expected_settings
 
     async def test_returns_settings_from_db(self):
-        cache_svc = _make_cache_aside_service()
+        cache_svc = _make_document_service()
         loaded_settings = _make_settings()
 
         with patch(
@@ -76,7 +76,7 @@ class TestUseDbConfigTrue:
             result = await initialize_g8e_service(
                 "my-service",
                 settings=MagicMock(),
-                cache_aside_service=cache_svc,
+                document_service=cache_svc,
                 use_db_config=True,
             )
 
@@ -89,7 +89,7 @@ class TestUseDbConfigFalse:
         result = await initialize_g8e_service(
             "test-service",
             settings=explicit_settings,
-            cache_aside_service=MagicMock(),
+            document_service=MagicMock(),
             use_db_config=False,
         )
         assert result is explicit_settings
@@ -99,7 +99,7 @@ class TestUseDbConfigFalse:
         result = await initialize_g8e_service(
             "test-service",
             settings=settings,
-            cache_aside_service=MagicMock(),
+            document_service=MagicMock(),
             use_db_config=False,
         )
         assert result is settings

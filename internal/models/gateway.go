@@ -65,24 +65,6 @@ type DocQueryRequest struct {
 	Limit   int         `json:"limit,omitempty"`
 }
 
-// KVSetRequest is the typed body for PUT /kv/{key}.
-type KVSetRequest struct {
-	Value string `json:"value"`
-	TTL   int    `json:"ttl,omitempty"`
-}
-
-// KVExpireRequest is the typed body for PUT /kv/{key}/_expire.
-type KVExpireRequest struct {
-	TTL int `json:"ttl"`
-}
-
-// KVPatternRequest is the typed body for POST /kv/_keys, /kv/_scan, /kv/_delete_pattern.
-type KVPatternRequest struct {
-	Pattern string `json:"pattern,omitempty"`
-	Cursor  int    `json:"cursor,omitempty"`
-	Count   int    `json:"count,omitempty"`
-}
-
 // PubSubPublishRequest is the typed body for POST /pubsub/publish.
 type PubSubPublishRequest struct {
 	Channel string          `json:"channel"`
@@ -108,32 +90,6 @@ type StateResponse struct {
 // StatusResponse is the typed response for simple ok/error replies.
 type StatusResponse struct {
 	Status constants.GatewayMode `json:"status"`
-}
-
-// KVGetResponse is the typed response for GET /kv/{key}.
-type KVGetResponse struct {
-	Value string `json:"value"`
-}
-
-// KVTTLResponse is the typed response for GET /kv/{key}/_ttl.
-type KVTTLResponse struct {
-	TTL int `json:"ttl"`
-}
-
-// KVKeysResponse is the typed response for POST /kv/_keys.
-type KVKeysResponse struct {
-	Keys []string `json:"keys"`
-}
-
-// KVScanResponse is the typed response for POST /kv/_scan.
-type KVScanResponse struct {
-	Cursor int      `json:"cursor"`
-	Keys   []string `json:"keys"`
-}
-
-// KVDeletePatternResponse is the typed response for POST /kv/_delete_pattern.
-type KVDeletePatternResponse struct {
-	Deleted int64 `json:"deleted"`
 }
 
 // PubSubPublishResponse is the typed response for POST /pubsub/publish.

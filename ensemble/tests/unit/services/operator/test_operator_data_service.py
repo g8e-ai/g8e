@@ -27,12 +27,12 @@ class TestOperatorDataService:
         return MagicMock()
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service, mock_gateway_client):
-        return OperatorDataService(mock_cache_aside_service, mock_gateway_client)
+    def service(self, mock_document_service, mock_gateway_client):
+        return OperatorDataService(mock_document_service, mock_gateway_client)
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     async def test_get_operator_success(self, service, mock_gateway_client):
         operator_id = "op-123"
@@ -88,7 +88,7 @@ class TestOperatorDataService:
 
     async def test_get_cli_session_success(self, service, mock_cache):
         cli_session_id = "cli-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "id": cli_session_id,
             "session_type": "cli",
             "user_id": "user-test",
@@ -104,12 +104,12 @@ class TestOperatorDataService:
         assert isinstance(result, CliSessionDocument)
         assert result.id == cli_session_id
         assert result.operator_session_id == "op-sess-123"
-        mock_cache.get_document_with_cache.assert_called_once()
+        mock_cache.get_document_data.assert_called_once()
 
     async def test_validate_cli_session_ownership_success(self, service, mock_cache):
         cli_session_id = "cli-123"
         operator_session_id = "op-sess-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "id": cli_session_id,
             "session_type": "cli",
             "user_id": "user-test",
@@ -125,7 +125,7 @@ class TestOperatorDataService:
     async def test_validate_cli_session_ownership_mismatch(self, service, mock_cache):
         cli_session_id = "cli-123"
         operator_session_id = "op-sess-wrong"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "id": cli_session_id,
             "session_type": "cli",
             "user_id": "user-test",

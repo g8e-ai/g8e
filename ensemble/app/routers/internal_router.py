@@ -29,17 +29,18 @@ from app.constants import (
     Priority,
 )
 from app.constants.message_sender import MessageSender
+from app.db.document_service import DocumentService
 from app.dependencies import (
     get_g8ee_api_key_service,
     get_g8ee_app_settings,
     get_g8ee_approval_service,
     get_g8ee_attachment_service,
-    get_g8ee_cache_aside_service,
     get_g8ee_case_data_service,
     get_g8ee_certificate_service,
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_chat_user_settings,
+    get_g8ee_document_service,
     get_g8ee_event_service,
     get_g8ee_gateway_operator_client,
     get_g8ee_investigation_seed_service,
@@ -137,7 +138,6 @@ from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.ai.title_generator import generate_case_title
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.data.case_data_service import CaseDataService
 from app.services.evaluation.investigation_seed import InvestigationSeedService
@@ -991,7 +991,7 @@ async def delete_case(
     request: CaseDeleteRequest,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
-    cache_aside_service: CacheAsideService = Depends(get_g8ee_cache_aside_service),
+    document_service: DocumentService = Depends(get_g8ee_document_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
     request_context: RequestContext = Depends(get_request_context),
 ):
@@ -1034,7 +1034,7 @@ async def delete_case(
     )
 
     # Delete all memories for this case (scoped to user for tenant isolation)
-    memory_docs = await cache_aside_service.query_documents(
+    memory_docs = await document_service.query_documents(
         collection=DB_COLLECTION_MEMORIES,
         field_filters=[
             FieldFilter(field="user_id", op="==", value=case_user_id).model_dump(mode="json"),
@@ -1046,7 +1046,7 @@ async def delete_case(
         for memory_doc in memory_docs:
             memory_id = memory_doc.get("investigation_id")
             if memory_id:
-                await cache_aside_service.delete_document(
+                await document_service.delete_document(
                     collection=DB_COLLECTION_MEMORIES, document_id=memory_id
                 )
                 logger.info(

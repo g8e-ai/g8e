@@ -13,7 +13,7 @@ deterministic Merkle root, a Gateway signature, and a commitment
 whose `prev_root` chains to the previous commitment in the deployment.
 
 These tests exercise the real `ReputationDataService` backed by a real
-`CacheAsideService` with in-memory fakes for the KV/DB clients per the
+`DocumentService` with an in-memory fake DB client per the
 no-mocks-on-internal-services policy in `docs/testing.md`.
 """
 
@@ -73,10 +73,10 @@ def _expected_signature(
 
 class TestCommitReputation:
     @pytest.fixture
-    def service(self, fake_cache_aside_service) -> ReputationDataService:
+    def service(self, fake_document_service) -> ReputationDataService:
 
         async def _write_through(collection, document_id, updates, **kwargs):
-            return await fake_cache_aside_service.db_client.update_document(
+            return await fake_document_service.db_client.update_document(
                 collection=collection,
                 document_id=document_id,
                 data=updates,
@@ -97,7 +97,7 @@ class TestCommitReputation:
             )
 
         gov.sign_reputation_commitment = AsyncMock(side_effect=_sign)
-        return ReputationDataService(fake_cache_aside_service, gov)
+        return ReputationDataService(fake_document_service, gov)
 
     @pytest.fixture
     def seeded_states(self) -> list[ReputationState]:
@@ -289,7 +289,7 @@ class TestCommitReputation:
             )
 
     async def test_db_write_failure_propagates_and_leaves_no_commitment(
-        self, service, seeded_states, fake_cache_aside_service
+        self, service, seeded_states, fake_document_service
     ):
         await _seed_states(service, seeded_states)
 
@@ -297,7 +297,7 @@ class TestCommitReputation:
         async def _boom(*_args, **_kwargs):
             raise RuntimeError("db offline")
 
-        fake_cache_aside_service.db_client.update_document.side_effect = _boom
+        fake_document_service.db_client.update_document.side_effect = _boom
 
         with pytest.raises(DatabaseError):
             await commit_reputation(

@@ -48,8 +48,8 @@ def recursive_serialize(value: Any) -> Any:
     """Recursively convert Pydantic models to plain dicts for boundary crossing.
 
     Intended for dict/list inputs only (e.g., raw DB responses). For models,
-    use ``model.model_dump(mode="json")`` directly. Used by CacheAsideService
-    to flatten datetime-bearing dicts returned from the DB (cache_aside.py:281).
+    use ``model.model_dump(mode="json")`` directly. Used by DocumentService
+    to flatten datetime-bearing dicts returned from the DB.
     """
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json", exclude_none=True)

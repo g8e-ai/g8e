@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
     from app.clients.db_client import DBClient
-    from app.clients.kv_cache_client import KVCacheClient
     from app.models.settings import G8eeAppSettings
     from app.services.infra.internal_http_client import InternalHttpClient
     from app.services.service_factory import AllServices
@@ -29,7 +28,6 @@ class G8eeAppState(Protocol):
 
     # Core transport clients
     db_client: DBClient
-    kv_cache_client: KVCacheClient
     blob_client: BlobClient
     internal_http_client: InternalHttpClient
 

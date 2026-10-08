@@ -63,19 +63,19 @@ def _make_commitment(
 
 class TestReputationStateCrud:
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
+    def service(self, mock_document_service):
         mock_governance_client = MagicMock()
         mock_governance_client.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
         return ReputationDataService(
-            mock_cache_aside_service, governance_client=mock_governance_client
+            mock_document_service, governance_client=mock_governance_client
         )
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     async def test_get_state_returns_model(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "agent_id": "axiom",
             "scalar": 0.5,
             "updated_at": "2026-04-24T12:00:00Z",
@@ -86,13 +86,13 @@ class TestReputationStateCrud:
         assert isinstance(result, ReputationState)
         assert result.agent_id == "axiom"
         assert result.scalar == 0.5
-        mock_cache.get_document_with_cache.assert_called_once_with(
+        mock_cache.get_document_data.assert_called_once_with(
             collection=DB_COLLECTION_REPUTATION_STATE,
             document_id="axiom",
         )
 
     async def test_get_state_missing_returns_none(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         assert await service.get_state("axiom") is None
 
     async def test_get_state_empty_id_raises(self, service):
@@ -100,7 +100,7 @@ class TestReputationStateCrud:
             await service.get_state("")
 
     async def test_get_state_db_error_wraps(self, service, mock_cache):
-        mock_cache.get_document_with_cache.side_effect = RuntimeError("boom")
+        mock_cache.get_document_data.side_effect = RuntimeError("boom")
         with pytest.raises(DatabaseError):
             await service.get_state("axiom")
 
@@ -117,7 +117,7 @@ class TestReputationStateCrud:
         assert [s.agent_id for s in results] == ["axiom", "concord", "variance"]
 
     async def test_upsert_state_creates_when_absent(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         context = RequestContext(
             web_session_id="test-sess",
             user_id="test-user",
@@ -132,7 +132,7 @@ class TestReputationStateCrud:
         assert kwargs["merge"] is False
 
     async def test_upsert_state_updates_when_present(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "agent_id": "axiom",
             "scalar": 0.5,
             "updated_at": "2026-04-24T12:00:00Z",
@@ -152,16 +152,16 @@ class TestReputationStateCrud:
 
 class TestReputationCommitmentCrud:
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
+    def service(self, mock_document_service):
         mock_governance_client = MagicMock()
         mock_governance_client.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
         return ReputationDataService(
-            mock_cache_aside_service, governance_client=mock_governance_client
+            mock_document_service, governance_client=mock_governance_client
         )
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     async def test_create_commitment_writes_to_collection(self, service, mock_cache):
         c = _make_commitment()
@@ -181,13 +181,13 @@ class TestReputationCommitmentCrud:
 
     async def test_get_commitment_round_trips(self, service, mock_cache):
         c = _make_commitment()
-        mock_cache.get_document_with_cache.return_value = c.model_dump(mode="json")
+        mock_cache.get_document_data.return_value = c.model_dump(mode="json")
         result = await service.get_commitment(c.id)
         assert isinstance(result, ReputationCommitment)
         assert result.merkle_root == c.merkle_root
 
     async def test_get_commitment_missing_returns_none(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         assert await service.get_commitment("missing") is None
 
     async def test_get_latest_commitment_picks_first_result(self, service, mock_cache):

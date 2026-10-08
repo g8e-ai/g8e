@@ -42,7 +42,7 @@ from app.services.infra.llm_role_settings import (
 )
 
 if TYPE_CHECKING:
-    from app.services.cache.cache_aside import CacheAsideService
+    from app.db.document_service import DocumentService
 
 
 @runtime_checkable
@@ -63,18 +63,18 @@ class SettingsServiceProtocol(Protocol):
 
 
 class SettingsService:
-    """Service for managing g8ee settings with bootstrap loading and cache-aside logic."""
+    """Service for managing g8ee settings with bootstrap loading from the Gateway."""
 
     def __init__(
         self,
-        cache_aside_service: CacheAsideService | None = None,
+        document_service: DocumentService | None = None,
     ) -> None:
-        self._cache_aside = cache_aside_service
+        self._documents = document_service
         self._logger = logging.getLogger(__name__)
 
-    def attach_cache_aside(self, cache_aside_service: CacheAsideService) -> None:
-        """Attach the cache-aside service once it is constructed after bootstrap."""
-        self._cache_aside = cache_aside_service
+    def attach_document_service(self, document_service: DocumentService) -> None:
+        """Attach the document service once it is constructed after bootstrap."""
+        self._documents = document_service
 
     def get_local_settings(self) -> G8eeAppSettings:
         """Load canonical defaults and local LLM credentials."""
@@ -204,11 +204,11 @@ class SettingsService:
         return user_settings.llm
 
     async def get_app_settings(self) -> G8eeAppSettings:
-        """Load platform settings from operator via CacheAsideService."""
-        if not self._cache_aside:
+        """Load platform settings from operator via DocumentService."""
+        if not self._documents:
             return self.get_local_settings()
 
-        doc_dict = await self._cache_aside.get_document_with_cache(
+        doc_dict = await self._documents.get_document_data(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC,
         )
@@ -226,11 +226,11 @@ class SettingsService:
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:
         """Load per-request settings for a specific user."""
-        if not self._cache_aside:
-            raise ConfigurationError("CacheAsideService required for user settings")
+        if not self._documents:
+            raise ConfigurationError("DocumentService required for user settings")
 
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        user_doc_dict = await self._cache_aside.get_document_with_cache(
+        user_doc_dict = await self._documents.get_document_data(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id,
         )
@@ -261,23 +261,20 @@ class SettingsService:
         )
 
     async def update_user_settings(self, user_id: str, new_settings: G8eeUserSettings) -> None:
-        """Update user settings in the database and invalidate the local cache."""
-        if not self._cache_aside:
-            raise ConfigurationError("CacheAsideService required for writing settings")
+        """Update user settings in the Gateway document store."""
+        if not self._documents:
+            raise ConfigurationError("DocumentService required for writing settings")
 
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
         doc = UserSettingsDocument(id=user_doc_id, user_id=user_id, settings=new_settings)
 
-        await self._cache_aside.update_document(
+        await self._documents.update_document(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id,
             data=doc.model_dump(mode="json"),
             merge=False,
         )
-        # The next request must read what was just written, including when KV
-        # cache reads are enabled.
-        await self._cache_aside.invalidate_document(DB_COLLECTION_SETTINGS, user_doc_id)
 
     async def get_llm_role_settings(self, user_id: str) -> LLMRoleSettingsResponse:
         """Return the caller's provider connections and per-role selections with keys masked."""

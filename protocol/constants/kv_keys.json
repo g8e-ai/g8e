@@ -5,16 +5,6 @@
       "value": "g8e",
       "_python_const": "CACHE_PREFIX"
     },
-    "CacheDoc": {
-      "_go_const": "KVKeyCacheDoc",
-      "value": "g8e:cache:doc:{collection}:{id}",
-      "_python_const": "CACHE_DOC"
-    },
-    "CacheQuery": {
-      "_go_const": "KVKeyCacheQuery",
-      "value": "g8e:cache:query:{collection}:{hash}",
-      "_python_const": "CACHE_QUERY"
-    },
     "SessionWeb": {
       "_go_const": "KVKeySessionWeb",
       "value": "g8e:sessions:{session.type}:{session.id}",

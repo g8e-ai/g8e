@@ -69,7 +69,7 @@ class ReputationDataService:
         if not agent_id:
             raise ValidationError("agent_id is required")
         try:
-            doc = await self.cache.get_document_with_cache(
+            doc = await self.cache.get_document_data(
                 collection=self.state_collection,
                 document_id=agent_id,
             )
@@ -121,7 +121,7 @@ class ReputationDataService:
         if not state.agent_id:
             raise ValidationError("ReputationState.agent_id is required")
         try:
-            existing = await self.cache.get_document_with_cache(
+            existing = await self.cache.get_document_data(
                 collection=self.state_collection,
                 document_id=state.agent_id,
             )
@@ -141,9 +141,7 @@ class ReputationDataService:
         except DatabaseError:
             raise
         except Exception as exc:
-            logger.exception(
-                "Failed to upsert reputation_state for %s: %s", state.agent_id, exc
-            )
+            logger.exception("Failed to upsert reputation_state for %s: %s", state.agent_id, exc)
             raise DatabaseError(
                 message=f"Failed to upsert reputation_state for {state.agent_id}: {exc}",
                 code=ErrorCode.DB_WRITE_ERROR,
@@ -192,9 +190,7 @@ class ReputationDataService:
         except DatabaseError:
             raise
         except Exception as exc:
-            logger.exception(
-                "Failed to create reputation_commitment %s: %s", commitment.id, exc
-            )
+            logger.exception("Failed to create reputation_commitment %s: %s", commitment.id, exc)
             raise DatabaseError(
                 message=f"Failed to create reputation_commitment: {exc}",
                 code=ErrorCode.DB_WRITE_ERROR,
@@ -207,7 +203,7 @@ class ReputationDataService:
         if not commitment_id:
             raise ValidationError("commitment_id is required")
         try:
-            doc = await self.cache.get_document_with_cache(
+            doc = await self.cache.get_document_data(
                 collection=self.commitments_collection,
                 document_id=commitment_id,
             )
@@ -216,9 +212,7 @@ class ReputationDataService:
             doc.setdefault("id", commitment_id)
             return ReputationCommitment.model_validate(doc)
         except Exception as exc:
-            logger.exception(
-                "Failed to get reputation_commitment %s: %s", commitment_id, exc
-            )
+            logger.exception("Failed to get reputation_commitment %s: %s", commitment_id, exc)
             raise DatabaseError(
                 message=f"Failed to get reputation_commitment: {exc}",
                 code=ErrorCode.DB_QUERY_ERROR,

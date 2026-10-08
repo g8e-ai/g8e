@@ -46,7 +46,6 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_retention ON documents(
     WHERE collection = 'platform_enrollments';
 
 -- KV store with TTL
--- Must be defined before document triggers that reference it.
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -57,30 +56,13 @@ CREATE TABLE IF NOT EXISTS kv_store (
 CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
 CREATE INDEX IF NOT EXISTS idx_kv_tier ON kv_store(state_tier);
 
--- Trigger to invalidate KV cache when a document is inserted
-CREATE TRIGGER IF NOT EXISTS trg_documents_insert_kv
-AFTER INSERT ON documents
-BEGIN
-    DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || NEW.collection || ':' || NEW.id;
-    DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*';
-END;
-
--- Trigger to invalidate KV cache when a document is updated (only when data changes)
-CREATE TRIGGER IF NOT EXISTS trg_documents_update_kv
-AFTER UPDATE ON documents
-WHEN OLD.data IS NOT NEW.data
-BEGIN
-    DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || NEW.collection || ':' || NEW.id;
-    DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*';
-END;
-
--- Trigger to invalidate KV cache when a document is deleted
-CREATE TRIGGER IF NOT EXISTS trg_documents_delete_kv
-AFTER DELETE ON documents
-BEGIN
-    DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || OLD.collection || ':' || OLD.id;
-    DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || OLD.collection || ':*';
-END;
+-- The g8e:cache:doc/query KV copies of document rows and their trigger-driven
+-- invalidation are removed. Existing databases drop the triggers and the
+-- uncommitted cache rows before the commitment triggers below are replaced.
+DROP TRIGGER IF EXISTS trg_documents_insert_kv;
+DROP TRIGGER IF EXISTS trg_documents_update_kv;
+DROP TRIGGER IF EXISTS trg_documents_delete_kv;
+DELETE FROM kv_store WHERE key GLOB 'g8e:cache:*';
 
 -- SSE event buffer: per-routing-target ring buffer for reconnection replay.
 -- Every row carries user_id (ownership/identity, always NOT NULL) plus exactly
@@ -141,7 +123,7 @@ DROP TABLE IF EXISTS state_root;
 -- Incremental state Merkle commitment, owned by StateRootService.
 -- Triggers record each changed committed row in the writer's own transaction;
 -- a root read rehashes only those leaves and their bucket ancestor paths.
--- Cache keys (g8e:cache:*), nonces and SSE events are not committed.
+-- Nonces and SSE events live in their own tables and are not committed.
 CREATE TABLE IF NOT EXISTS state_commitment_dirty (
     source TEXT NOT NULL,
     k1     TEXT NOT NULL,
@@ -206,7 +188,6 @@ END;
 DROP TRIGGER IF EXISTS trg_kv_store_insert_commitment;
 CREATE TRIGGER trg_kv_store_insert_commitment
 AFTER INSERT ON kv_store
-WHEN NEW.key NOT LIKE 'g8e:cache:%'
 BEGIN
     INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', NEW.key, ''
         WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = NEW.key AND k2 = '');
@@ -219,17 +200,14 @@ WHEN OLD.key IS NOT NEW.key OR OLD.value IS NOT NEW.value
   OR OLD.expires_at IS NOT NEW.expires_at OR OLD.state_tier IS NOT NEW.state_tier
 BEGIN
     INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', OLD.key, ''
-        WHERE OLD.key NOT LIKE 'g8e:cache:%'
-          AND NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = OLD.key AND k2 = '');
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = OLD.key AND k2 = '');
     INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', NEW.key, ''
-        WHERE NEW.key NOT LIKE 'g8e:cache:%'
-          AND NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = NEW.key AND k2 = '');
+        WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = NEW.key AND k2 = '');
 END;
 
 DROP TRIGGER IF EXISTS trg_kv_store_delete_commitment;
 CREATE TRIGGER trg_kv_store_delete_commitment
 AFTER DELETE ON kv_store
-WHEN OLD.key NOT LIKE 'g8e:cache:%'
 BEGIN
     INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', OLD.key, ''
         WHERE NOT EXISTS (SELECT 1 FROM state_commitment_dirty WHERE source = 'kv_store' AND k1 = OLD.key AND k2 = '');

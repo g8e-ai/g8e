@@ -55,11 +55,8 @@ async def detailed_health_check(
     state = cast(G8eeAppState, request.app.state)
     services = getattr(state, "services", None)
     clients_status = {
-        "cache_aside_service": "up"
-        if services and getattr(services, "cache_aside_service", None)
-        else "down",
-        "operator_kv": "up"
-        if hasattr(state, "kv_cache_client") and state.kv_cache_client
+        "document_service": "up"
+        if services and getattr(services, "document_service", None)
         else "down",
         "internal_http_client": "up"
         if services and getattr(services, "internal_http_client", None)

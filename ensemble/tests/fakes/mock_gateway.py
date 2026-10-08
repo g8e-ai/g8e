@@ -12,7 +12,7 @@ integration tests can run without a real Go gateway binary.
 
 Implements:
   - HTTP endpoints: /api/v1/health, /api/v1/data/{collection}/{id},
-    /api/v1/kv/{key}, /api/v1/blobs/{ns}/{id}
+    /api/v1/blobs/{ns}/{id}
   - WebSocket pub/sub at /api/v1/pubsub/stream using the same protobuf wire
     protocol (PubSubMessage / PubSubEvent) as the real GatewayWebSocketHandler.
 
@@ -20,7 +20,7 @@ TLS:
   PubSubClient unconditionally forces wss://, so the mock gateway starts
   an aiohttp HTTPS server with a self-signed certificate.  The generated
   CA cert path is exposed via ``MockGateway.ca_cert_path`` so that
-  DBClient, KVCacheClient, BlobClient, and PubSubClient can all connect
+  DBClient, BlobClient, and PubSubClient can all connect
   with a matching TLSConfig.
 
 Usage (pytest fixture)::
@@ -32,13 +32,12 @@ Usage (pytest fixture)::
         yield gw
         await gw.stop()
 
-    async def test_kv(mock_gateway):
-        settings = mock_gateway.gateway_settings
+    async def test_db(mock_gateway):
         tls = mock_gateway.tls_config
-        kv = KVCacheClient(http_url=settings.http_url, tls_config=tls)
-        await kv.connect()
-        assert kv.is_healthy()
-        await kv.close()
+        db = DBClient(tls_config=tls)
+        await db.connect()
+        assert db.is_healthy()
+        await db.close()
 """
 
 from __future__ import annotations
@@ -62,7 +61,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
 
-from app.constants import CACHE_TTL_DEFAULT, GatewayAPIPaths, PubSubAction, PubSubWireEventType
+from app.constants import GatewayAPIPaths, PubSubAction, PubSubWireEventType
 from app.models.settings import GatewaySettings, TLSConfig
 
 logger = logging.getLogger(__name__)
@@ -153,39 +152,6 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
 # ---------------------------------------------------------------------------
 # In-memory stores
 # ---------------------------------------------------------------------------
-
-
-class _KVStore:
-    """Dict-backed KV store matching the operator /kv API surface."""
-
-    def __init__(self) -> None:
-        self._store: dict[str, str] = {}
-
-    async def get(self, key: str) -> str | None:
-        return self._store.get(key)
-
-    async def set(self, key: str, value: str, ttl: int = 0) -> None:
-        self._store[key] = value
-
-    async def delete(self, key: str) -> bool:
-        return self._store.pop(key, None) is not None
-
-    async def expire(self, key: str, ttl: int) -> bool:
-        return key in self._store
-
-    async def ttl(self, key: str) -> int:
-        if key not in self._store:
-            return -2
-        return -1
-
-    async def keys(self, pattern: str = "*") -> list[str]:
-        return [k for k in self._store if fnmatch.fnmatch(k, pattern)]
-
-    async def delete_pattern(self, pattern: str) -> int:
-        keys = [k for k in self._store if fnmatch.fnmatch(k, pattern)]
-        for k in keys:
-            del self._store[k]
-        return len(keys)
 
 
 class _DocStore:
@@ -363,7 +329,7 @@ class MockGateway:
     """In-memory mock g8e gateway for integration tests.
 
     Starts an aiohttp HTTPS server with a self-signed certificate on a random
-    port.  Implements the HTTP endpoints (health, db, kv, blob) and the
+    port.  Implements the HTTP endpoints (health, db, blob) and the
     WebSocket pub/sub protocol (/ws/pubsub) that g8ee clients expect.
 
     Attributes:
@@ -371,7 +337,6 @@ class MockGateway:
         gateway_settings: GatewaySettings with http_url, pubsub_url, blob_url
             pointing at the mock server.
         tls_config: TLSConfig with ca_cert_path set (no client cert required).
-        kv: Direct access to the in-memory KV store (for test assertions).
         db: Direct access to the in-memory document store.
         blob: Direct access to the in-memory blob store.
     """
@@ -383,7 +348,6 @@ class MockGateway:
         self._cert_path = cert_path
         self._key_path = key_path
 
-        self.kv = _KVStore()
         self.db = _DocStore()
         self.blob = _BlobStore()
         self._broker = _PubSubBroker()
@@ -411,8 +375,6 @@ class MockGateway:
             http_url=base,
             pubsub_url=f"wss://localhost:{self._port}",
             blob_url=base,
-            default_ttl=CACHE_TTL_DEFAULT,
-            enable_cache_read=False,
         )
 
     @property
@@ -476,17 +438,6 @@ class MockGateway:
             GatewayAPIPaths.DATA_DB + "{collection}/{doc_id}", self._handle_db_delete
         )
         app.router.add_post(GatewayAPIPaths.DATA_DB + "{collection}/_query", self._handle_db_query)
-
-        # KV endpoints (GatewayAPIPaths.KV_PREFIX = "/api/v1/kv/")
-        app.router.add_get(GatewayAPIPaths.KV_PREFIX + "{key}", self._handle_kv_get)
-        app.router.add_put(GatewayAPIPaths.KV_PREFIX + "{key}", self._handle_kv_set)
-        app.router.add_delete(GatewayAPIPaths.KV_PREFIX + "{key}", self._handle_kv_delete)
-        app.router.add_put(GatewayAPIPaths.KV_PREFIX + "{key}/_expire", self._handle_kv_expire)
-        app.router.add_get(GatewayAPIPaths.KV_PREFIX + "{key}/_ttl", self._handle_kv_ttl)
-        app.router.add_post(GatewayAPIPaths.KV_PREFIX + "_keys", self._handle_kv_keys)
-        app.router.add_post(
-            GatewayAPIPaths.KV_PREFIX + "_delete_pattern", self._handle_kv_delete_pattern
-        )
 
         # Blob endpoints (GatewayAPIPaths.DATA_BLOBS_PREFIX = "/api/v1/blobs/")
         app.router.add_put(
@@ -554,49 +505,6 @@ class MockGateway:
             limit=body.get("limit", 100),
         )
         return web.json_response(docs)
-
-    # ------------------------------------------------------------------
-    # HTTP handlers - KV
-    # ------------------------------------------------------------------
-
-    async def _handle_kv_get(self, request: web.Request) -> web.Response:
-        key = unquote(request.match_info["key"])
-        value = await self.kv.get(key)
-        if value is None:
-            return web.json_response({"error": "not found"}, status=404)
-        return web.json_response({"value": value})
-
-    async def _handle_kv_set(self, request: web.Request) -> web.Response:
-        key = unquote(request.match_info["key"])
-        body = await request.json()
-        await self.kv.set(key, body.get("value", ""), body.get("ttl", 0))
-        return web.json_response({"success": True})
-
-    async def _handle_kv_delete(self, request: web.Request) -> web.Response:
-        key = unquote(request.match_info["key"])
-        await self.kv.delete(key)
-        return web.json_response({"success": True})
-
-    async def _handle_kv_expire(self, request: web.Request) -> web.Response:
-        key = unquote(request.match_info["key"])
-        body = await request.json()
-        ok = await self.kv.expire(key, body.get("ttl", 0))
-        return web.json_response({"success": ok})
-
-    async def _handle_kv_ttl(self, request: web.Request) -> web.Response:
-        key = unquote(request.match_info["key"])
-        ttl = await self.kv.ttl(key)
-        return web.json_response({"ttl": ttl})
-
-    async def _handle_kv_keys(self, request: web.Request) -> web.Response:
-        body = await request.json()
-        keys = await self.kv.keys(body.get("pattern", "*"))
-        return web.json_response({"keys": keys})
-
-    async def _handle_kv_delete_pattern(self, request: web.Request) -> web.Response:
-        body = await request.json()
-        count = await self.kv.delete_pattern(body.get("pattern", "*"))
-        return web.json_response({"deleted": count})
 
     # ------------------------------------------------------------------
     # HTTP handlers - Blob

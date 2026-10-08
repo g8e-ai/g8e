@@ -215,9 +215,9 @@ const (
 
 	// Full relative storage DB paths (relative to project root, used as config defaults)
 	OperatorDeploymentStatePath = RuntimeDirname + "/" + DeploymentDirname + "/" + DeploymentStateFileOperator
-	ReplayStoreDBPath          = RuntimeDirname + "/" + ReplayStoreDBFilename
-	ExecutionVaultDBPath       = RuntimeDirname + "/" + ExecutionVaultDBFilename
-	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
+	ReplayStoreDBPath           = RuntimeDirname + "/" + ReplayStoreDBFilename
+	ExecutionVaultDBPath        = RuntimeDirname + "/" + ExecutionVaultDBFilename
+	SuspendedTransactionDBPath  = RuntimeDirname + "/" + SuspendedTxFilename
 
 	// Runtime-relative database paths (relative to RuntimeFileService root).
 	CanonicalDBRelPath            = DataDirname + "/" + DbFilename

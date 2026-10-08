@@ -22,6 +22,7 @@ from app.constants import (
     EventType,
     TaskStatus,
 )
+from app.db.document_service import DocumentService
 from app.errors import (
     BusinessLogicError,
     DatabaseError,
@@ -42,7 +43,6 @@ from app.models.events import SessionEvent
 from app.models.http_context import RequestContext
 from app.models.pubsub_messages import G8eMessage
 from app.models.settings import G8eeAppSettings
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
 from app.utils.time_ids.timestamp import now
 
@@ -52,12 +52,12 @@ logger = logging.getLogger(__name__)
 
 
 class CaseDataService:
-    """Domain service for Case and Task data management using CacheAsideService."""
+    """Domain service for Case and Task data management using DocumentService."""
 
     def __init__(
         self,
         settings: G8eeAppSettings,
-        cache: CacheAsideService,
+        cache: DocumentService,
         event_service: EventService,
         governance_client: GovernanceClient,
     ):
@@ -187,7 +187,7 @@ class CaseDataService:
         logger.info("Retrieving case: %s", case_id, extra={"case_id": case_id})
 
         async def _get():
-            doc_data = await self.cache.get_document_with_cache(
+            doc_data = await self.cache.get_document_data(
                 collection=self.cases_collection,
                 document_id=case_id,
             )

@@ -35,7 +35,7 @@ from app.models.settings import G8eeUserSettings
 from app.models.tool_results import InvestigationContextResult
 from app.services.ai.tool_service import AIToolService
 from app.services.ai.tools import query_investigation_context
-from app.services.cache.cache_aside import CacheAsideService
+from app.db.document_service import DocumentService
 from app.services.evaluation.investigation_seed import InvestigationSeedService
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.investigation_service import InvestigationService
@@ -52,21 +52,19 @@ FAILED_GREP = "recursive_grep_search failed for pattern AUTH_FAILURE"
 
 
 class _DocumentStore:
-    """In-memory document map shared by the cache-aside read and the governed write stand-ins."""
+    """In-memory document map shared by the document read and the governed write stand-ins."""
 
     def __init__(self) -> None:
         self.documents: dict[tuple[str, str], dict[str, Any]] = {}
 
 
-class _StoreCache(CacheAsideService):
-    """Cache-aside read served from the in-memory document store."""
+class _StoreCache(DocumentService):
+    """Document read served from the in-memory document store."""
 
     def __init__(self, store: _DocumentStore) -> None:
         self._store = store
 
-    async def get_document_with_cache(
-        self, collection: str, document_id: str
-    ) -> dict[str, Any] | None:
+    async def get_document_data(self, collection: str, document_id: str) -> dict[str, Any] | None:
         document = self._store.documents.get((collection, document_id))
         return json.loads(json.dumps(document)) if document is not None else None
 

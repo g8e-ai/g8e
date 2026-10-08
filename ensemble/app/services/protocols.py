@@ -100,7 +100,7 @@ from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 if TYPE_CHECKING:
     from app.clients.http_client import HTTPClient
-    from app.services.cache.cache_aside import CacheAsideService
+    from app.db.document_service import DocumentService
 
 
 @runtime_checkable
@@ -171,60 +171,12 @@ class EventServiceProtocol(Protocol):
 
 
 @runtime_checkable
-class KVServiceProtocol(Protocol):
-    """Protocol for Key-Value store service."""
-
-    async def get(self, key: str) -> str | None:
-        """Retrieve a string value by key."""
-        raise NotImplementedError
-
-    async def set(self, key: str, value: str, ex: int | None) -> bool:
-        """Set a string value with optional expiration (seconds)."""
-        raise NotImplementedError
-
-    async def delete(self, *keys: str) -> int:
-        """Delete one or more keys."""
-        raise NotImplementedError
-
-    async def get_json(self, key: str) -> object | None:
-        """Retrieve and parse a JSON value by key."""
-        raise NotImplementedError
-
-    async def set_json(self, key: str, value: object, ex: int | None = None) -> bool:
-        """Serialize and set a JSON value with optional expiration."""
-        raise NotImplementedError
-
-    async def keys(self, pattern: str = "*") -> list[str]:
-        """List keys matching a pattern."""
-        raise NotImplementedError
-
-    async def delete_pattern(self, pattern: str) -> int:
-        """Delete all keys matching a pattern."""
-        raise NotImplementedError
-
-    def is_healthy(self) -> bool:
-        """Check if the service is healthy."""
-        raise NotImplementedError
-
-
-@runtime_checkable
 class DocumentServiceProtocol(Protocol):
-    """Unified protocol for document operations with cache-aside support.
+    """Protocol for g8ee's Gateway document access.
 
-    This protocol consolidates DBServiceProtocol and CacheAsideProtocol into a single
-    authoritative protocol for document operations. All write operations support optional
-    TTL for cache management, and read operations support optional result caching.
+    Every read and write goes to the Gateway's committed document state; g8ee holds
+    no document or query cache.
     """
-
-    @property
-    def kv(self) -> KVServiceProtocol:
-        """Access the underlying KV service for direct cache operations."""
-        raise NotImplementedError
-
-    @property
-    def db(self) -> DocumentServiceProtocol:
-        """Access the underlying document service (for internal use)."""
-        raise NotImplementedError
 
     async def create_document(
         self,
@@ -246,11 +198,11 @@ class DocumentServiceProtocol(Protocol):
         raise NotImplementedError
 
     async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult:
-        """Delete a document from a collection and invalidate cache."""
+        """Delete a document from a collection."""
         raise NotImplementedError
 
     async def get_document(self, collection: str, document_id: str) -> DocumentResult:
-        """Retrieve a document by ID (checks cache first)."""
+        """Retrieve a document by ID."""
         raise NotImplementedError
 
     async def query_collection(
@@ -260,9 +212,8 @@ class DocumentServiceProtocol(Protocol):
         order_by: dict[str, str],
         limit: int,
         select_fields: list[str] | None = None,
-        ttl: int | None = 300,
     ) -> QueryResult:
-        """Query a collection with filters, ordering, and optional result caching."""
+        """Query a collection with filters and ordering."""
         raise NotImplementedError
 
     async def update_with_array_union(
@@ -273,17 +224,15 @@ class DocumentServiceProtocol(Protocol):
         items_to_add: list[Any],
         additional_updates: dict[str, Any],
     ) -> CacheOperationResult:
-        """Atomically append items to an array field with cache invalidation."""
+        """Atomically append items to an array field."""
         raise NotImplementedError
 
     async def batch_write(self, operations: list[BatchWriteOperation]) -> CacheOperationResult:
-        """Perform multiple write operations in batch with cache invalidation."""
+        """Perform multiple write operations in batch."""
         raise NotImplementedError
 
-    async def get_document_with_cache(
-        self, collection: str, document_id: str
-    ) -> dict[str, Any] | None:
-        """Get document with cache-aside pattern."""
+    async def get_document_data(self, collection: str, document_id: str) -> dict[str, Any] | None:
+        """Return the document's data as a dict, or None when it does not exist."""
         raise NotImplementedError
 
     async def query_documents(
@@ -293,8 +242,6 @@ class DocumentServiceProtocol(Protocol):
         order_by: dict[str, str] | None = None,
         limit: int = 100,
         select_fields: list[str] | None = None,
-        ttl: int | None = 300,
-        bypass_cache: bool = False,
     ) -> list[dict[str, Any]]:
         """Query documents returning a list of dicts."""
         raise NotImplementedError
@@ -311,7 +258,7 @@ class DocumentServiceProtocol(Protocol):
         raise NotImplementedError
 
     async def close(self) -> None:
-        """Close the underlying database and cache connections."""
+        """Close the underlying Gateway document client."""
         raise NotImplementedError
 
 
@@ -320,7 +267,7 @@ class OperatorDataServiceProtocol(Protocol):
     """Protocol for operator-specific data operations (pure CRUD)."""
 
     collection: str
-    cache: CacheAsideService
+    cache: DocumentService
 
     async def get_operator(
         self, operator_id: str, *, user_id: str | None = None

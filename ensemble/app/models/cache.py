@@ -53,10 +53,6 @@ class CacheOperationResult(G8eBaseModel):
     document_id: str | None = Field(
         default=None, description="Document ID involved in the operation"
     )
-    cached: bool | None = Field(default=None, description="Whether the item was cached")
-    cache_invalidated: bool | None = Field(
-        default=None, description="Whether cache was invalidated"
-    )
     error: str | None = Field(default=None, description="Error message if operation failed")
 
 
@@ -66,27 +62,6 @@ class BatchOperationResult(G8eBaseModel):
     success: bool = Field(..., description="Whether the batch operation succeeded")
     count: int = Field(default=0, description="Number of documents processed")
     error: str | None = Field(default=None, description="Error message if operation failed")
-
-
-class CacheWarmResult(G8eBaseModel):
-    """Result of a full user cache warm operation."""
-
-    user_id: str = Field(..., description="User whose cache was warmed")
-    cases_count: int = Field(default=0, description="Number of cases warmed")
-    investigations_count: int = Field(default=0, description="Number of investigations warmed")
-    memories_count: int = Field(default=0, description="Number of memories warmed")
-    success: bool = Field(default=True, description="Whether the warm operation succeeded")
-    error: str | None = Field(default=None, description="Error message if operation failed")
-
-
-class CacheContextWarmResult(G8eBaseModel):
-    """Result of warming cache for a specific case context."""
-
-    case: bool = Field(default=False, description="Whether the case was successfully warmed")
-    investigation: bool = Field(
-        default=False, description="Whether the investigation was successfully warmed"
-    )
-    memory: bool = Field(default=False, description="Whether the memory was successfully warmed")
 
 
 class BatchCreateDocumentOperation(G8eBaseModel):
@@ -127,16 +102,3 @@ class ArrayRemove:
 
     def __init__(self, values: list[object]):
         self.values = values
-
-
-class CacheStats(G8eBaseModel):
-    """Statistics snapshot for the KV cache service."""
-
-    enabled: bool = Field(..., description="Whether caching is enabled")
-    read_enabled: bool = Field(default=False, description="Whether reading from cache is enabled")
-    healthy: bool = Field(..., description="Whether the KV backend is healthy")
-    document_keys: int = Field(default=0, description="Number of document cache keys")
-    query_keys: int = Field(default=0, description="Number of query cache keys")
-    total_keys: int = Field(default=0, description="Total number of cache keys")
-    default_ttl: int = Field(default=0, description="Default TTL in seconds")
-    error: str | None = Field(default=None, description="Error message if stats retrieval failed")

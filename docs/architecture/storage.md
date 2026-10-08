@@ -45,23 +45,22 @@ Documents g8e's storage architecture: local SQLite databases, persistence topolo
 
 | ID | Rule |
 | --- | --- |
-| INV-STOR-KV-01 | Gateway HTTP KV access requires mTLS authentication and admits only `g8e:cache:doc:` and `g8e:cache:query:` namespaces. Enumeration and deletion patterns MUST begin with an entire allowed literal prefix. Session, nonce, scrubbing-token, and other private keys remain Gateway-owned. |
-| INV-STOR-KV-02 | HTTP cache writes MUST use observed state. Cache keys contribute to neither state root nor `state_version`; document writes invalidate their related document and query cache entries in SQLite. Schema initialization replaces the KV version triggers on existing databases. |
-| INV-STOR-KV-03 | g8ee MUST use Gateway storage primitives and MUST NOT emulate atomic counters, hashes, lists, or nonce reservation through client-side read/modify/write. Disabled cache reads MUST also disable cache warming writes. Governed replay protection belongs to the executing runtime's uniqueness-constrained replay store. |
+| INV-STOR-KV-01 | The Gateway exposes no HTTP KV API. Session, nonce, scrubbing-token, and other KV keys are private to Gateway services. |
+| INV-STOR-KV-02 | No `kv_store` row is a derived copy of a document or query result, and document writes MUST NOT write or delete KV rows. Every `kv_store` row is committed state in the bound or observed tier. Schema initialization drops the legacy document-cache triggers and deletes legacy `g8e:cache:*` rows on existing databases. |
+| INV-STOR-KV-03 | g8ee MUST use Gateway storage primitives and MUST NOT emulate atomic counters, hashes, lists, or nonce reservation through client-side read/modify/write. Governed replay protection belongs to the executing runtime's uniqueness-constrained replay store. |
 
 ## Owned surfaces
 
 | Surface | Owner | Verification |
 | --- | --- | --- |
-| Canonical schema and cache invalidation/version triggers | `internal/services/gateway/db/schema.sql`, `CanonicalDBService.initSchema` | `TestKVStore_CacheMutationsDoNotAdvanceStateVersion`, `TestKVStore_SchemaReopenReplacesOldCacheVersionTriggers` |
+| Canonical schema and state-commitment dirty-mark triggers | `internal/services/gateway/db/schema.sql`, `CanonicalDBService.initSchema` | `TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen`, `TestStateRootService_LegacyDatabaseIsRebuiltOnOpen` |
 | HTTP KV authorization | `DataController.handleKV`, `authorizeKVNamespace` | `TestKVNamespace_RejectsAuthorityKeysAndUnscopedPatterns`, `TestKVNamespace_CacheWritesAreObserved` |
 | Internal KV state and TTL | `KVStoreService` | Gateway KV integration tests |
 | App cache transport and optional cache warming | `ensemble/app/clients/kv_cache_client.py`, `CacheAsideService` | Cache client and disabled-read regressions; Gateway owns invalidation |
 | Replay nonce reservation | `ReplayStoreService` and outbound `SQLReplayStore` | Replay and L4 verification tests |
 | Runtime paths | `RuntimeFileService`, `internal/constants/paths.go` | Isolated runtime fixture tests |
 
-Enrollment admission uses the existing document store and `BEGIN IMMEDIATE` transaction owner. Deduplication, live-request counting, and insertion share one transaction. Partial expression indexes cover enrollment identity, token hash, live capacity, pending expiry, issuance leases, and retention. Token and pending reads decode only matching requests; the cleanup owner explicitly expires abandoned requests and retains completed issuance records. Batch decisions recheck active-owner authority and every fingerprint-bound member in one transaction, recording the same governed receipt ID on every member. These changes do not replace the current full-scan state-root implementation or document cache invalidation triggers.
-
+Enrollment admission uses the existing document store and `BEGIN IMMEDIATE` transaction owner. Deduplication, live-request counting, and insertion share one transaction. Partial expression indexes cover enrollment identity, token hash, live capacity, pending expiry, issuance leases, and retention. Token and pending reads decode only matching requests; the cleanup owner explicitly expires abandoned requests and retains completed issuance records. Batch decisions recheck active-owner authority and every fingerprint-bound member in one transaction, recording the same governed receipt ID on every member.
 ## Procedures
 
 This document does not define a general SQLite backup or recovery procedure. The supported lifecycle operations are owned by CLI commands; confirm flags and defaults with `./g8e <command> --help`.
@@ -109,15 +108,15 @@ The canonical database ([internal/services/storage/](../../internal/services/sto
 
 ### Platform Documents
 
-The document store persists JSON records by collection and identifier. Gateway services use it for users, sessions, Operators, policies, consensus definitions, signer records, enrollment state, passkeys, revocations, and other platform resources. Document writes invalidate related key-value cache entries and advance the state version used to cache state-root calculations.
+The document store persists JSON records by collection and identifier. Gateway services use it for users, sessions, Operators, policies, consensus definitions, signer records, enrollment state, passkeys, revocations, and other platform resources. Document writes touch no key-value rows; each write marks only its own leaf dirty in the incremental state commitment.
 
 ### Key-Value and Blob State
 
 The key-value store persists string values with optional expiration. The blob store persists binary content by namespace and identifier with content type, size, and optional expiration. Both stores distinguish bound state from observed state.
 
-The `/api/v1/kv/` HTTP API exposes only authenticated document and query caches, including TTL operations. Unscoped patterns such as `*` or `g8e:cache:*` return 403, as do private key names. Gateway services access private KV state directly through `KVStoreService`. The ensemble retains seven cache data operations (`get`, `set`, `delete`, `keys`, `delete_pattern`, `get_json`, `set_json`) plus connection and health lifecycle methods. It does not maintain a second governed replay guard or emulate Redis structures. Document changes invalidate caches in the Gateway database; g8ee does not issue cache writes while cache reads are disabled.
+There is no HTTP key-value API; Gateway services access KV state directly through `KVStoreService`. The Gateway keeps no derived copy of documents or query results in `kv_store`. g8ee does not maintain a second governed replay guard or emulate Redis structures.
 
-Bound documents, active bound key-value entries, and active bound blobs contribute to the state root that L4 verifies. Cache entries, replay nonces, and SSE events do not contribute to that root. Observed key-value entries and blobs are excluded from the admission root and can be hashed as a separate observed-state commitment.
+Bound documents, bound key-value entries, and bound blobs contribute to the state root that L4 verifies. Replay nonces and SSE events do not contribute to that root. Observed key-value entries and blobs are excluded from the admission root and can be hashed as a separate observed-state commitment.
 
 ### Scrubbing Token Store
 

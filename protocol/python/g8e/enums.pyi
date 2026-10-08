@@ -928,8 +928,6 @@ class InvestigationStatus(CaseInsensitiveStrEnum):
 
 class KVKey(CaseInsensitiveStrEnum):
     CACHE_PREFIX = 'g8e'
-    CACHE_DOC = 'g8e:cache:doc:{collection}:{id}'
-    CACHE_QUERY = 'g8e:cache:query:{collection}:{hash}'
     SESSION_WEB = 'g8e:sessions:{session.type}:{session.id}'
     SESSION_OPERATOR = 'g8e:sessions:operator:{operator.session.id}'
     SESSION_OPERATOR_BIND = 'g8e:sessions:operator:{operator.session.id}:bind'

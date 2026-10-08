@@ -197,7 +197,7 @@ func (s *StateRootService) RebuildCommitment(ctx context.Context) error {
 			"DELETE FROM state_nodes",
 			"DELETE FROM state_commitment_dirty",
 			"INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'documents', collection, id FROM documents",
-			"INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', key, '' FROM kv_store WHERE key NOT LIKE 'g8e:cache:%'",
+			"INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'kv_store', key, '' FROM kv_store",
 			"INSERT INTO state_commitment_dirty (source, k1, k2) SELECT 'blobs', namespace, id FROM blobs",
 		} {
 			if _, err := conn.ExecContext(ctx, stmt); err != nil {

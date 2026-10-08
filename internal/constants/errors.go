@@ -830,8 +830,6 @@ var (
 	ErrFileEditReadLinesFailed          = errors.New("failed to read file lines")
 
 	// DB controller errors
-	ErrDBControllerKeyRequired         = errors.New("key required")
-	ErrKVNamespaceForbidden            = errors.New("KV namespace is Gateway-owned; only document and query cache namespaces are accessible")
 	ErrReputationCommitmentInvalid     = errors.New("invalid reputation signing request")
 	ErrReputationSignerUnavailable     = errors.New("reputation signing key unavailable")
 	ErrDBControllerNamespaceRequired   = errors.New("namespace required")
@@ -841,8 +839,6 @@ var (
 	ErrDBControllerContentTypeRequired = errors.New("Content-Type header required")
 	ErrDBControllerBodyReadFailed      = errors.New("failed to read body")
 	ErrDBControllerChannelRequired     = errors.New("channel required")
-	ErrDBControllerPatternRequired     = errors.New("pattern required")
-	ErrDBControllerTTLRequired         = errors.New("ttl required and must be > 0")
 	ErrDBControllerInvalidTTL          = errors.New("X-Blob-TTL must be a non-negative integer")
 	ErrDBControllerBlobTooLarge        = errors.New("blob exceeds maximum size")
 	ErrDBControllerBodyEmpty           = errors.New("body must not be empty")

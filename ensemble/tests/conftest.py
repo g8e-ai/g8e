@@ -30,7 +30,6 @@ import pytest
 import pytest_asyncio
 
 from app.clients.db_client import DBClient
-from app.clients.kv_cache_client import KVCacheClient
 from app.constants import (
     G8EE_COMPONENT,
     OLLAMA_DEFAULT_ENDPOINT,
@@ -41,8 +40,7 @@ from app.constants import (
 )
 from app.constants.bootstrap import reset_bootstrap
 from app.constants.env_vars import EnvVar
-from app.db.db_service import DBService
-from app.db.kv_service import KVService
+from app.db.document_service import DocumentService
 from app.llm.factory import (
     get_llm_settings,
     get_search_settings,
@@ -52,7 +50,6 @@ from app.llm.factory import (
     set_settings,
 )
 from app.models.settings import TLSConfig
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.settings_service import SettingsService
 from app.utils.path import resolve_project_root
 
@@ -252,7 +249,6 @@ async def _load_settings_from_operator(probe_timeout: float = 5.0):
     # operator running.
     noisy_loggers = (
         "app.clients.db_client",
-        "app.clients.kv_cache_client",
         "app.services.infra.settings_service",
     )
     saved_levels = {}
@@ -271,22 +267,14 @@ async def _load_settings_from_operator(probe_timeout: float = 5.0):
             db_client = DBClient(tls_config=tls_config)
             await db_client.connect()
 
-            kv_client = KVCacheClient(
-                component_name=G8EE_COMPONENT,
-                tls_config=tls_config,
+            settings_service.attach_document_service(
+                DocumentService(db_client, component_name=G8EE_COMPONENT)
             )
-            await kv_client.connect()
-
-            cache_aside = CacheAsideService(
-                kv=KVService(kv_client), db=DBService(db_client), component_name=G8EE_COMPONENT
-            )
-            settings_service._cache_aside = cache_aside
 
             try:
                 settings = await settings_service.get_app_settings()
                 return settings, "ok"
             finally:
-                await kv_client.close()
                 await db_client.close()
     except TimeoutError:
         return bootstrap_settings, "down"
@@ -586,21 +574,21 @@ def test_settings():
 
 
 @pytest.fixture
-def mock_cache_aside_service():
-    """Pure MagicMock spec'd to CacheAsideService for unit tests."""
-    create_pure_mock_cache_aside = import_module("tests.fakes.builder").create_pure_mock_cache_aside
+def mock_document_service():
+    """Pure MagicMock spec'd to DocumentService for unit tests."""
+    create_pure_mock_document_service = import_module(
+        "tests.fakes.builder"
+    ).create_pure_mock_document_service
 
-    return create_pure_mock_cache_aside()
+    return create_pure_mock_document_service()
 
 
 @pytest.fixture
-def fake_cache_aside_service():
-    """Real CacheAsideService backed by MagicMock clients for unit tests."""
-    create_mock_cache_aside_service = import_module(
-        "tests.fakes.builder"
-    ).create_mock_cache_aside_service
+def fake_document_service():
+    """Real DocumentService backed by an in-memory fake client for unit tests."""
+    create_fake_document_service = import_module("tests.fakes.builder").create_fake_document_service
 
-    return create_mock_cache_aside_service()
+    return create_fake_document_service()
 
 
 @pytest.fixture
@@ -778,13 +766,10 @@ def provider_config():
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def cache_aside_service(test_settings):
+async def document_service(test_settings):
     db_client = import_module("app.clients.db_client").DBClient
-    kv_cache_client = import_module("app.clients.kv_cache_client").KVCacheClient
-    db_service = import_module("app.db.db_service").DBService
-    kv_service = import_module("app.db.kv_service").KVService
     tls_config = import_module("app.models.settings").TLSConfig
-    cache_aside_service = import_module("app.services.cache.cache_aside").CacheAsideService
+    document_service_cls = import_module("app.db.document_service").DocumentService
 
     settings = test_settings
 
@@ -794,49 +779,27 @@ async def cache_aside_service(test_settings):
         client_key_path=settings.client_key_path,
     )
 
-    raw_kv = kv_cache_client(
-        tls_config=tls_config,
-        component_name=G8EE_COMPONENT,
-    )
-    await raw_kv.connect()
-
     raw_db = db_client(tls_config=tls_config)
     await raw_db.connect()
 
-    kv = kv_service(raw_kv)
-    db = db_service(raw_db)
-
-    service = cache_aside_service(
-        kv=kv,
-        db=db,
-        component_name=G8EE_COMPONENT,
-        default_ttl=settings.gateway.default_ttl,
-    )
+    service = document_service_cls(raw_db, component_name=G8EE_COMPONENT)
     yield service
     await service.close()
-    await raw_db.close()
-    await raw_kv.close()
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def kv_cache_client(cache_aside_service):
-    # Returns the client from the protocol cache service to ensure token consistency
-    yield cache_aside_service.kv.client
+async def db_client(document_service):
+    yield document_service.client
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def db_client(cache_aside_service):
-    yield cache_aside_service.db_client
-
-
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def db_service(test_settings, cache_aside_service, mock_governance_client):
+async def db_service(test_settings, document_service, mock_governance_client):
     investigation_data_service = import_module(
         "app.services.investigation.investigation_data_service"
     ).InvestigationDataService
 
     yield investigation_data_service(
-        cache=cache_aside_service, governance_client=mock_governance_client
+        cache=document_service, governance_client=mock_governance_client
     )
 
 
@@ -889,7 +852,7 @@ async def mock_gateway():
     Yields a MockGateway instance with:
       - mock_gateway.gateway_settings: GatewaySettings pointing at the mock
       - mock_gateway.tls_config: TLSConfig with the self-signed CA cert
-      - mock_gateway.kv / .db / .blob: direct access to in-memory stores
+      - mock_gateway.db / .blob: direct access to in-memory stores
     """
     mock_gateway = import_module("tests.fakes.mock_gateway").MockGateway
 

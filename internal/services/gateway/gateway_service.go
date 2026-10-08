@@ -753,7 +753,6 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Cfg:                cfg,
 			Logger:             logger,
 			DocStore:           ls.docStore,
-			KVStore:            ls.kvStore,
 			SSEStore:           ls.sseStore,
 			BlobStore:          ls.blobStore,
 			Pubsub:             pubsub,

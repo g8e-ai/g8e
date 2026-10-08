@@ -69,13 +69,13 @@ The append-only SQLite record (`internal/services/storage/audit_store.go`, `SQLA
 
 ## Bound State Root
 
-The admission-gating **State Root** computed by `StateRootService.calculateStateRoot()`. It is derived from a deterministic SHA-256 Merkle aggregation over: all authoritative `documents` rows (`collection`, `id`, `data` ordered by `collection, id`), active bound-tier `kv_store` entries (`state_tier = 'bound'`, excluding ephemeral cache keys prefixed with `g8e:cache:*`, ordered by `key`), active bound-tier `blobs` entries (`state_tier = 'bound'`, ordered by `namespace, id`), and the token keymap hash provided by `KeymapHashProvider` when the scrubbing service is attached. It explicitly excludes ephemeral caches, nonces, SSE events, and observed-tier rows (`state_tier = 'observed'`) so telemetry does not continuously invalidate in-flight envelopes.
+The admission-gating **State Root** read from `StateRootService`. It is the root of a persisted incremental SHA-256 Merkle commitment (algorithm 2) over: all authoritative `documents` rows, bound-tier `kv_store` entries (`state_tier = 'bound'`), bound-tier `blobs` entries (`state_tier = 'bound'`), and the token keymap hash provided by `KeymapHashProvider` when the scrubbing service is attached. A write marks only its own leaf dirty; a read rehashes the dirty leaves and their ancestor paths. It explicitly excludes nonces, SSE events, and observed-tier rows (`state_tier = 'observed'`) so telemetry does not continuously invalidate in-flight envelopes; observed-tier rows are committed in a separate observed tree.
 
 ---
 
 ## Canonical Gateway Database
 
-The Gateway's primary SQLite database, `g8e.db`, opened in WAL mode via `sqliteutil` and managed by `CanonicalDBService`. It embeds the canonical schema from `internal/services/gateway/db/schema.sql` and stores platform state across `documents`, `kv_store`, `blobs`, `state_root`, `state_version`, `nonces`, and `sse_events`. It is distinct from the git-backed file **Ledger**, the **Execution Vault** (`execution_vault.db`), the **Suspended Transaction Store** (`suspended_transactions.db`), and remote Operator audit databases, each of which maintains an independent lifecycle and sovereignty boundary.
+The Gateway's primary SQLite database, `g8e.db`, opened in WAL mode via `sqliteutil` and managed by `CanonicalDBService`. It embeds the canonical schema from `internal/services/gateway/db/schema.sql` and stores platform state across `documents`, `kv_store`, `blobs`, the state-commitment tables (`state_commitment_dirty`, `state_leaves`, `state_nodes`, `state_commitment`), `nonces`, and `sse_events`. It is distinct from the git-backed file **Ledger**, the **Execution Vault** (`execution_vault.db`), the **Suspended Transaction Store** (`suspended_transactions.db`), and remote Operator audit databases, each of which maintains an independent lifecycle and sovereignty boundary.
 
 ---
 

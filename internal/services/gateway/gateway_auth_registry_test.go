@@ -43,7 +43,6 @@ func TestPrivilegedRouteRegistry_NonPrivilegedPaths(t *testing.T) {
 		constants.APIPaths.AuditReceipts,
 		constants.APIPaths.Operators,
 		constants.APIPaths.DataSettings,
-		constants.APIPaths.KV,
 		"/api/v1/pki/apps/enroll",
 	}
 

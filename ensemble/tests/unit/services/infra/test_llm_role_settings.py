@@ -240,7 +240,7 @@ class TestSettingsServiceLLMRoles:
         cache = MagicMock()
         cache.update_document = AsyncMock()
         cache.invalidate_document = AsyncMock(return_value=True)
-        service = SettingsService(cache_aside_service=cache)
+        service = SettingsService(document_service=cache)
         service.get_user_settings = AsyncMock(return_value=G8eeUserSettings(llm=LLMSettings()))
         request = _request(
             primary=LLMRoleUpdate(provider=LLMProvider.OLLAMA, model="gemma4:e4b"),
@@ -277,10 +277,10 @@ class TestSettingsServiceLLMRoles:
         cache = MagicMock()
         cache.update_document = AsyncMock(side_effect=update_document)
         cache.invalidate_document = AsyncMock(return_value=True)
-        cache.get_document_with_cache = AsyncMock(
+        cache.get_document_data = AsyncMock(
             side_effect=lambda *_args, document_id, **_kwargs: stored.get(document_id)
         )
-        service = SettingsService(cache_aside_service=cache)
+        service = SettingsService(document_service=cache)
         await service.update_user_settings("user_1", G8eeUserSettings(llm=LLMSettings()))
         await service.update_llm_role_settings(
             "user_1",
@@ -307,10 +307,10 @@ class TestEvalJudgeModel:
         cache = MagicMock()
         cache.update_document = AsyncMock(side_effect=update_document)
         cache.invalidate_document = AsyncMock(return_value=True)
-        cache.get_document_with_cache = AsyncMock(
+        cache.get_document_data = AsyncMock(
             side_effect=lambda *_args, document_id, **_kwargs: stored.get(document_id)
         )
-        return SettingsService(cache_aside_service=cache)
+        return SettingsService(document_service=cache)
 
     def test_request_with_only_a_judge_model_is_a_valid_update(self):
         request = _request(eval_judge=EvalJudgeUpdate(model="qwen3:1.7b"))

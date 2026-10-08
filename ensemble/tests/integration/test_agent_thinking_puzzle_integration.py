@@ -35,7 +35,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.s
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_services):
+async def test_agent_thinking_puzzle(llm_provider, document_service, all_services):
     """
     Verify that the AI agent uses the thinking model correctly when solving a puzzle.
 

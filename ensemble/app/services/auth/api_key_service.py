@@ -12,8 +12,8 @@ import secrets
 from typing import TYPE_CHECKING, Any
 
 from app.constants import DB_COLLECTION_API_KEYS, APIKeyStatus
+from app.db.document_service import DocumentService
 from app.models.api_keys import APIKeyDocument
-from app.services.cache.cache_aside import CacheAsideService
 from app.utils.security import (
     DEFAULT_KEY_DERIVATION_ITERATIONS,
     DEFAULT_KEY_DERIVATION_SALT,
@@ -39,8 +39,8 @@ class APIKeyService:
     Handles validation and lifecycle of API keys.
     """
 
-    def __init__(self, cache_aside: CacheAsideService):
-        self.cache = cache_aside
+    def __init__(self, document_service: DocumentService):
+        self.cache = document_service
         self.collection = DB_COLLECTION_API_KEYS
 
     def make_doc_id(self, raw_material: str) -> str:
@@ -69,7 +69,7 @@ class APIKeyService:
             return False, None, "API key is required"
 
         doc_id = self.make_doc_id(raw_key)
-        data = await self.cache.get_document_with_cache(self.collection, doc_id)
+        data = await self.cache.get_document_data(self.collection, doc_id)
 
         if not data:
             return False, None, "API key not found"
@@ -154,7 +154,7 @@ class APIKeyService:
             return True
         doc_id = self.make_doc_id(raw_key)
         try:
-            existing = await self.cache.get_document_with_cache(self.collection, doc_id)
+            existing = await self.cache.get_document_data(self.collection, doc_id)
             if not existing:
                 return True
             await self.cache.update_document(
@@ -240,7 +240,7 @@ class APIKeyService:
         """Update the last used timestamp of a key and establish fingerprint if missing."""
         try:
             doc_id = self.make_doc_id(raw_key)
-            data = await self.cache.get_document_with_cache(self.collection, doc_id)
+            data = await self.cache.get_document_data(self.collection, doc_id)
             if not data:
                 return
 

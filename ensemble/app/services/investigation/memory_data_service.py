@@ -9,6 +9,7 @@ import logging
 
 from app.clients.governance_client import GovernanceClient
 from app.constants import DB_COLLECTION_MEMORIES, G8EE_COMPONENT, AITaskId, EventType
+from app.db.document_service import DocumentService
 from app.errors import DatabaseError
 from app.models.cache import FieldFilter
 from app.models.command_request_payloads import DocumentUpdateRequestPayload
@@ -16,7 +17,6 @@ from app.models.http_context import RequestContext
 from app.models.investigations import InvestigationModel
 from app.models.memory import InvestigationMemory
 from app.models.pubsub_messages import G8eMessage
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 class MemoryDataService(MemoryDataServiceProtocol):
     """Cache-aside persistence layer for InvestigationMemory documents.
 
-    All reads and writes route exclusively through CacheAsideService.
+    All reads and writes route exclusively through DocumentService.
     """
 
     def __init__(
-        self, cache_aside_service: CacheAsideService, governance_client: GovernanceClient
+        self, document_service: DocumentService, governance_client: GovernanceClient
     ) -> None:
-        self._cache_aside = cache_aside_service
+        self._documents = document_service
         self._governance_client = governance_client
         self.memories_collection = DB_COLLECTION_MEMORIES
 
@@ -123,7 +123,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
             )
 
     async def get_memory(self, investigation_id: str) -> InvestigationMemory | None:
-        data = await self._cache_aside.get_document_with_cache(
+        data = await self._documents.get_document_data(
             collection=self.memories_collection,
             document_id=investigation_id,
         )
@@ -133,7 +133,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
 
     async def get_user_memories(self, user_id: str, limit: int = 10) -> list[InvestigationMemory]:
         try:
-            docs = await self._cache_aside.query_documents(
+            docs = await self._documents.query_documents(
                 collection=self.memories_collection,
                 field_filters=[
                     FieldFilter(field="user_id", op="==", value=user_id).model_dump(mode="json")
@@ -160,7 +160,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
 
     async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]:
         try:
-            docs = await self._cache_aside.query_documents(
+            docs = await self._documents.query_documents(
                 collection=self.memories_collection,
                 field_filters=[
                     FieldFilter(field="user_id", op="==", value=user_id).model_dump(mode="json"),

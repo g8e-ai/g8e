@@ -139,8 +139,7 @@ class CertificateService:
 
         if self.data_service is None:
             raise RuntimeError("CertificateDataService is required to sign certificates")
-        db_service = cast(_ClientBackedDocumentService, self.data_service.cache.db)
-        db_client = db_service.client
+        db_client = cast(_ClientBackedDocumentService, self.data_service.cache).client
 
         payload = {
             "public_key_pem": public_key_pem,

@@ -67,7 +67,7 @@ class StakeResolutionDataService:
     async def get(self, tribunal_command_id: str, agent_id: str) -> StakeResolution | None:
         doc_id = stake_resolution_id(tribunal_command_id, agent_id)
         try:
-            doc = await self.cache.get_document_with_cache(
+            doc = await self.cache.get_document_data(
                 collection=self.collection,
                 document_id=doc_id,
             )
@@ -99,7 +99,7 @@ class StakeResolutionDataService:
         if not resolution.id:
             raise ValidationError("StakeResolution.id is required")
 
-        existing = await self.cache.get_document_with_cache(
+        existing = await self.cache.get_document_data(
             collection=self.collection,
             document_id=resolution.id,
         )
@@ -142,9 +142,7 @@ class StakeResolutionDataService:
         except DatabaseError:
             raise
         except Exception as exc:
-            logger.exception(
-                "Failed to create stake_resolution %s: %s", resolution.id, exc
-            )
+            logger.exception("Failed to create stake_resolution %s: %s", resolution.id, exc)
             raise DatabaseError(
                 message=f"Failed to create stake_resolution: {exc}",
                 code=ErrorCode.DB_WRITE_ERROR,

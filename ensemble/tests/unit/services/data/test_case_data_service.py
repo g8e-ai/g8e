@@ -63,18 +63,18 @@ def _make_awaitable_exception_side_effect(exc):
 class TestCaseDataService:
     @pytest.fixture
     def service(
-        self, mock_settings, mock_cache_aside_service, mock_event_service, mock_governance_client
+        self, mock_settings, mock_document_service, mock_event_service, mock_governance_client
     ):
         return CaseDataService(
             settings=mock_settings,
-            cache=mock_cache_aside_service,
+            cache=mock_document_service,
             event_service=mock_event_service,
             governance_client=mock_governance_client,
         )
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     @pytest.fixture
     def mock_event(self, mock_event_service):
@@ -178,7 +178,7 @@ class TestCaseDataService:
 
     async def test_get_case_success(self, service, mock_cache):
         case_id = "case-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Test Case",
             "description": "Test description",
             "user_id": "user-123",
@@ -194,7 +194,7 @@ class TestCaseDataService:
 
         assert result.id == case_id
         assert result.title == "Test Case"
-        mock_cache.get_document_with_cache.assert_called_once_with(
+        mock_cache.get_document_data.assert_called_once_with(
             collection=service.cases_collection, document_id=case_id
         )
 
@@ -203,12 +203,12 @@ class TestCaseDataService:
             await service.get_case("")
 
     async def test_get_case_not_found(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         with pytest.raises(ResourceNotFoundError, match="Case not found"):
             await service.get_case("missing")
 
     async def test_get_case_db_error(self, service, mock_cache):
-        mock_cache.get_document_with_cache.side_effect = Exception("Fetch error")
+        mock_cache.get_document_data.side_effect = Exception("Fetch error")
         with pytest.raises(DatabaseError, match="Failed to retrieve case"):
             await service.get_case("case-123")
 
@@ -219,7 +219,7 @@ class TestCaseDataService:
         updates = CaseUpdateRequest(title="Updated Title", context=self._make_context())
 
         # Mock get_case (internal call)
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Old Title",
             "description": "Old description",
             "user_id": "user-123",
@@ -242,7 +242,7 @@ class TestCaseDataService:
 
     async def test_update_case_db_error(self, service, mock_cache, mock_governance_client):
         case_id = "case-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Test Case",
             "description": "Test description",
             "user_id": "u1",
@@ -262,7 +262,7 @@ class TestCaseDataService:
 
     async def test_update_case_g8e_error(self, service, mock_cache, mock_governance_client):
         case_id = "case-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Test Case",
             "description": "Test description",
             "user_id": "u1",
@@ -288,7 +288,7 @@ class TestCaseDataService:
 
     async def test_delete_case_success(self, service, mock_cache, mock_governance_client):
         case_id = "case-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Test Case",
             "description": "Test description",
             "user_id": "u1",
@@ -306,7 +306,7 @@ class TestCaseDataService:
 
     async def test_delete_case_failure_result(self, service, mock_cache, mock_governance_client):
         case_id = "case-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Test Case",
             "description": "Test description",
             "user_id": "u1",
@@ -324,7 +324,7 @@ class TestCaseDataService:
 
     async def test_delete_case_exception(self, service, mock_cache, mock_governance_client):
         case_id = "case-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "title": "Test Case",
             "description": "Test description",
             "user_id": "u1",

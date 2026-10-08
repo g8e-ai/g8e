@@ -95,15 +95,15 @@ class TestCreate:
     pytestmark = [pytest.mark.asyncio(loop_scope="session")]
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service, governance_client):
-        return StakeResolutionDataService(mock_cache_aside_service, governance_client)
+    def service(self, mock_document_service, governance_client):
+        return StakeResolutionDataService(mock_document_service, governance_client)
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     async def test_create_writes_with_composite_id(self, service, mock_cache, governance_client):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         r = _make_resolution()
         await service.create(r, _context())
         mock_cache.create_document.assert_not_called()
@@ -122,7 +122,7 @@ class TestCreate:
     async def test_create_with_slash_tier_persists_int(
         self, service, mock_cache, governance_client
     ):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         r = _make_resolution(slash_tier=SlashTier.TIER_2)
         await service.create(r, _context())
         kwargs = governance_client.update_governed_doc.await_args.kwargs
@@ -132,7 +132,7 @@ class TestCreate:
         self, service, mock_cache, governance_client
     ):
         existing = _make_resolution(slash_tier=SlashTier.TIER_3)
-        mock_cache.get_document_with_cache.return_value = existing.model_dump(mode="json")
+        mock_cache.get_document_data.return_value = existing.model_dump(mode="json")
 
         result = await service.create(_make_resolution(), _context())
 
@@ -146,7 +146,7 @@ class TestCreate:
     async def test_create_wraps_unexpected_failure_as_database_error(
         self, service, mock_cache, governance_client
     ):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         governance_client.update_governed_doc.side_effect = RuntimeError("boom")
         with pytest.raises(DatabaseError):
             await service.create(_make_resolution(), _context())
@@ -156,16 +156,16 @@ class TestGet:
     pytestmark = [pytest.mark.asyncio(loop_scope="session")]
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service, governance_client):
-        return StakeResolutionDataService(mock_cache_aside_service, governance_client)
+    def service(self, mock_document_service, governance_client):
+        return StakeResolutionDataService(mock_document_service, governance_client)
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     async def test_get_round_trip_preserves_slash_tier(self, service, mock_cache):
         r = _make_resolution(slash_tier=SlashTier.TIER_1)
-        mock_cache.get_document_with_cache.return_value = r.model_dump(mode="json")
+        mock_cache.get_document_data.return_value = r.model_dump(mode="json")
 
         result = await service.get(tribunal_command_id="tc-1", agent_id="axiom")
 
@@ -173,17 +173,17 @@ class TestGet:
         assert result.slash_tier == SlashTier.TIER_1
         assert result.outcome_score == 1.0
         assert result.scalar_after == 0.51
-        mock_cache.get_document_with_cache.assert_called_once_with(
+        mock_cache.get_document_data.assert_called_once_with(
             collection=DB_COLLECTION_STAKE_RESOLUTIONS,
             document_id="tc-1:axiom",
         )
 
     async def test_get_missing_returns_none(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         assert await service.get(tribunal_command_id="tc-1", agent_id="axiom") is None
 
     async def test_get_db_error_wraps(self, service, mock_cache):
-        mock_cache.get_document_with_cache.side_effect = RuntimeError("boom")
+        mock_cache.get_document_data.side_effect = RuntimeError("boom")
         with pytest.raises(DatabaseError):
             await service.get(tribunal_command_id="tc-1", agent_id="axiom")
 
@@ -192,12 +192,12 @@ class TestListForTribunalCommand:
     pytestmark = [pytest.mark.asyncio(loop_scope="session")]
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service, governance_client):
-        return StakeResolutionDataService(mock_cache_aside_service, governance_client)
+    def service(self, mock_document_service, governance_client):
+        return StakeResolutionDataService(mock_document_service, governance_client)
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     async def test_list_filters_by_tribunal_command_id_and_orders_by_agent(
         self, service, mock_cache

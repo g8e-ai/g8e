@@ -8,14 +8,13 @@
 """
 aiohttp.ClientSession constructors.
 
-Three transport roles exist in g8ee - each has exactly one constructor here.
+Two transport roles exist in g8ee - each has exactly one constructor here.
 No aiohttp.ClientSession(...) calls anywhere else in the codebase.
 
 Roles
 -----
-create_kv_http_session        - KV/REST HTTP to the Operator listen port (kv_cache_client)
 create_pubsub_ws_session      - WebSocket carrier session for pub/sub clients
-create_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
+create_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient)
 
 SSL
 ---
@@ -75,45 +74,6 @@ def _url_uses_tls(url: str) -> bool:
     return url.startswith(("https://", "wss://"))
 
 
-def create_kv_http_session(
-    existing: aiohttp.ClientSession | None,
-    *,
-    base_url: str,
-    timeout: aiohttp.ClientTimeout,
-    ca_cert_path: str | None = None,
-    headers: dict[str, str],
-    client_cert_path: str | None = None,
-    client_key_path: str | None = None,
-) -> aiohttp.ClientSession:
-    """Session for KV/REST HTTP requests to the Operator listen port.
-
-    SSL is applied only when base_url uses https://.
-    Content-Type is set to application/json for all requests unless overridden.
-    Used by KVCacheClient.
-    """
-    if existing is not None and not existing.closed:
-        return existing
-
-    use_tls = _url_uses_tls(base_url)
-    ssl_ctx = _resolve_ssl_context(
-        (ca_cert_path,),
-        use_tls=use_tls,
-        certfile=client_cert_path,
-        keyfile=client_key_path,
-    )
-    connector = aiohttp.TCPConnector(ssl=ssl_ctx)
-
-    default_headers = {"Content-Type": "application/json"}
-    if headers:
-        default_headers.update(headers)
-
-    return aiohttp.ClientSession(
-        headers=default_headers,
-        timeout=timeout,
-        connector=connector,
-    )
-
-
 def create_pubsub_ws_session(
     existing: aiohttp.ClientSession | None,
     *,
@@ -159,7 +119,7 @@ def create_component_http_session(
     client_cert_path: str | None = None,
     client_key_path: str | None = None,
 ) -> aiohttp.ClientSession:
-    """Session for inter-component HTTP (HTTPClient , CacheAsideService).
+    """Session for inter-component HTTP (HTTPClient).
 
     Always probes for a CA cert regardless of scheme - internal services
     may sit behind TLS even in dev.  Uses _json_dumps for datetime-aware

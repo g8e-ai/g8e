@@ -557,7 +557,7 @@ async def test_delete_case_success(request_context, g8e_context):
         request=request,
         case_service=mock_case_service,
         investigation_service=mock_inv_service,
-        cache_aside_service=mock_cache,
+        document_service=mock_cache,
         g8e_context=g8e_context,
         request_context=request_context,
     )
@@ -582,7 +582,7 @@ async def test_delete_case_not_found_idempotent(request_context, g8e_context):
         request=request,
         case_service=mock_case_service,
         investigation_service=MagicMock(),
-        cache_aside_service=MagicMock(),
+        document_service=MagicMock(),
         g8e_context=g8e_context,
         request_context=request_context,
     )

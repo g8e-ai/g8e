@@ -128,14 +128,14 @@ func bindWebSessionToOperators(t *testing.T, h *HTTPHandler, webSessionID string
 	t.Helper()
 	raw, err := json.Marshal(operatorSessionIDs)
 	require.NoError(t, err)
-	err = h.dataController.kvStore.KVSet(sessionWebBindKey(webSessionID), string(raw), 0)
+	err = h.sseController.kvStore.KVSet(sessionWebBindKey(webSessionID), string(raw), 0)
 	require.NoError(t, err)
 }
 
 // bindOperatorToWebSession sets the KV binding from operator session to web session ID.
 func bindOperatorToWebSession(t *testing.T, h *HTTPHandler, operatorSessionID, webSessionID string) {
 	t.Helper()
-	err := h.dataController.kvStore.KVSet(sessionOperatorBindKey(operatorSessionID), webSessionID, 0)
+	err := h.sseController.kvStore.KVSet(sessionOperatorBindKey(operatorSessionID), webSessionID, 0)
 	require.NoError(t, err)
 }
 

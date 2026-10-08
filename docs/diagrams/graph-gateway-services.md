@@ -109,7 +109,7 @@ Two HTTP servers are started on distinct ports to separate TLS requirements:
 ### Persistence Layer
 
 - **Document Store**: JSON document CRUD on a Collection/ID pattern (`/api/v1/data/*`).
-- **KV Store**: TTL-aware ephemeral state with GLOB pattern scanning (`/api/v1/kv/*`).
+- **KV Store**: TTL-aware state private to Gateway services; it has no HTTP surface.
 - **Blob Store**: Binary persistence for attachments and certificate material (`/api/v1/blobs/*`).
 - **Audit Authority**: Append-only encrypted log of sessions, events, file mutations, signed `ActionReceipt` records, and commitment evidence.
 - **State Root Service**: Incremental state tracking with bound vs observed Merkle root tiering. The bound root gates transaction admission; the observed root chains into the audit ledger without invalidating in-flight envelopes.

@@ -11,21 +11,18 @@ g8ee Database Layer
 SQLite coordination store for application state.
 
 Database modules:
-- db_service.py: Database service for SQLite operations
-- kv_service.py: Key-value service for cache operations
+- document_service.py: Gateway document access (no g8ee-side cache)
 - blob_service.py: Blob storage service for file operations
 """
 
 from app.clients.db_client import DBClient
 from app.models.cache import ArrayRemove, ArrayUnion
 
-from .db_service import DBService
-from .kv_service import KVService
+from .document_service import DocumentService
 
 __all__ = [
     "ArrayRemove",
     "ArrayUnion",
     "DBClient",
-    "DBService",
-    "KVService",
+    "DocumentService",
 ]

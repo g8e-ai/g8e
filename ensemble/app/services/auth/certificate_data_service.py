@@ -15,7 +15,7 @@ from app.errors import ExternalServiceError
 from app.utils.time_ids.timestamp import now
 
 if TYPE_CHECKING:
-    from app.services.cache.cache_aside import CacheAsideService
+    from app.db.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +23,13 @@ logger = logging.getLogger(__name__)
 class CertificateDataService:
     """Service for persisting certificate-related data, such as revocations."""
 
-    def __init__(self, cache: CacheAsideService):
+    def __init__(self, cache: DocumentService):
         self.cache = cache
         self.collection = DB_COLLECTION_REVOKED_CERTS
 
     async def get_all_revocations(self) -> list[dict[str, Any]]:
         """Get all revoked certificate records."""
         try:
-            # query_documents handles cache-aside internally
             return await self.cache.query_documents(
                 collection=self.collection,
                 field_filters=[],

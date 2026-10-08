@@ -96,7 +96,6 @@ func setupObserveProducerEndpointEnv(t *testing.T) *observeProducerEndpointEnv {
 			Cfg:       infra.Cfg,
 			Logger:    infra.Logger,
 			DocStore:  infra.DocStore,
-			KVStore:   infra.KVStore,
 			SSEStore:  infra.SSEStore,
 			BlobStore: infra.BlobStore,
 			Pubsub:    infra.Pubsub,

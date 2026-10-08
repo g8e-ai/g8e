@@ -24,20 +24,20 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 class TestAgentActivityDataService:
     @pytest.fixture
-    def service(self, mock_cache_aside_service, mock_governance_client):
-        return AgentActivityDataService(mock_cache_aside_service, mock_governance_client)
+    def service(self, mock_document_service, mock_governance_client):
+        return AgentActivityDataService(mock_document_service, mock_governance_client)
 
     @pytest.fixture
-    def mock_cache(self, mock_cache_aside_service):
-        return mock_cache_aside_service
+    def mock_cache(self, mock_document_service):
+        return mock_document_service
 
     @pytest.fixture
     def context(self):
         return RequestContext(web_session_id="web-session-123", user_id="user-123")
 
-    async def test_record_activity_submits_governed_document_update(self, mock_cache_aside_service):
+    async def test_record_activity_submits_governed_document_update(self, mock_document_service):
         governance_client = AsyncMock()
-        service = AgentActivityDataService(mock_cache_aside_service, governance_client)
+        service = AgentActivityDataService(mock_document_service, governance_client)
         metadata = AgentActivityMetadata(
             id="activity-123",
             user_id="user-123",
@@ -72,7 +72,7 @@ class TestAgentActivityDataService:
         assert message.payload.document_id == metadata.id
         assert message.payload.updates == metadata.model_dump(mode="json")
         assert message.payload.merge is False
-        mock_cache_aside_service.create_document.assert_not_called()
+        mock_document_service.create_document.assert_not_called()
 
     async def test_record_activity_success(self, service, mock_governance_client, context):
         metadata = AgentActivityMetadata(
@@ -107,7 +107,7 @@ class TestAgentActivityDataService:
 
     async def test_get_activity_success(self, service, mock_cache):
         activity_id = "activity-123"
-        mock_cache.get_document_with_cache.return_value = {
+        mock_cache.get_document_data.return_value = {
             "id": activity_id,
             "user_id": "user-123",
             "investigation_id": "inv-123",
@@ -121,12 +121,12 @@ class TestAgentActivityDataService:
         assert isinstance(result, AgentActivityMetadata)
         assert result.id == activity_id
         assert result.user_id == "user-123"
-        mock_cache.get_document_with_cache.assert_called_once_with(
+        mock_cache.get_document_data.assert_called_once_with(
             collection=service.collection, document_id=activity_id
         )
 
     async def test_get_activity_not_found(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
+        mock_cache.get_document_data.return_value = None
         result = await service.get_activity("nonexistent")
         assert result is None
 

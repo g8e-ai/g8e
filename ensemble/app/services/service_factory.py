@@ -17,8 +17,7 @@ from fastapi import FastAPI
 
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.db.blob_service import BlobService
-from app.db.db_service import DBService
-from app.db.kv_service import KVService
+from app.db.document_service import DocumentService
 from app.models.settings import G8eeAppSettings
 from app.models.state import G8eeAppState
 from app.services.ai.agent import G8eEnsemble
@@ -36,7 +35,6 @@ from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.auth.certificate_service import CertificateService
 from app.services.auth.proxy_stamp import ProxyStampVerifier
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.data.case_data_service import CaseDataService
@@ -126,10 +124,8 @@ class OperatorServices:
 
 @dataclass(frozen=True)
 class AllServices:
-    db_service: DBService
-    kv_service: KVService
+    document_service: DocumentService
     blob_service: BlobService
-    cache_aside_service: CacheAsideService
     attachment_service: AttachmentService
     response_analyzer: AIResponseAnalyzer | AIResponseAnalyzerProtocol
     grounding_service: GroundingService
@@ -167,7 +163,7 @@ class AllServices:
 class ServiceFactory:
     @staticmethod
     def create_core_services(
-        settings: G8eeAppSettings, cache_aside_service: CacheAsideService
+        settings: G8eeAppSettings, document_service: DocumentService
     ) -> CoreServices:
         """Create core services that other services depend on."""
 
@@ -181,7 +177,7 @@ class ServiceFactory:
 
         event_service: EventService = EventService(internal_http_client=internal_http_client)
 
-        settings_service = SettingsService(cache_aside_service)
+        settings_service = SettingsService(document_service)
 
         return CoreServices(
             http_service=http_service,
@@ -193,46 +189,46 @@ class ServiceFactory:
     @staticmethod
     def create_data_services(
         settings: G8eeAppSettings,
-        cache_aside_service: CacheAsideService,
+        document_service: DocumentService,
         core_services: CoreServices,
         governance_client: GovernanceClient,
     ) -> DataServices:
         """Create data services for CRUD operations."""
         investigation_data_service = InvestigationDataService(
-            cache=cache_aside_service,
+            cache=document_service,
             governance_client=governance_client,
         )
 
         gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
         operator_data_service = OperatorDataService(
-            cache=cache_aside_service,
+            cache=document_service,
             gateway_operator_client=gateway_operator_client,
         )
 
         memory_data_service = MemoryDataService(
-            cache_aside_service=cache_aside_service,
+            document_service=document_service,
             governance_client=governance_client,
         )
 
         case_data_service = CaseDataService(
             settings=settings,
-            cache=cache_aside_service,
+            cache=document_service,
             event_service=cast(EventService, core_services.event_service),
             governance_client=governance_client,
         )
 
         agent_activity_data_service = AgentActivityDataService(
-            cache=cache_aside_service,
+            cache=document_service,
             governance_client=governance_client,
         )
 
         reputation_data_service = ReputationDataService(
-            cache=cache_aside_service,
+            cache=document_service,
             governance_client=governance_client,
         )
 
         stake_resolution_data_service = StakeResolutionDataService(
-            cache=cache_aside_service,
+            cache=document_service,
             governance_client=governance_client,
         )
 
@@ -288,12 +284,12 @@ class ServiceFactory:
     @staticmethod
     def create_operator_services(
         core_services: CoreServices,
-        cache_aside_service: CacheAsideService,
+        document_service: DocumentService,
     ) -> OperatorServices:
         """Create auth-adjacent services still used by non-operator g8ee routes."""
-        api_key_service = APIKeyService(cache_aside=cache_aside_service)
+        api_key_service = APIKeyService(document_service=document_service)
         certificate_service = CertificateService(
-            data_service=CertificateDataService(cache_aside_service)
+            data_service=CertificateDataService(document_service)
         )
         internal_http_client = core_services.internal_http_client
         auth_service = AuthService(
@@ -310,9 +306,7 @@ class ServiceFactory:
     @staticmethod
     def create_all_services(
         settings: G8eeAppSettings,
-        cache_aside_service: CacheAsideService,
-        db_service: DBService,
-        kv_service: KVService,
+        document_service: DocumentService,
         blob_service: BlobService,
         governance_client: GovernanceClient,
         blob_service_client: BlobClient | None = None,
@@ -323,16 +317,14 @@ class ServiceFactory:
         *web_search_provider* allows tests to inject a provider without
         requiring platform settings to have search configured.
         """
-        core_services = ServiceFactory.create_core_services(settings, cache_aside_service)
+        core_services = ServiceFactory.create_core_services(settings, document_service)
         data_services = ServiceFactory.create_data_services(
-            settings, cache_aside_service, core_services, governance_client
+            settings, document_service, core_services, governance_client
         )
         domain_services = ServiceFactory.create_domain_services(
             settings, data_services, core_services
         )
-        operator_services = ServiceFactory.create_operator_services(
-            core_services, cache_aside_service
-        )
+        operator_services = ServiceFactory.create_operator_services(core_services, document_service)
 
         attachment_service = AttachmentService(
             blob_service=blob_service_client,  # type: ignore[arg-type]
@@ -412,10 +404,8 @@ class ServiceFactory:
         )
 
         return AllServices(
-            db_service=db_service,
-            kv_service=kv_service,
+            document_service=document_service,
             blob_service=blob_service,
-            cache_aside_service=cache_aside_service,
             attachment_service=attachment_service,
             response_analyzer=response_analyzer,
             grounding_service=grounding_service,

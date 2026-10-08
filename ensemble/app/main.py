@@ -12,9 +12,8 @@ Agentic Ensemble with LLM provider abstraction providing Zero-Trust AI for infra
 
 Bootstrap responsibilities (this file):
     1. SettingsService bootstrap + local settings
-    2. Raw Gateway client connections (DB, KV, Blob, HTTP)
-    3. Handler services (sole users of each client): DBService, KVService, BlobService
-    4. CacheAsideService (orchestrator over DB + KV handler services)
+    2. Raw Gateway client connections (DB, Blob, HTTP)
+    3. Handler services (sole users of each client): DocumentService, BlobService
     5. Platform settings load from operator
     6. Delegate ALL domain service construction to ServiceFactory
     7. Service lifecycle start / stop
@@ -34,7 +33,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from .clients.blob_client import BlobClient
 from .clients.db_client import DBClient
 from .clients.governance_client import GovernanceClient
-from .clients.kv_cache_client import KVCacheClient
 from .constants import (
     ACCEPT,
     ACCEPT_LANGUAGE,
@@ -72,8 +70,7 @@ from .constants import (
 )
 from .constants.generated_paths import PortConstants
 from .db.blob_service import BlobService
-from .db.db_service import DBService
-from .db.kv_service import KVService
+from .db.document_service import DocumentService
 from .decision.validation import (
     log_jev_generative_lite_warning,
     validate_jev_lite_coexistence,
@@ -88,7 +85,6 @@ from .models.settings import G8eeAppSettings, TLSConfig
 from .models.state import G8eeAppState
 from .routers import chat_router, health_router
 from .routers.internal_router import router as internal_router
-from .services.cache.cache_aside import CacheAsideService
 from .services.infra.app_enrollment_service import AppEnrollmentService, AppIdentity
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import AllServices, ServiceFactory
@@ -103,22 +99,16 @@ logger = logging.getLogger(__name__)
 async def _connect_clients(tls_config: TLSConfig):
     """Create and connect the core operator transport clients.
 
-    Returns (db_client, kv_cache_client, blob_client).
+    Returns (db_client, blob_client).
     HTTP client is created by ServiceFactory (InternalHttpClient).
     """
     db_client = DBClient(tls_config=tls_config)
     await db_client.connect()
 
-    kv_cache_client = KVCacheClient(
-        component_name=G8EE_COMPONENT,
-        tls_config=tls_config,
-    )
-    await kv_cache_client.connect()
-
     blob_client = BlobClient(tls_config=tls_config)
     await blob_client.connect()
 
-    return db_client, kv_cache_client, blob_client
+    return db_client, blob_client
 
 
 async def _close_client(client, label: str) -> None:
@@ -163,7 +153,6 @@ async def _shutdown(state: G8eeAppState, all_services: AllServices | None) -> No
     if all_services:
         await ServiceFactory.stop_services(all_services)
 
-    await _close_client(getattr(state, "kv_cache_client", None), "KV cache client")
     await _close_client(getattr(state, "blob_client", None), "Blob client")
     await _close_client(
         getattr(state, "internal_http_client", None),
@@ -171,10 +160,10 @@ async def _shutdown(state: G8eeAppState, all_services: AllServices | None) -> No
     )
 
     services = getattr(state, "services", None)
-    db_service = getattr(services, "db_service", None) if services else None
-    if db_service is not None:
+    document_service = getattr(services, "document_service", None) if services else None
+    if document_service is not None:
         try:
-            await db_service.close()
+            await document_service.close()
             logger.info("operator document service closed")
         except Exception as exc:
             logger.error("Error closing operator document service: %s", exc)
@@ -192,7 +181,7 @@ async def lifespan(app: FastAPI):
         settings = await initialize_g8e_service(
             "g8ee",
             settings=initial_settings,
-            cache_aside_service=None,
+            document_service=None,
             use_db_config=False,
         )
         state.settings = settings
@@ -220,28 +209,17 @@ async def lifespan(app: FastAPI):
             client_key_path=app_identity.key_path,
         )
 
-        # -- Phase 1: Core operator clients (db, kv, blob) --
+        # -- Phase 1: Core operator clients (db, blob) --
         (
             state.db_client,
-            state.kv_cache_client,
             state.blob_client,
         ) = await _connect_clients(tls_config)
-        logger.info("operator transport clients connected (db, kv, blob)")
+        logger.info("operator transport clients connected (db, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
-        db_service = DBService(state.db_client)
-        kv_service = KVService(state.kv_cache_client)
+        document_service = DocumentService(state.db_client, component_name=G8EE_COMPONENT)
         blob_service = BlobService(state.blob_client)
-
-        # -- Phase 3: CacheAsideService (orchestrator over DB + KV) --
-        cache_aside_service = CacheAsideService(
-            kv=kv_service,
-            db=db_service,
-            component_name=G8EE_COMPONENT,
-            default_ttl=settings.gateway.default_ttl,
-            read_enabled=settings.gateway.enable_cache_read,
-        )
-        settings_service.attach_cache_aside(cache_aside_service)
+        settings_service.attach_document_service(document_service)
 
         # -- Phase 4: Platform settings from operator --
         settings = await settings_service.get_app_settings()
@@ -261,9 +239,7 @@ async def lifespan(app: FastAPI):
         # -- Phase 5: All domain services (single factory call) --
         all_services = ServiceFactory.create_all_services(
             settings,
-            cache_aside_service,
-            db_service=db_service,
-            kv_service=kv_service,
+            document_service,
             blob_service=blob_service,
             blob_service_client=state.blob_client,
             governance_client=governance_client,

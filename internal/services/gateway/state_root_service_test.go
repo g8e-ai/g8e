@@ -55,7 +55,7 @@ func oracleStateRoots(t *testing.T, db *CanonicalDBService) (bound, observed str
 	require.NoError(t, rows.Err())
 	rows.Close()
 
-	rows, err = db.db.Query("SELECT key, value, COALESCE(expires_at, ''), state_tier FROM kv_store WHERE key NOT LIKE 'g8e:cache:%'")
+	rows, err = db.db.Query("SELECT key, value, COALESCE(expires_at, ''), state_tier FROM kv_store")
 	require.NoError(t, err)
 	for rows.Next() {
 		var k, v, exp, tier string
@@ -315,39 +315,50 @@ func TestStateRootService_MissingCommitmentTableFailsClosed(t *testing.T) {
 	require.ErrorIs(t, err, constants.ErrStateRootCalculate)
 }
 
-// TestStateRootService_NoCacheLeakOnDocumentWrite verifies that cache keys never
-// contribute to the authoritative root.
-func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
-	db := newTestDB(t)
-	svc := db.GetStateRootSvc()
+// TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen opens a database that
+// still carries the document cache invalidation triggers and cache rows, and
+// verifies both are removed and document writes no longer touch kv_store.
+func TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
 
-	root1, err := svc.GetCurrentStateRoot()
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
-	assert.NotEmpty(t, root1)
-
-	require.NoError(t, db.GetKVStore().KVSet("g8e:cache:doc:test:doc1", "cached_value", 3600))
-	root2, err := svc.GetCurrentStateRoot()
-	require.NoError(t, err)
-	assert.Equal(t, root1, root2, "state root should not change when cache keys are added")
-
-	require.NoError(t, db.GetKVStore().KVSet("g8e:cache:query:SELECT * FROM test", "query_result", 3600))
-	root3, err := svc.GetCurrentStateRoot()
-	require.NoError(t, err)
-	assert.Equal(t, root2, root3, "state root should not change when more cache keys are added")
-
+	for _, stmt := range []string{
+		"CREATE TRIGGER trg_documents_insert_kv AFTER INSERT ON documents BEGIN DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*'; END",
+		"INSERT INTO kv_store (key, value, created_at) VALUES ('g8e:cache:doc:test:doc1', 'cached', '2026-01-01T00:00:00Z')",
+		"INSERT INTO kv_store (key, value, created_at) VALUES ('g8e:cache:query:test:q1', '[]', '2026-01-01T00:00:00Z')",
+	} {
+		_, err := db.db.Exec(stmt)
+		require.NoError(t, err, stmt)
+	}
 	require.NoError(t, db.GetKVStore().KVSet("authoritative:key", "value", 0))
-	root4, err := svc.GetCurrentStateRoot()
-	require.NoError(t, err)
-	assert.NotEqual(t, root3, root4, "state root should change when authoritative KV entries are added")
+	db.Close()
 
-	require.NoError(t, db.GetDocStore().DocSet("test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
-	root5, err := svc.GetCurrentStateRoot()
+	reopened, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
-	assert.NotEqual(t, root4, root5, "state root should change after document insertion")
+	t.Cleanup(func() { reopened.Close() })
 
-	require.NoError(t, db.GetDocStore().DocSet("test", "doc2", mustDocJSON(t, map[string]interface{}{"key2": "value2"})))
-	root6, err := svc.GetCurrentStateRoot()
+	var legacy int
+	require.NoError(t, reopened.db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE name IN ('trg_documents_insert_kv', 'trg_documents_update_kv', 'trg_documents_delete_kv')").Scan(&legacy))
+	assert.Zero(t, legacy, "cache invalidation triggers must be dropped")
+	var keys []string
+	rows, err := reopened.db.Query("SELECT key FROM kv_store ORDER BY key")
 	require.NoError(t, err)
-	assert.NotEqual(t, root5, root6, "state root should change after second document insertion")
-	requireRootsMatchOracle(t, db)
+	for rows.Next() {
+		var k string
+		require.NoError(t, rows.Scan(&k))
+		keys = append(keys, k)
+	}
+	require.NoError(t, rows.Err())
+	rows.Close()
+	assert.Equal(t, []string{"authoritative:key"}, keys, "only committed KV rows survive")
+
+	require.NoError(t, reopened.GetDocStore().DocSet("test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
+	var kvCount int
+	require.NoError(t, reopened.db.QueryRow("SELECT COUNT(*) FROM kv_store").Scan(&kvCount))
+	assert.Equal(t, 1, kvCount, "a document write must not touch kv_store")
+	requireRootsMatchOracle(t, reopened)
 }

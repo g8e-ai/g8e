@@ -90,7 +90,6 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - Governance: `GovernanceEnvelopes`, `GovernanceSigners`, `GovernanceSignersByID`, `GovernanceSignersPrefix`
 - Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`, `OperatorsSession`, `OperatorsCommands`, `GrantIntent`, `RevokeIntent`
 - Data: `DataSettings`, `DataDB`, `DataBlobs`, `DataPrefix`, `DataItems`, `DataBlobsPrefix`, `QueryPrefix` (`/_query`)
-- KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
 - PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
 - Observe (browser read-only): `ObservePrefix` (`/api/v1/observe/`), `ObserveBootstrap`, `ObserveRuns`, `ObserveRunsByID`, `ObserveEvals`, `ObserveEvalsByID`, `ObserveDownloads`, `ObserveDownloadsByID`
@@ -347,7 +346,6 @@ Key-value store key patterns and session type constants:
 - Sentinel prefix: `SentinelKeyPrefix` (`g8e:sentinel:`)
 - Scrubbing token prefix: `ScrubbingTokenKeyPrefix` (`uei_token_`)
 - Cache prefix: `KVCachePrefix` (`g8e`)
-- Cache keys: `KVKeyCacheDoc`, `KVKeyCacheQuery`
 - Session keys: `KVKeySessionWeb`, `KVKeySessionOperator`, `KVKeySessionOperatorBind`, `KVKeySessionWebBind`
 - Operator keys: `KVKeyOperatorFirstDeployed`, `KVKeyOperatorTrackedStatus`
 - User keys: `KVKeyUserOperators`, `KVKeyUserWebSessions`, `KVKeyUserMemories`

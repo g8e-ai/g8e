@@ -99,15 +99,6 @@ func (s *KVStoreService) KVDelete(key string) error {
 	return err
 }
 
-// KVDeletePattern removes all keys matching a glob pattern (uses SQL GLOB).
-func (s *KVStoreService) KVDeletePattern(pattern string) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key GLOB ?", pattern)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 // KVKeys returns all keys matching a glob pattern.
 func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
 	keys, err := sqliteutil.MaterializeRows(s.db,
@@ -124,76 +115,6 @@ func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
 		return nil, err
 	}
 	return keys, nil
-}
-
-// KVScan returns keys matching a glob pattern using cursor-based pagination.
-// cursor is a row offset (0 = start). count is the page size (default 100).
-// Returns (nextCursor, keys, error). nextCursor == 0 means scan is complete.
-func (s *KVStoreService) KVScan(pattern string, cursor, count int) (int, []string, error) {
-	if count <= 0 {
-		count = 100
-	}
-	// Fetch count+1 to detect whether a next page exists
-	keys, err := sqliteutil.MaterializeRows(s.db,
-		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY key LIMIT ? OFFSET ?",
-		[]interface{}{pattern, timesvc.NowTimestamp(), count + 1, cursor},
-		func(r *sql.Rows) (string, error) {
-			var k string
-			if err := r.Scan(&k); err != nil {
-				return "", err
-			}
-			return k, nil
-		})
-	if err != nil {
-		return 0, nil, err
-	}
-
-	if len(keys) > count {
-		return cursor + count, keys[:count], nil
-	}
-	return 0, keys, nil
-}
-
-// KVExists checks if a key exists and is not expired.
-func (s *KVStoreService) KVExists(key string) bool {
-	_, found := s.KVGet(key)
-	return found
-}
-
-// KVTTL returns the remaining TTL in seconds for a key. -1 if no expiry, -2 if not found.
-func (s *KVStoreService) KVTTL(key string) int {
-	var expiresAt sql.NullString
-	err := s.db.QueryRowWithRetry(
-		"SELECT expires_at FROM kv_store WHERE key = ?", key,
-	).Scan(&expiresAt)
-	if err != nil {
-		return -2
-	}
-	if !expiresAt.Valid {
-		return -1
-	}
-	exp, err := timesvc.ParseTimestamp(expiresAt.String)
-	if err != nil {
-		return -2
-	}
-	remaining := int(time.Until(exp).Seconds())
-	if remaining < 0 {
-		return -2
-	}
-	return remaining
-}
-
-// KVExpire sets a TTL on an existing key. Returns false if key not found.
-func (s *KVStoreService) KVExpire(key string, ttlSeconds int) bool {
-	exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
-	result, err := s.db.ExecWithRetry(
-		"UPDATE kv_store SET expires_at = ? WHERE key = ?", exp, key,
-	)
-	if err != nil {
-		return false
-	}
-	n, _ := result.RowsAffected()
-	return n > 0
 }
 
 // RunMaintenance removes expired KV entries from the database.

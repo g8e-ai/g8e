@@ -11,10 +11,10 @@ from typing import cast
 from fastapi import Depends, Request
 
 from app.clients.blob_client import BlobClient
-from app.clients.kv_cache_client import KVCacheClient
 from app.constants import (
     G8EE_COMPONENT,
 )
+from app.db.document_service import DocumentService
 from app.errors import (
     AuthenticationError,
     ConfigurationError,
@@ -28,7 +28,6 @@ from app.models.state import G8eeAppState
 from app.security.auth import (
     is_infrastructure_health_check_ip,
 )
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.health_service import HealthService
 from app.services.service_factory import AllServices
 
@@ -95,16 +94,6 @@ async def get_g8ee_app_settings(request: Request) -> G8eeAppSettings:
     return state.settings
 
 
-async def get_g8ee_kv_cache_client(request: Request) -> KVCacheClient:
-    state = cast(G8eeAppState, request.app.state)
-    client = state.kv_cache_client
-    if not client:
-        logger.error("KVCacheClient not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("KVCacheClient not available")
-
-    return client
-
-
 async def get_g8ee_blob_client(request: Request) -> BlobClient:
     state = cast(G8eeAppState, request.app.state)
     client = state.blob_client
@@ -115,12 +104,14 @@ async def get_g8ee_blob_client(request: Request) -> BlobClient:
     return client
 
 
-async def get_g8ee_cache_aside_service(request: Request) -> CacheAsideService:
+async def get_g8ee_document_service(request: Request) -> DocumentService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.cache_aside_service
+    service = state.services.document_service
     if not service:
-        logger.error("Cache service not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("Cache service not available")
+        logger.error(
+            "Document service not found in app state - g8ee initialization may have failed"
+        )
+        raise ServiceUnavailableError("Document service not available")
 
     return service
 
@@ -229,18 +220,6 @@ async def get_g8ee_chat_task_manager(request: Request) -> BackgroundTaskManager:
             "Chat Task Manager not found in app state - g8ee initialization may have failed"
         )
         raise ServiceUnavailableError("Chat Task Manager not available", component=G8EE_COMPONENT)
-
-    return service
-
-
-async def get_g8ee_operator_cache(request: Request) -> CacheAsideService:
-    state = cast(G8eeAppState, request.app.state)
-    service = state.services.cache_aside_service
-    if not service:
-        logger.error(
-            "Operator cache service not found in app state - g8ee initialization may have failed"
-        )
-        raise ServiceUnavailableError("Operator cache service not available")
 
     return service
 
@@ -410,7 +389,7 @@ async def health_check_dependencies(request: Request) -> HealthCheckResult:
     return await HealthService.check_dependencies(
         {
             "settings": get_g8ee_app_settings(request),
-            "cache_aside_service": get_g8ee_cache_aside_service(request),
+            "document_service": get_g8ee_document_service(request),
             "investigation_data_service": get_g8ee_investigation_data_service(request),
             "investigation_service": get_g8ee_investigation_service(request),
             "memory_service": get_g8ee_memory_service(request),
@@ -443,7 +422,6 @@ __all__ = [
     "get_g8ee_auth_service",
     "get_g8ee_blob_client",
     "get_g8ee_blob_service",
-    "get_g8ee_cache_aside_service",
     "get_g8ee_case_data_service",
     "get_g8ee_certificate_service",
     "get_g8ee_chat_pipeline",
@@ -451,16 +429,15 @@ __all__ = [
     "get_g8ee_chat_user_settings",
     "get_g8ee_client_http_client",
     "get_g8ee_current_active_user",
+    "get_g8ee_document_service",
     "get_g8ee_event_service",
     "get_g8ee_gateway_operator_client",
     "get_g8ee_grounding_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_seed_service",
     "get_g8ee_investigation_service",
-    "get_g8ee_kv_cache_client",
     "get_g8ee_memory_generation_service",
     "get_g8ee_memory_service",
-    "get_g8ee_operator_cache",
     "get_g8ee_operator_command_service",
     "get_g8ee_operator_data_service",
     "get_g8ee_settings_service",

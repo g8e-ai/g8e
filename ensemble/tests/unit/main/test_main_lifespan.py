@@ -10,9 +10,8 @@ Tests for app.main.lifespan - the FastAPI startup/shutdown orchestrator.
 
 main.py responsibilities:
     Phase 0: Bootstrap settings (SettingsService, initialize_g8e_service, setup_logging)
-    Phase 1: Core operator clients (DB, KV, PubSub, Blob) via _connect_clients
-    Phase 2: Handler services (DBService, KVService, BlobService)
-    Phase 3: CacheAsideService
+    Phase 1: Core operator clients (DB, Blob) via _connect_clients
+    Phase 2: Handler services (DocumentService, BlobService)
     Phase 4: Platform settings from operator
     Phase 5: ServiceFactory.create_all_services -> bind_to_app_state
     Phase 6: ServiceFactory.start_services
@@ -42,13 +41,10 @@ _PATCHES = [
     "app.main.set_settings",
     "app.main.AppEnrollmentService",
     "app.main.DBClient",
-    "app.main.KVCacheClient",
     "app.main.BlobClient",
     "app.main.GovernanceClient",
-    "app.main.DBService",
-    "app.main.KVService",
+    "app.main.DocumentService",
     "app.main.BlobService",
-    "app.main.CacheAsideService",
     "app.main.ServiceFactory",
 ]
 
@@ -61,7 +57,7 @@ def _build_mocks():
     for p in patches:
         mock_obj = p.start()
         name = p.attribute
-        if name in ("DBClient", "KVCacheClient", "BlobClient"):
+        if name in ("DBClient", "BlobClient"):
             mock_obj.return_value.connect = AsyncMock(return_value=True)
             mock_obj.return_value.close = AsyncMock()
         mocks[name] = mock_obj
@@ -95,7 +91,6 @@ def _configure_settings(mocks):
     settings._client_cert_path = cert_path
     settings._client_key_path = key_path
     settings.auth.operator_session_id = "session"
-    settings.gateway.default_ttl = 3600
     settings.port = PortConstants.G8E_PORT_G8EE_HTTPS
 
     mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
@@ -103,7 +98,7 @@ def _configure_settings(mocks):
     settings_svc = mocks["SettingsService"].return_value
     settings_svc.get_local_settings.return_value = settings
     settings_svc.get_app_settings = AsyncMock(return_value=settings)
-    settings_svc._cache_aside = None
+    settings_svc._documents = None
 
     return settings, settings_svc
 
@@ -116,14 +111,13 @@ def _configure_factory(mocks):
     # Create a mock AllServices object with required attributes
     mock_services = MagicMock(spec=AllServices)
     mock_services.api_key_service = MagicMock()
-    mock_services.cache_aside_service = MagicMock()
     mock_services.settings_service = MagicMock()
     mock_services.operator_data_service = MagicMock()
     mock_services.certificate_service = MagicMock()
     mock_services.investigation_service = MagicMock()
     mock_services.approval_service = MagicMock()
-    mock_services.db_service = MagicMock()
-    mock_services.db_service.close = AsyncMock()
+    mock_services.document_service = MagicMock()
+    mock_services.document_service.close = AsyncMock()
     mock_services.internal_http_client = MagicMock()
 
     factory.create_all_services.return_value = mock_services
@@ -146,7 +140,7 @@ def mock_app():
 
 
 class TestLifespanStartup:
-    async def test_connects_three_core_clients(self, mock_app):
+    async def test_connects_core_clients(self, mock_app):
         mocks, patches = _build_mocks()
         _configure_settings(mocks)
         _configure_factory(mocks)
@@ -155,7 +149,6 @@ class TestLifespanStartup:
                 pass
 
             mocks["DBClient"].return_value.connect.assert_called_once()
-            mocks["KVCacheClient"].return_value.connect.assert_called_once()
             mocks["BlobClient"].return_value.connect.assert_called_once()
         finally:
             for p in patches:
@@ -169,10 +162,8 @@ class TestLifespanStartup:
             async with lifespan(mock_app):
                 pass
 
-            mocks["DBService"].assert_called_once()
-            mocks["KVService"].assert_called_once()
+            mocks["DocumentService"].assert_called_once()
             mocks["BlobService"].assert_called_once()
-            mocks["CacheAsideService"].assert_called_once()
         finally:
             for p in patches:
                 p.stop()
@@ -265,7 +256,6 @@ class TestLifespanEnrollmentFailsClosed:
                     pass
 
             mocks["DBClient"].return_value.connect.assert_not_called()
-            mocks["KVCacheClient"].return_value.connect.assert_not_called()
             mocks["BlobClient"].return_value.connect.assert_not_called()
         finally:
             for p in patches:
@@ -302,9 +292,8 @@ class TestLifespanShutdown:
 
             factory.stop_services.assert_called_once()
 
-            mock_app.state.kv_cache_client.close.assert_called_once()
             mock_app.state.blob_client.close.assert_called_once()
-            mock_app.state.services.db_service.close.assert_called_once()
+            mock_app.state.services.document_service.close.assert_called_once()
         finally:
             for p in patches:
                 p.stop()

@@ -386,7 +386,7 @@ func TestRouteAuthRegistry_ObserveProducerRoutesDoNotLeakWebSession(t *testing.T
 func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 	registry := NewRouteAuthRegistry(false)
 
-	// Generic data, audit, blob, KV, pubsub, SSE push, governance, and PKI
+	// Generic data, audit, blob, pubsub, SSE push, governance, and PKI
 	// management routes must remain RouteAuthMTLS (fail-closed default).
 	// The observe prefix must not widen auth for any of these surfaces.
 	mtlsPaths := []string{
@@ -400,8 +400,6 @@ func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 		constants.APIPaths.AuditReceiptsExport,
 		constants.APIPaths.AuditReport,
 		constants.APIPaths.AuditStream,
-		// KV routes
-		constants.APIPaths.KV + "some-key",
 		// PubSub routes
 		constants.APIPaths.PubSubPublish,
 		// SSE push (producer-only, never browser-accessible)

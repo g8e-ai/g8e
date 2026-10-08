@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from app.db.document_service import DocumentService
 from app.models.cache import CacheOperationResult
 from app.models.operators import OperatorDocument
 from app.models.sessions import CliSessionDocument
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
 
 
@@ -25,10 +25,10 @@ class FakeOperatorCache:
     """
 
     collection: str = "operators"
-    cache: CacheAsideService
+    cache: DocumentService
 
     def __init__(self) -> None:
-        self.cache = MagicMock(spec=CacheAsideService)
+        self.cache = MagicMock(spec=DocumentService)
 
     async def get_operator(
         self, operator_id: str, *, user_id: str | None = None

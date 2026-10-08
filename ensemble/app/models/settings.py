@@ -27,7 +27,6 @@ from g8e.models.settings import (
 
 from app.constants import (
     ANTHROPIC_DEFAULT_ENDPOINT,
-    CACHE_TTL_DEFAULT,
     DB_COLLECTION_API_KEYS,
     DB_COLLECTION_CASES,
     DB_COLLECTION_INVESTIGATIONS,
@@ -267,8 +266,6 @@ class GatewaySettings(G8eBaseModel):
             or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
         )
     )
-    default_ttl: int = Field(CACHE_TTL_DEFAULT)
-    enable_cache_read: bool = Field(False)
 
     @field_validator("http_url", "pubsub_url", "blob_url", mode="after")
     @classmethod
@@ -564,7 +561,9 @@ class G8eeAppSettings(G8eBaseModel):
     eval_judge: EvalJudgeSettings = Field(
         default_factory=lambda: EvalJudgeSettings.model_validate({})
     )
-    reputation: ReputationSettings = Field(default_factory=lambda: ReputationSettings.model_validate({}))
+    reputation: ReputationSettings = Field(
+        default_factory=lambda: ReputationSettings.model_validate({})
+    )
     batch_execution: BatchExecutionSettings = Field(
         default_factory=lambda: BatchExecutionSettings.model_validate({})
     )

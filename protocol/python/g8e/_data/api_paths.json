@@ -71,8 +71,6 @@
   "health": "/api/v1/health",
   "inference_dispatch": "/api/v1/inference/dispatch",
   "internal_prefix": "/api/v1",
-  "kv": "/api/v1/kv/",
-  "kv_prefix": "/api/v1/kv/",
   "landing": "/",
   "mcp_endpoint": "/mcp",
   "observe_bootstrap": "/api/v1/observe/bootstrap",

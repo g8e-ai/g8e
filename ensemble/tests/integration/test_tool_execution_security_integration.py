@@ -35,7 +35,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 @pytest.mark.asyncio
 async def test_orchestrate_tool_execution_security_violation(
-    cache_aside_service,
+    document_service,
     unique_investigation_id,
     unique_case_id,
     unique_web_session_id,

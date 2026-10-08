@@ -203,7 +203,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.SSEEvents, h.sseController.handleInternalSSEEvents)
 	mux.HandleFunc(constants.APIPaths.SSEStream, h.sseController.handleInternalSSEStream)
 	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dataController.handleDataDB))
-	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dataController.handleKV))
 	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dataController.handlePubSubPublish)
 	if h.authMiddleware != nil {
 		mux.Handle(constants.APIPaths.PubSubStream, h.authMiddleware.Middleware(http.HandlerFunc(h.pubsubController.handleWebSocket)))

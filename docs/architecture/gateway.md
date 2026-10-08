@@ -191,7 +191,7 @@ When the Gateway returns an L3 approval response, the stdio proxy auto-opens a b
 
 ### Incremental State Tracking
 
-The Gateway's SQLite state-root service uses incremental state tracking to avoid unnecessary full recomputation. A monotonically increasing `state_version` counter tracks changes across data stores. Triggers automatically increment this counter on document, KV store, and blob mutations. The Gateway queries the current version before expensive state-root calculations, skipping computation when version unchanged.
+The Gateway's SQLite state-root service maintains a persisted incremental Merkle commitment (algorithm 2). Triggers on `documents`, `kv_store`, and `blobs` record each changed key in the writer's own transaction. A root read with nothing dirty is one `SELECT` over a single snapshot; otherwise one `BEGIN IMMEDIATE` transaction rehashes only the dirty leaves and their ancestor paths, so the cost of a write does not grow with history. Leaves are SHA-256 identities over (source, key) in 65,536 buckets under a fixed 16-ary tree four levels deep, with separate bound and observed trees. Expired but unswept KV and blob rows remain committed until maintenance deletes them. On open, a database recorded under a different algorithm is rebuilt once in one transaction. Historical receipts keep the roots they recorded.
 
 Two state tiers for Merkle root computation:
 

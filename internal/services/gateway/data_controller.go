@@ -24,12 +24,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/response"
 )
 
-// DataController handles document DB, KV store, blob storage, SSE events, and pub/sub publish endpoints.
+// DataController handles document DB, blob storage, SSE events, and pub/sub publish endpoints.
 type DataController struct {
 	cfg                *config.Config
 	logger             *slog.Logger
 	docStore           *DocumentStoreService
-	kvStore            *KVStoreService
 	sseStore           *SSEEventService
 	blobStore          *BlobStoreService
 	pubsub             *GatewayWebSocketHandler
@@ -42,7 +41,6 @@ type DataControllerDeps struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
 	DocStore           *DocumentStoreService
-	KVStore            *KVStoreService
 	SSEStore           *SSEEventService
 	BlobStore          *BlobStoreService
 	Pubsub             *GatewayWebSocketHandler
@@ -55,7 +53,6 @@ func newDataController(d DataControllerDeps) *DataController {
 		cfg:                d.Cfg,
 		logger:             d.Logger,
 		docStore:           d.DocStore,
-		kvStore:            d.KVStore,
 		sseStore:           d.SSEStore,
 		blobStore:          d.BlobStore,
 		pubsub:             d.Pubsub,
@@ -272,195 +269,6 @@ func (c *DataController) handleSSEEvents(w http.ResponseWriter, r *http.Request,
 	}
 
 	c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-}
-
-func (c *DataController) handleKV(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.KVPrefix)
-	if path == "" {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerKeyRequired.Error())
-		return
-	}
-
-	if path == "_keys" && r.Method == http.MethodPost {
-		c.handleKVKeys(w, r)
-		return
-	}
-	if path == "_scan" && r.Method == http.MethodPost {
-		c.handleKVScan(w, r)
-		return
-	}
-	if path == "_delete_pattern" && r.Method == http.MethodPost {
-		c.handleKVDeletePattern(w, r)
-		return
-	}
-
-	key := strings.TrimSuffix(strings.TrimSuffix(path, "/_ttl"), "/_expire")
-	if err := authorizeKVNamespace(r, key); err != nil {
-		c.responder.Error(w, http.StatusForbidden, err.Error())
-		return
-	}
-
-	if strings.HasSuffix(path, "/_ttl") {
-		key := strings.TrimSuffix(path, "/_ttl")
-		ttl := c.kvStore.KVTTL(key)
-		c.responder.JSON(w, http.StatusOK, models.KVTTLResponse{TTL: ttl})
-		return
-	}
-	if strings.HasSuffix(path, "/_expire") && r.Method == http.MethodPut {
-		key := strings.TrimSuffix(path, "/_expire")
-		body, err := c.readBody(r)
-		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-			return
-		}
-		var req models.KVExpireRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-			return
-		}
-		if req.TTL <= 0 {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerTTLRequired.Error())
-			return
-		}
-		ok := c.kvStore.KVExpire(key, req.TTL)
-		if !ok {
-			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
-			return
-		}
-		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-		return
-	}
-
-	key = path
-
-	switch r.Method {
-	case http.MethodGet:
-		value, ok := c.kvStore.KVGet(key)
-		if !ok {
-			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
-			return
-		}
-		c.responder.JSON(w, http.StatusOK, models.KVGetResponse{Value: value})
-
-	case http.MethodPut:
-		body, err := c.readBody(r)
-		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-			return
-		}
-		var req models.KVSetRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-			return
-		}
-		if err := c.kvStore.KVSetObserved(key, req.Value, req.TTL); err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKV: %w", err).Error())
-			return
-		}
-		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-
-	case http.MethodDelete:
-		if err := c.kvStore.KVDelete(key); err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKV: %w", err).Error())
-			return
-		}
-		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-
-	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-	}
-}
-
-func (c *DataController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-	var req models.KVPatternRequest
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-			return
-		}
-	}
-	if req.Pattern == "" {
-		req.Pattern = "*"
-	}
-	if err := authorizeKVNamespace(r, req.Pattern); err != nil {
-		c.responder.Error(w, http.StatusForbidden, err.Error())
-		return
-	}
-	keys, err := c.kvStore.KVKeys(req.Pattern)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKVKeys: %w", err).Error())
-		return
-	}
-	if keys == nil {
-		keys = []string{}
-	}
-	c.responder.JSON(w, http.StatusOK, models.KVKeysResponse{Keys: keys})
-}
-
-func (c *DataController) handleKVScan(w http.ResponseWriter, r *http.Request) {
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-	var req models.KVPatternRequest
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-			return
-		}
-	}
-	if req.Pattern == "" {
-		req.Pattern = "*"
-	}
-	if err := authorizeKVNamespace(r, req.Pattern); err != nil {
-		c.responder.Error(w, http.StatusForbidden, err.Error())
-		return
-	}
-	if req.Count <= 0 {
-		req.Count = 100
-	}
-	nextCursor, keys, err := c.kvStore.KVScan(req.Pattern, req.Cursor, req.Count)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKVScan: %w", err).Error())
-		return
-	}
-	if keys == nil {
-		keys = []string{}
-	}
-	c.responder.JSON(w, http.StatusOK, models.KVScanResponse{Cursor: nextCursor, Keys: keys})
-}
-
-func (c *DataController) handleKVDeletePattern(w http.ResponseWriter, r *http.Request) {
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-	var req models.KVPatternRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-	if req.Pattern == "" {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerPatternRequired.Error())
-		return
-	}
-	if err := authorizeKVNamespace(r, req.Pattern); err != nil {
-		c.responder.Error(w, http.StatusForbidden, err.Error())
-		return
-	}
-	count, err := c.kvStore.KVDeletePattern(req.Pattern)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleKVDeletePattern: %w", err).Error())
-		return
-	}
-	c.responder.JSON(w, http.StatusOK, models.KVDeletePatternResponse{Deleted: count})
 }
 
 func blobSegmentValid(s string) bool {

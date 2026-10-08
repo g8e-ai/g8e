@@ -15,13 +15,13 @@ from app.constants import (
     ErrorCode,
     EventType,
 )
+from app.db.document_service import DocumentService
 from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata
 from app.models.cache import FieldFilter
 from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.http_context import RequestContext
 from app.models.pubsub_messages import G8eMessage
-from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class AgentActivityDataService:
     used for data science analysis and telemetry.
     """
 
-    def __init__(self, cache: CacheAsideService, governance_client: GovernanceClient):
+    def __init__(self, cache: DocumentService, governance_client: GovernanceClient):
         self.cache = cache
         self.governance_client = governance_client
         self.collection = DB_COLLECTION_AGENT_ACTIVITY_METADATA
@@ -116,7 +116,7 @@ class AgentActivityDataService:
         logger.info("Retrieving agent activity metadata: %s", activity_id)
 
         try:
-            doc_data = await self.cache.get_document_with_cache(
+            doc_data = await self.cache.get_document_data(
                 collection=self.collection,
                 document_id=activity_id,
             )

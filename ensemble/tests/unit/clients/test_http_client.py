@@ -30,7 +30,6 @@ from app.clients.http_client import (
     get_service_client,
 )
 from app.constants import (
-    CACHE_TTL_DEFAULT,
     CASE_ID,
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
@@ -60,7 +59,7 @@ pytestmark = pytest.mark.unit
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
 
-    listen = GatewaySettings(default_ttl=CACHE_TTL_DEFAULT, enable_cache_read=False)
+    listen = GatewaySettings()
     tls_config = TLSConfig(
         ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None
     )
@@ -82,7 +81,7 @@ async def client():
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def authed_client():
 
-    listen = GatewaySettings(default_ttl=CACHE_TTL_DEFAULT, enable_cache_read=False)
+    listen = GatewaySettings()
     tls_config = TLSConfig(
         ca_cert_path="/mock/ca.crt", client_cert_path=None, client_key_path=None
     )

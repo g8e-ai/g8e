@@ -9,10 +9,10 @@ import logging
 
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants.collections import DB_COLLECTION_CLI_SESSIONS, DB_COLLECTION_OPERATORS
+from app.db.document_service import DocumentService
 from app.errors import ValidationError
 from app.models.operators import OperatorDocument
 from app.models.sessions import CliSessionDocument
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
 from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
 
@@ -24,7 +24,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
     def __init__(
         self,
-        cache: CacheAsideService,
+        cache: DocumentService,
         gateway_operator_client: GatewayOperatorClient,
     ) -> None:
         self.cache = cache
@@ -62,7 +62,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         if not cli_session_id:
             raise ValidationError("cli_session_id is required")
 
-        data = await self.cache.get_document_with_cache(DB_COLLECTION_CLI_SESSIONS, cli_session_id)
+        data = await self.cache.get_document_data(DB_COLLECTION_CLI_SESSIONS, cli_session_id)
         if not data:
             return None
 
@@ -103,10 +103,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ValidationError("user_id is required for Gateway operator reads")
 
         operators = await self._gateway_operator_client.list(user_id=user_id)
-        docs = [
-            operator_document_from_gateway(operator_doc)
-            for operator_doc in operators
-        ]
+        docs = [operator_document_from_gateway(operator_doc) for operator_doc in operators]
 
         if field_filters:
             docs = [doc for doc in docs if self._matches_filters(doc, field_filters)]

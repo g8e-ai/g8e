@@ -300,8 +300,6 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	}
 	m.logger.Info("[SecretManager] platform_settings document created with security secrets")
 
-	m.warmAppSettingsCache(string(dataJSON), now)
-
 	for _, name := range requiredBootstrapSecrets {
 		if err := m.keystore.EncryptSecret(name, secrets[name]); err != nil {
 			return fmt.Errorf("secret_manager: create app settings: encrypt secret %s: %w", name, err)
@@ -458,22 +456,6 @@ func (m *SecretManager) rejectPreexistingBootstrapState() error {
 		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: digest manifest: %w", constants.ErrAlreadyExists)
 	}
 	return nil
-}
-
-func (m *SecretManager) warmAppSettingsCache(dataJSON string, now time.Time) {
-	cacheKey := "g8e:cache:doc:settings:platform_settings"
-	cacheTTL := 3600
-	nowStr := timesvc.FormatTimestamp(now)
-	_, err := m.db.ExecWithRetry(
-		`INSERT INTO kv_store (key, value, created_at, expires_at)
-		 VALUES (?, ?, ?, ?)`,
-		cacheKey, dataJSON, nowStr, timesvc.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
-	)
-	if err != nil {
-		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
-	} else {
-		m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
-	}
 }
 
 func (m *SecretManager) generateSecureToken(bytes int) (string, error) {

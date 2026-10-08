@@ -133,7 +133,6 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 			Cfg:       infra.Cfg,
 			Logger:    infra.Logger,
 			DocStore:  infra.DocStore,
-			KVStore:   infra.KVStore,
 			SSEStore:  infra.SSEStore,
 			BlobStore: infra.BlobStore,
 			Pubsub:    infra.Pubsub,
@@ -379,7 +378,6 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h.cfg)
 	assert.NotNil(t, h.logger)
 	assert.NotNil(t, h.dataController.docStore)
-	assert.NotNil(t, h.dataController.kvStore)
 	assert.NotNil(t, h.dataController.sseStore)
 	assert.NotNil(t, h.GetGatewayWebSocketHandler())
 	assert.NotNil(t, h.authMiddleware)

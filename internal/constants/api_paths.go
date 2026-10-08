@@ -53,9 +53,6 @@ var APIPaths = struct {
 	DataItems       string `json:"data_items"`
 	DataBlobsPrefix string `json:"data_blobs_prefix"`
 	QueryPrefix     string `json:"query_prefix"`
-	// KV routes
-	KV       string `json:"kv"`
-	KVPrefix string `json:"kv_prefix"`
 	// PubSub routes
 	PubSubPublish   string `json:"pubsub_publish"`
 	PubSubStream    string `json:"pubsub_stream"`
@@ -244,9 +241,6 @@ var APIPaths = struct {
 	DataItems:       "/api/v1/data/items",
 	DataBlobsPrefix: "/api/v1/blobs/",
 	QueryPrefix:     "/_query",
-	// KV routes
-	KV:       "/api/v1/kv/",
-	KVPrefix: "/api/v1/kv/",
 	// PubSub routes
 	PubSubPublish:   "/api/v1/pubsub/publish",
 	PubSubStream:    "/api/v1/pubsub/stream",

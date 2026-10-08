@@ -30,7 +30,6 @@ func TestAuthMiddleware_PublicHealthAndMissingClientCertificate(t *testing.T) {
 		{"public health reaches handler", http.MethodGet, constants.APIPaths.Health, http.StatusOK},
 		{"websocket requires certificate", http.MethodGet, constants.APIPaths.PubSubWebSocket, http.StatusUnauthorized},
 		{"settings mutation requires certificate", http.MethodPut, constants.APIPaths.DataSettings + "/" + string(constants.DocIDPlatformSettings), http.StatusUnauthorized},
-		{"key value read requires certificate", http.MethodGet, constants.APIPaths.KV + "/some-key", http.StatusUnauthorized},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false

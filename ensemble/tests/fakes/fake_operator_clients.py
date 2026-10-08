@@ -5,101 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Typed fakes for operator KV, DB, and PubSub clients."""
+"""Typed fakes for operator DB and PubSub clients."""
 
-import fnmatch
-import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from app.clients.http_client import HTTPClient
 from app.models.cache import BatchWriteOperation, CacheOperationResult, DocumentResult, QueryResult
-
-
-class FakeKVClient:
-    """In-memory fake for operator KV client.
-
-    Provides a real dict-backed store so tests can assert on actual stored
-    values. Used by KVCacheClient.
-    """
-
-    def __init__(self):
-        self._store: dict[str, str] = {}
-        # Expose as AsyncMock for call assertions if needed,
-        # but implementation is real in-memory.
-        self.get = AsyncMock(side_effect=self._get)
-        self.set = AsyncMock(side_effect=self._set)
-        self.get_json = AsyncMock(side_effect=self._get_json)
-        self.set_json = AsyncMock(side_effect=self._set_json)
-        self.delete = AsyncMock(side_effect=self._delete)
-        self.exists = AsyncMock(side_effect=self._exists)
-        self.ttl = AsyncMock(return_value=-1)
-        self.setex = AsyncMock(side_effect=self._setex)
-        self.expire = AsyncMock(return_value=True)
-        self.ping = AsyncMock(return_value=True)
-        self.keys = AsyncMock(side_effect=self._keys)
-        self.delete_pattern = AsyncMock(side_effect=self._delete_pattern)
-        self.hget = AsyncMock(return_value=None)
-        self.hset = AsyncMock(return_value=1)
-        self.hgetall = AsyncMock(return_value={})
-        self.hdel = AsyncMock(return_value=1)
-        self.rpush = AsyncMock(return_value=1)
-        self.lpush = AsyncMock(return_value=1)
-        self.lrange = AsyncMock(return_value=[])
-        self.llen = AsyncMock(return_value=0)
-        self.ltrim = AsyncMock(return_value=True)
-        self.incr = AsyncMock(return_value=1)
-        self.decr = AsyncMock(return_value=0)
-        self.connect = AsyncMock()
-        self.disconnect = AsyncMock()
-        self.close = AsyncMock()
-
-    def seed(self, key: str, value: str):
-        self._store[key] = value
-
-    def seed_json(self, key: str, data: Any):
-        self._store[key] = json.dumps(data)
-
-    async def _get(self, key: str):
-        return self._store.get(key)
-
-    async def _set(self, key: str, value: str, **kwargs):
-        self._store[key] = value
-        return True
-
-    async def _get_json(self, key: str):
-        raw = self._store.get(key)
-        return json.loads(raw) if raw is not None else None
-
-    async def _set_json(self, key: str, value: Any, **kwargs):
-        self._store[key] = json.dumps(value)
-        return True
-
-    async def _delete(self, *keys: str):
-        count = 0
-        for k in keys:
-            if k in self._store:
-                del self._store[k]
-                count += 1
-        return count
-
-    async def _exists(self, *keys: str):
-        return sum(1 for k in keys if k in self._store)
-
-    async def _keys(self, pattern: str) -> list[str]:
-        # Simple glob to regex or fnmatch
-        return [k for k in self._store if fnmatch.fnmatch(k, pattern)]
-
-    async def _delete_pattern(self, pattern: str) -> int:
-        keys_to_delete = await self._keys(pattern)
-        return await self._delete(*keys_to_delete)
-
-    async def _setex(self, key: str, seconds: int, value: str):
-        self._store[key] = value
-        return True
-
-    def is_healthy(self):
-        return True
 
 
 class FakePubSubClient:

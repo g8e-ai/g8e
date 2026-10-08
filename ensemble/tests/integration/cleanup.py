@@ -13,7 +13,7 @@ test, even on assertion failure or unexpected exceptions.
 
 Usage via the ``cleanup`` autouse fixture in ``integration/conftest.py``::
 
-    async def test_example(self, cache_aside_service, cleanup, all_services):
+    async def test_example(self, document_service, cleanup, all_services):
         inv_data_svc = all_services.investigation_data_service
         created = await inv_data_svc.create_investigation(...)
         cleanup.track_investigation(created.id)
@@ -23,7 +23,7 @@ Usage via the ``cleanup`` autouse fixture in ``integration/conftest.py``::
 
 import logging
 
-from app.services.cache.cache_aside import CacheAsideService
+from app.db.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 class IntegrationCleanupTracker:
     """Tracks operator documents for automatic post-test deletion."""
 
-    def __init__(self, cache_aside_service: CacheAsideService) -> None:
-        self._cache_aside = cache_aside_service
+    def __init__(self, document_service: DocumentService) -> None:
+        self._documents = document_service
         self._tracked: list[tuple[str, str]] = []
 
     def track(self, collection: str, document_id: str) -> None:
@@ -50,7 +50,7 @@ class IntegrationCleanupTracker:
     async def cleanup(self) -> None:
         for collection, doc_id in reversed(self._tracked):
             try:
-                await self._cache_aside.delete_document(collection, doc_id)
+                await self._documents.delete_document(collection, doc_id)
             except Exception as exc:
                 logger.info(
                     "Cleanup: could not delete %s/%s: %s",
