@@ -531,11 +531,6 @@ func (rs *OperatorPubSubService) Stop() error {
 	return nil
 }
 
-// listenForCommands holds the Operator's cmd-channel subscription for the life
-// of the service. The Gateway is allowed to be down for any length of time (a
-// restart, an upgrade), so a lost subscription is retried with capped backoff
-// until the service context ends; giving up would leave an Operator that still
-// heartbeats over its publish socket but can never receive a command.
 func (rs *OperatorPubSubService) observeCommandSubscription(connected bool) bool {
 	if rs.onCommandSubscription == nil {
 		return true
@@ -543,7 +538,7 @@ func (rs *OperatorPubSubService) observeCommandSubscription(connected bool) bool
 	if err := rs.onCommandSubscription(rs.ctx, rs.config.OperatorSessionId, connected); err != nil {
 		rs.logger.Error("Failed to record command subscription state", "error", err)
 		select {
-		case rs.ShutdownChan <- "DEPLOYMENT_STATE_FAILURE":
+		case rs.ShutdownChan <- constants.ErrOperatorDeployFailed.Error():
 		case <-rs.ctx.Done():
 		}
 		return false
@@ -551,6 +546,11 @@ func (rs *OperatorPubSubService) observeCommandSubscription(connected bool) bool
 	return true
 }
 
+// listenForCommands holds the Operator's cmd-channel subscription for the life
+// of the service. The Gateway is allowed to be down for any length of time (a
+// restart, an upgrade), so a lost subscription is retried with capped backoff
+// until the service context ends; giving up would leave an Operator that still
+// heartbeats over its publish socket but can never receive a command.
 func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 	reconnectDelay := rs.reconnectBaseDelay
 	maxReconnectDelay := 30 * rs.reconnectBaseDelay

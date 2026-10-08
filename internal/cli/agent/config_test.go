@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -144,8 +145,8 @@ func TestLaunchArgs(t *testing.T) {
 		id   constants.AgentBinary
 		want []string
 	}{
-		{constants.AgentBinaryClaude, []string{"--mcp-config", "/tmp/cfg.json", "--strict-mcp-config", "--disallowed-tools", "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"}},
-		{constants.AgentBinaryCodex, []string{"--mcp-config", "/tmp/cfg.json", "--strict-mcp-config", "--disallowed-tools", "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"}},
+		{constants.AgentBinaryClaude, []string{"--mcp-config", "/tmp/cfg.json", "--strict-mcp-config", "--disallowed-tools", strings.Join(nativeToolsToDisable, ",")}},
+		{constants.AgentBinaryCodex, []string{"--mcp-config", "/tmp/cfg.json", "--strict-mcp-config", "--disallowed-tools", strings.Join(nativeToolsToDisable, ",")}},
 		{constants.AgentBinaryGoose, []string{"session", "--no-profile", "--with-extension", "/fake/g8e mcp stdio --app goose"}},
 		{constants.AgentBinaryGemini, []string{}},
 		{constants.AgentBinaryDevin, []string{}},
@@ -157,6 +158,20 @@ func TestLaunchArgs(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestNativeToolsToDisable_CoversEveryExecutionAndEgressTool(t *testing.T) {
+	required := []string{
+		"Bash", "PowerShell", "REPL", "Monitor",
+		"Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep",
+		"EnterWorktree", "ExitWorktree",
+		"WebSearch", "WebFetch", "PushNotification", "RemoteTrigger",
+		"Artifact", "ArtifactComments", "ArtifactData", "DesignSync",
+		"Agent", "Skill", "ListAgents", "SendMessage",
+		"CronCreate", "CronDelete", "CronList", "ScheduleWakeup",
+	}
+	assert.ElementsMatch(t, required, nativeToolsToDisable,
+		"every built-in that can execute, touch files, reach the network, spawn agents, or schedule work must be disallowed")
 }
 
 func TestLaunchArgs_UnknownStrategyFailsClosed(t *testing.T) {

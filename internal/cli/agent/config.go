@@ -24,8 +24,24 @@ import (
 // nativeToolsToDisable lists built-in tools that Claude Code and Codex must
 // disable via --disallowed-tools to force all I/O through g8e's MCP gateway.
 // Other agents use different mechanisms (see their Integration entries).
+//
+// The list covers every built-in that can execute commands, touch files, reach
+// the network, spawn sub-agents, or schedule work outside the governed path.
+// Only tools with no such effect (ReportFindings, TaskStop, ToolSearch, which is
+// needed to reach deferred MCP tools) stay enabled. Verified against the
+// Claude Code 2.1.293 session init tool list; re-check it on Claude Code upgrades.
 var nativeToolsToDisable = []string{
-	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
+	// Shell and code execution.
+	"Bash", "PowerShell", "REPL", "Monitor",
+	// Filesystem reads and writes.
+	"Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep",
+	"EnterWorktree", "ExitWorktree",
+	// Network and external egress.
+	"WebSearch", "WebFetch", "PushNotification", "RemoteTrigger",
+	"Artifact", "ArtifactComments", "ArtifactData", "DesignSync",
+	// Sub-agents, skills, and deferred or remote execution.
+	"Agent", "Skill", "ListAgents", "SendMessage",
+	"CronCreate", "CronDelete", "CronList", "ScheduleWakeup",
 }
 
 // mcpConfig is the mcpServers JSON structure shared by Claude, Codex, and Devin.

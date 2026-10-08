@@ -43,7 +43,7 @@ func TestOperatorDeploymentRecorderPreservesIdentityAcrossSubscriptionChanges(t 
 	}
 	info, err := fileSvc.Stat(ctx, operatorDeploymentStateRelPath())
 	require.NoError(t, err)
-	require.Equal(t, constants.PermFilePrivate, info.Mode().Perm())
+	require.EqualValues(t, constants.PermFilePrivate, info.Mode().Perm())
 }
 
 func TestOperatorDeploymentFailureSurvivesLateReadinessCallback(t *testing.T) {

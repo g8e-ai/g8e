@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "g8e": {
+      "command": "sh",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-stdio.sh",
+        "${user_config.g8e_root}",
+        "${user_config.g8e_binary}",
+        "${user_config.app_name}"
+      ]
+    }
+  }
+}

@@ -62,6 +62,9 @@ make console-lint                  # tsc --noEmit + ESLint
 make console-embed   # rebuild and refresh the Gateway embed (commit static/ with the source change)
 make console-embed-check           # fail if the committed embed is stale
 
+# Claude Code plugin (claude-plugin/)
+make claude-plugin-test            # hook tests, shellcheck, claude plugin validate
+
 # Protocol / generated code
 make proto-generate       # regenerates Go, Python, TS bindings + lockfiles — never hand-edit generated output
 make constants-check      # verify generated event/action-type constants are current
@@ -123,6 +126,7 @@ protocol/             Protobuf contracts, constants registries, generated Go/Pyt
 ensemble/             g8ee — Python/FastAPI agentic app
 console/              Browser console (React/TS), embedded in the Gateway at /console/
 g8e-adapter/          Audited browser adapter + observe-frontend contract pack
+claude-plugin/        Claude Code plugin (marketplace manifest in .claude-plugin/)
 evaluation-explorer/  Frontend for live model-campaign inspection
 eval/                 Evaluation fixtures, campaign schemas, benchmark datasets
 docs/                 Full platform documentation (see below)

@@ -189,7 +189,7 @@ func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing
 	client := &cmdtest.MockAPIClient{GetResp: listBody, PostResp: decisionBody}
 
 	out, err := runOperatorDeploy(t, client, "--hosts", "localhost", "--remote-dir", remoteDir,
-		"--count", "2", "--background", "--endpoint", "localhost", "--approve")
+		"--count", "2", "--background", "--endpoint", "localhost", "--approve", "--log", "error")
 	require.NoError(t, err, out)
 
 	require.Len(t, client.PostCalls, 1)

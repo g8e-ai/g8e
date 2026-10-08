@@ -1,0 +1,34 @@
+{
+  "name": "g8e",
+  "displayName": "g8e",
+  "version": "0.1.0",
+  "description": "Puts Claude Code on the g8e governed path: the g8e Gateway MCP server is the only way to act, and every other tool is denied.",
+  "author": {
+    "name": "Lateralus Labs",
+    "url": "https://g8e.ai"
+  },
+  "homepage": "https://g8e.ai",
+  "repository": "https://github.com/g8e-ai/g8e",
+  "license": "BUSL-1.1",
+  "keywords": ["g8e", "governance", "mcp", "audit"],
+  "userConfig": {
+    "g8e_root": {
+      "type": "directory",
+      "title": "g8e root",
+      "description": "Directory that contains your .g8e/ runtime (where you ran 'g8e gw start' and enrolled). The MCP bridge runs from here.",
+      "required": true
+    },
+    "g8e_binary": {
+      "type": "string",
+      "title": "g8e binary",
+      "description": "Path to the g8e binary, or a name on PATH.",
+      "default": "g8e"
+    },
+    "app_name": {
+      "type": "string",
+      "title": "Application identity",
+      "description": "Enrolled application name the bridge authenticates as ('g8e auth enroll app <name>'). Receipts record it as spiffe://g8e.local/app/<name>.",
+      "default": "claude"
+    }
+  }
+}

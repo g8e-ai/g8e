@@ -292,6 +292,7 @@ help:
 		'  ensemble-test             Run ensemble unit and integration tests' \
 		'  ensemble-test-external    Run tests that require real providers' \
 		'  ensemble-lint             Run ruff and pyright on the ensemble' \
+		'  claude-plugin-test        Test, shellcheck, and validate the Claude Code plugin' \
 		'' \
 		'Run locally' \
 		'  up                        Build and start the Gateway on this host' \
@@ -900,6 +901,19 @@ console-lint:
 console-test:
 	@echo "Running the console vitest suite..."
 	@cd console && npm test
+
+# The Claude Code plugin (claude-plugin/) and its marketplace (.claude-plugin/).
+# Manifest validation needs the claude CLI and is skipped without it.
+.PHONY: claude-plugin-test
+claude-plugin-test:
+	@echo "Testing the Claude Code plugin..."
+	@sh claude-plugin/test/run.sh
+	@shellcheck -s sh claude-plugin/hooks/*.sh claude-plugin/scripts/*.sh claude-plugin/test/*.sh
+	@if command -v claude >/dev/null 2>&1; then \
+		claude plugin validate --strict claude-plugin && claude plugin validate --strict .; \
+	else \
+		echo "claude CLI not found; skipping manifest validation"; \
+	fi
 
 # Rebuilds the console and fails if the committed embed is stale.
 .PHONY: console-embed-check

@@ -22,8 +22,8 @@ import (
 
 // OperatorDeploymentRecorder persists the Operator's non-secret enrollment and
 // startup progress so a deploying CLI discovers it without parsing process
-// output. Writes are serialized so a late "ready" cannot be overwritten by an
-// earlier phase.
+// output. Writes preserve enrollment identity across subscription changes,
+// and terminal startup failures take precedence over late readiness callbacks.
 type OperatorDeploymentRecorder struct {
 	fileSvc  fs.RuntimeFileService
 	launchID string
@@ -74,6 +74,9 @@ func (r *OperatorDeploymentRecorder) Record(ctx context.Context, state models.Op
 		return fmt.Errorf("operator deployment state: marshal: %w", err)
 	}
 	rel := operatorDeploymentStateRelPath()
+	if err := r.fileSvc.MkdirAll(ctx, filepath.Dir(rel), constants.PermDirPrivate); err != nil {
+		return fmt.Errorf("operator deployment state: create dir: %w", err)
+	}
 	if err := r.fileSvc.WriteFile(ctx, rel, data, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("operator deployment state: write: %w", err)
 	}

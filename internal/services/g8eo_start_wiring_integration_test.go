@@ -117,6 +117,28 @@ func TestG8eoService_Start_NoGitLeavesLedgerDisabledButKeepsHistoryHandler(t *te
 	assert.NotNil(t, service.executionVault)
 }
 
+func TestG8eoService_StartReportsSubscribedSessionToDeploymentObserver(t *testing.T) {
+	service := newStartableG8eoService(t, nil)
+	subscribed := make(chan string, 1)
+	require.NoError(t, service.SetCommandSubscriptionObserver(func(_ context.Context, sessionID string, connected bool) error {
+		if connected {
+			select {
+			case subscribed <- sessionID:
+			default:
+			}
+		}
+		return nil
+	}))
+	require.NoError(t, startWithTimeout(t, service))
+	select {
+	case sessionID := <-subscribed:
+		require.Equal(t, "test-sess-1", sessionID)
+	case <-time.After(5 * time.Second):
+		t.Fatal("deployment observer did not receive the subscribed session")
+	}
+	require.ErrorIs(t, service.SetCommandSubscriptionObserver(nil), constants.ErrServiceUnavailable)
+}
+
 func TestG8eoService_Start_InitializesGitLedgerWhenGitIsAllowed(t *testing.T) {
 	service := newStartableG8eoService(t, func(cfg *config.Config) { cfg.NoGit = false })
 

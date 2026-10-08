@@ -1,0 +1,17 @@
+{
+  "name": "g8e",
+  "owner": {
+    "name": "Lateralus Labs",
+    "url": "https://g8e.ai"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for the g8e governance platform."
+  },
+  "plugins": [
+    {
+      "name": "g8e",
+      "source": "./claude-plugin",
+      "description": "Puts Claude Code on the g8e governed path: the g8e Gateway MCP server is the only way to act, and every other tool is denied."
+    }
+  ]
+}
