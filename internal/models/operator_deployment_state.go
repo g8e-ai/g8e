@@ -29,11 +29,12 @@ const (
 
 // OperatorDeploymentState is the non-secret deployment state an Operator
 // persists for the CLI that launched it. It never carries the requester token,
-// private keys, or fingerprints. The Operator removes any previous record when
-// it starts; UpdatedAt lets a reader reject one written before its launch.
+// private keys, or fingerprints. LaunchID binds progress to the deploying
+// invocation without depending on synchronized clocks between hosts.
 type OperatorDeploymentState struct {
+	LaunchID          string                  `json:"launch_id,omitempty"`
 	Phase             OperatorDeploymentPhase `json:"phase"`
-	RequestID        string                  `json:"request_id,omitempty"`
+	RequestID         string                  `json:"request_id,omitempty"`
 	OperatorSessionID string                  `json:"operator_session_id,omitempty"`
 	Error             string                  `json:"error,omitempty"`
 	UpdatedAt         time.Time               `json:"updated_at"`

@@ -104,7 +104,8 @@ type OperatorPubSubService struct {
 	gatewayMode bool
 	mu          sync.RWMutex
 
-	reconnectBaseDelay time.Duration
+	reconnectBaseDelay    time.Duration
+	onCommandSubscription func(context.Context, string, bool) error
 
 	// governance services
 	actuator         *governance.L5Actuator
@@ -128,17 +129,19 @@ type OperatorPubSubService struct {
 // Gateway-only fields are in GatewayCommandServiceConfig to enforce mode
 // bifurcation at the type level.
 type CommandServiceConfig struct {
-	Config         *config.Config
-	Logger         *slog.Logger
-	Execution      *execution.ExecutionService
-	FileEdit       *execution.FileEditService
-	PubSubClient   PubSubClient
-	ResultsService ResultsPublisher
-	ExecutionVault storage.ExecutionVault
-	AuditStore     *storage.SQLAuditStore
-	Ledger         *storage.GitLedgerService
-	HistoryHandler *storage.HistoryHandler
-	Scrubbing      *scrubbing.ScrubbingService
+	// OnCommandSubscription observes outbound transport readiness; it grants no authority.
+	OnCommandSubscription func(context.Context, string, bool) error
+	Config                *config.Config
+	Logger                *slog.Logger
+	Execution             *execution.ExecutionService
+	FileEdit              *execution.FileEditService
+	PubSubClient          PubSubClient
+	ResultsService        ResultsPublisher
+	ExecutionVault        storage.ExecutionVault
+	AuditStore            *storage.SQLAuditStore
+	Ledger                *storage.GitLedgerService
+	HistoryHandler        *storage.HistoryHandler
+	Scrubbing             *scrubbing.ScrubbingService
 
 	// Inference is the governed execution handler for local LLM inference
 	// (g8ellama). Nil when inference is disabled; the inference event type
@@ -182,15 +185,16 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	serviceCtx, cancel := context.WithCancel(context.Background())
 
 	rs := &OperatorPubSubService{
-		client:             client,
-		config:             c.Config,
-		logger:             c.Logger,
-		results:            c.ResultsService,
-		ctx:                serviceCtx,
-		cancel:             cancel,
-		ShutdownChan:       make(chan string, 1),
-		reconnectBaseDelay: 1 * time.Second,
-		gatewayMode:        gatewayMode,
+		client:                client,
+		config:                c.Config,
+		logger:                c.Logger,
+		results:               c.ResultsService,
+		ctx:                   serviceCtx,
+		cancel:                cancel,
+		ShutdownChan:          make(chan string, 1),
+		reconnectBaseDelay:    1 * time.Second,
+		gatewayMode:           gatewayMode,
+		onCommandSubscription: c.OnCommandSubscription,
 	}
 
 	rs.heartbeat = NewHeartbeatService(c.Config, c.Logger, &rs.wg)
@@ -532,6 +536,21 @@ func (rs *OperatorPubSubService) Stop() error {
 // restart, an upgrade), so a lost subscription is retried with capped backoff
 // until the service context ends; giving up would leave an Operator that still
 // heartbeats over its publish socket but can never receive a command.
+func (rs *OperatorPubSubService) observeCommandSubscription(connected bool) bool {
+	if rs.onCommandSubscription == nil {
+		return true
+	}
+	if err := rs.onCommandSubscription(rs.ctx, rs.config.OperatorSessionId, connected); err != nil {
+		rs.logger.Error("Failed to record command subscription state", "error", err)
+		select {
+		case rs.ShutdownChan <- "DEPLOYMENT_STATE_FAILURE":
+		case <-rs.ctx.Done():
+		}
+		return false
+	}
+	return true
+}
+
 func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 	reconnectDelay := rs.reconnectBaseDelay
 	maxReconnectDelay := 30 * rs.reconnectBaseDelay
@@ -575,6 +594,9 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 			continue
 		}
 
+		if !rs.observeCommandSubscription(true) {
+			return
+		}
 		rs.logger.Info("Channel established - Ready to receive")
 		reconnectDelay = rs.reconnectBaseDelay
 
@@ -591,6 +613,9 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 				return
 			case payload, ok := <-msgCh:
 				if !ok {
+					if !rs.observeCommandSubscription(false) {
+						return
+					}
 					rs.logger.Warn("[RECONNECT] Channel closed, reconnecting...")
 					disconnected = true
 					break

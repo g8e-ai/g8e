@@ -152,6 +152,9 @@ func TestOperatorEnroll_ResumeFromPendingState(t *testing.T) {
 
 	err = client.persistPendingState(client.pendingStatePath(), pending)
 	require.NoError(t, err)
+	recorder, err := NewOperatorDeploymentRecorder(fileSvc, "resume-launch")
+	require.NoError(t, err)
+	client.SetDeploymentRecorder(recorder)
 
 	// Override the mock gateway to use the preexisting request ID and
 	// token so the status and completion endpoints recognize the
@@ -174,6 +177,17 @@ func TestOperatorEnroll_ResumeFromPendingState(t *testing.T) {
 	// token.
 	assert.Equal(t, mg.operatorID, result.OperatorID)
 	assert.Equal(t, mg.operatorSession, result.OperatorSessionID)
+	data, err := fileSvc.ReadFile(ctx, operatorDeploymentStateRelPath())
+	require.NoError(t, err)
+	var progress models.OperatorDeploymentState
+	require.NoError(t, json.Unmarshal(data, &progress))
+	assert.Equal(t, "resume-launch", progress.LaunchID)
+	assert.Equal(t, originalRequestID, progress.RequestID)
+	assert.Equal(t, mg.operatorSession, progress.OperatorSessionID)
+	assert.Equal(t, models.OperatorDeploymentPhaseEnrolled, progress.Phase)
+	assert.NotContains(t, string(data), originalToken)
+	assert.NotContains(t, string(data), opKeyPEM)
+	assert.NotContains(t, string(data), cliKeyPEM)
 }
 
 // TestOperatorEnroll_DenialFailsClosed verifies that a denied request

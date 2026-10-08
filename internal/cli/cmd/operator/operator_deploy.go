@@ -32,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
 const (
@@ -46,9 +47,7 @@ const (
 	operatorDeployOnlinePerOperator = time.Second
 
 	// operatorDeployStartLog is written by the started worker in its working
-	// directory. Its "Approve with:" line and enrollment-completed record are
-	// how deploy ties an enrollment request and an Operator session to the
-	// directory that produced them.
+	// directory for human diagnostics. Discovery uses structured runtime state.
 	operatorDeployStartLog = "start.log"
 )
 
@@ -61,10 +60,6 @@ var (
 	// --gateway-https-port, so this value must be a host/IP without a scheme
 	// or explicit port.
 	operatorDeployEndpointPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-
-	operatorDeployRequestIDPattern    = regexp.MustCompile(`auth enroll approve ([0-9a-f-]{36})`)
-	operatorDeploySessionIDPattern    = regexp.MustCompile(`operator_session_id:\s+([0-9a-f-]{36})`)
-	operatorDeployEnrollFailedPattern = regexp.MustCompile(`(?m)^Enrollment failed: .+$`)
 )
 
 // deploySSH runs commands on, and copies files to, one remote host.
@@ -75,6 +70,7 @@ type deploySSH struct {
 	stderr       io.Writer
 	local        bool
 	binaryDir    string
+	launchID     string
 }
 
 // deployTarget is the lifecycle surface shared by process/SSH and Docker
@@ -83,7 +79,7 @@ type deploySSH struct {
 type deployTarget interface {
 	name() string
 	startOperator(context.Context, string, string, ...string) error
-	readStartLog(context.Context, string) ([]byte, error)
+	readDeploymentState(context.Context, string) (*models.OperatorDeploymentState, error)
 	awaitRequestID(context.Context, string) (string, error)
 	awaitSessionID(context.Context, string) (string, error)
 	awaitReady(context.Context, string) error
@@ -302,6 +298,11 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 		return deployedOperator{}, err
 	}
 	opts.startArgs = operatorDeployArgsForDir(opts.startArgs, s.host, absDir)
+	s.launchID, err = uuid.NewString()
+	if err != nil {
+		return deployedOperator{}, fmt.Errorf("deployment launch identity: %w", err)
+	}
+	opts.startArgs = append(opts.startArgs, "--deployment-id="+s.launchID)
 	op := deployedOperator{target: s, Dir: absDir}
 	if !opts.background {
 		cmd.Printf("Operator deployed to %s:%s (use --background to auto-start)\n", s.host, absDir)
@@ -588,70 +589,40 @@ func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, star
 	return nil
 }
 
-func (s deploySSH) readStartLog(ctx context.Context, dir string) ([]byte, error) {
+func (s deploySSH) readDeploymentState(ctx context.Context, dir string) (*models.OperatorDeploymentState, error) {
+	var state *models.OperatorDeploymentState
 	if s.local {
-		data, err := os.ReadFile(filepath.Join(dir, operatorDeployStartLog))
-		if os.IsNotExist(err) {
-			return nil, nil
+		fileSvc, err := fs.NewRuntimeFileService(dir, slog.Default())
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 		}
-		return data, err
+		state, err = readOperatorDeploymentState(ctx, fileSvc)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// The remote CLI reads its runtime through RuntimeFileService.
+		data, err := s.run(ctx, fmt.Sprintf("cd %s && ./g8e operator deployment-state --working-dir %s", operatorDeployShellQuote(dir), operatorDeployShellQuote(dir)))
+		if err != nil {
+			return nil, err
+		}
+		state, err = decodeOperatorDeploymentState(data)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return s.run(ctx, fmt.Sprintf("cat %s/%s 2>/dev/null || true", dir, operatorDeployStartLog))
+	if state != nil && state.LaunchID != s.launchID {
+		return nil, nil
+	}
+	return state, nil
 }
 
-// awaitRequestID returns the enrollment request ID the worker in dir printed,
-// or the worker's enrollment failure. A worker that already holds issued
-// credentials submits no request and goes straight to its session; that
-// returns an empty request ID.
 func (s deploySSH) awaitRequestID(ctx context.Context, dir string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
-	defer cancel()
-
-	var requestID string
-	err := pollUntil(ctx, func() (bool, error) {
-		log, err := s.readStartLog(ctx, dir)
-		if err != nil {
-			return false, err
-		}
-		if m := operatorDeployRequestIDPattern.FindSubmatch(log); m != nil {
-			requestID = string(m[1])
-			return true, nil
-		}
-		if m := operatorDeployEnrollFailedPattern.Find(log); m != nil {
-			return false, fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, m)
-		}
-		return operatorDeploySessionIDPattern.Match(log), nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("await enrollment request in %s: %w", dir, err)
-	}
-	return requestID, nil
+	return awaitDeploymentRequestID(ctx, s, dir)
 }
 
-// awaitSessionID returns the operator session ID the worker in dir logged when
-// its enrollment completed.
 func (s deploySSH) awaitSessionID(ctx context.Context, dir string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
-	defer cancel()
-	var sessionID string
-	err := pollUntil(ctx, func() (bool, error) {
-		log, err := s.readStartLog(ctx, dir)
-		if err != nil {
-			return false, err
-		}
-		if m := operatorDeployEnrollFailedPattern.Find(log); m != nil {
-			return false, fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, m)
-		}
-		if m := operatorDeploySessionIDPattern.FindSubmatch(log); m != nil {
-			sessionID = string(m[1])
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("await operator session: %w", err)
-	}
-	return sessionID, nil
+	return awaitDeploymentSessionID(ctx, s, dir)
 }
 
 // Reuse start's flag definitions so deploy and start cannot drift in types/defaults.
@@ -765,18 +736,8 @@ func operatorDeployArgsForDir(args []string, host, dir string) []string {
 // A retained registry session may still be marked active from the old process.
 // Require this launch to establish its command subscription before trusting it.
 func (s deploySSH) awaitReady(ctx context.Context, dir string) error {
-	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
-	defer cancel()
-	return pollUntil(ctx, func() (bool, error) {
-		log, err := s.readStartLog(ctx, dir)
-		if err != nil {
-			return false, err
-		}
-		if bytes.Contains(log, []byte("Failed to start g8e")) || bytes.Contains(log, []byte("Enrollment failed:")) {
-			return false, fmt.Errorf("operator startup failed; see %s/%s", dir, operatorDeployStartLog)
-		}
-		return bytes.Contains(log, []byte("Channel established - Ready to receive")), nil
-	})
+	_, err := awaitDeploymentState(ctx, s, dir, models.OperatorDeploymentPhaseReady)
+	return err
 }
 
 func validateOperatorDeployFlags(
@@ -843,10 +804,7 @@ func validateOperatorDeployFlags(
 	if approve && !background {
 		return "", "", fmt.Errorf("%w: --approve requires --background", constants.ErrMissingRequiredField)
 	}
-	logLevel, _ := cmd.Flags().GetString("log")
-	if approve && logLevel != "info" && logLevel != "debug" {
-		return "", "", fmt.Errorf("%w: --approve requires --log info or debug to observe worker readiness", constants.ErrMissingRequiredField)
-	}
+
 	return effectiveHosts, workerEndpoint, nil
 }
 

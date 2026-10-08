@@ -25,6 +25,13 @@ import (
 
 var errFactory = fmt.Errorf("factory boom")
 
+func TestOperatorDeploymentStateCmd_FileSvcFactoryError(t *testing.T) {
+	cmd := operatorDeploymentStateCmdWithFactory(cmdtest.FailingFileSvcFactory(errFactory))
+	err := cmd.RunE(cmd, nil)
+	require.ErrorIs(t, err, constants.ErrFileServiceInit)
+	require.ErrorIs(t, err, errFactory)
+}
+
 func TestOperatorStopCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
 

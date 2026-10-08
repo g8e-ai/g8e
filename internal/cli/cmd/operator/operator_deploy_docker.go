@@ -20,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
 const (
@@ -50,6 +52,7 @@ type dockerOperatorSpec struct {
 	dir, container, volume, hostname string
 	startArgs                        []string
 	launchTime                       time.Time
+	launchID                         string
 	launched                         bool
 }
 
@@ -213,13 +216,18 @@ func (d *deployDocker) createContainer(ctx context.Context, op *dockerOperatorSp
 	}
 	args = append(args, d.imageID, "operator", "start", "--endpoint", endpoint)
 	args = append(args, op.startArgs...)
-	args = append(args, "--working-dir", op.dir)
+	args = append(args, "--working-dir", op.dir, "--deployment-id="+op.launchID)
 	_, err := d.docker(ctx, args...)
 	return err
 }
 
 func (d *deployDocker) prepareOperator(ctx context.Context, dir, endpoint string, startArgs []string) (*dockerOperatorSpec, error) {
 	op := d.spec(dir, startArgs)
+	var err error
+	op.launchID, err = uuid.NewString()
+	if err != nil {
+		return nil, fmt.Errorf("deployment launch identity: %w", err)
+	}
 	if err := d.ensureOwnedVolume(ctx, op); err != nil {
 		return nil, err
 	}
@@ -291,73 +299,47 @@ func (d *deployDocker) running(ctx context.Context, op *dockerOperatorSpec) (boo
 	return fields[0] == "true", strings.Join(fields[1:], " "), nil
 }
 
-func (d *deployDocker) pollLog(ctx context.Context, dir, kind string, match func([]byte) (bool, string, error)) (string, error) {
+func (d *deployDocker) readDeploymentState(ctx context.Context, dir string) (*models.OperatorDeploymentState, error) {
 	op, err := d.operator(dir)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
-	defer cancel()
-	var value string
-	err = pollUntil(ctx, func() (bool, error) {
-		log, err := d.readStartLog(ctx, dir)
-		if err != nil {
-			return false, err
-		}
-		done, found, err := match(log)
-		if err != nil {
-			return false, err
-		}
-		if done {
-			value = found
-			return true, nil
-		}
-		running, state, err := d.running(ctx, op)
-		if err != nil {
-			return false, err
-		}
-		if !running {
-			return false, fmt.Errorf("container %s exited (%s); recent logs: %s", op.container, state, strings.TrimSpace(string(log)))
-		}
-		return false, nil
-	})
+	// Probe process state before exec: an exited process may leave a ready record.
+	running, status, err := d.running(ctx, op)
 	if err != nil {
-		return "", fmt.Errorf("await %s in %s: %w", kind, dir, err)
+		return nil, err
 	}
-	return value, nil
+	if !running {
+		log, logErr := d.readStartLog(ctx, dir)
+		if logErr != nil {
+			return nil, logErr
+		}
+		return nil, fmt.Errorf("%w: container %s exited (%s); recent logs: %s", constants.ErrOperatorDeployFailed, op.container, status, strings.TrimSpace(string(log)))
+	}
+	data, err := d.docker(ctx, "container", "exec", op.container, "./g8e", "operator", "deployment-state", "--working-dir", op.dir)
+	if err != nil {
+		return nil, err
+	}
+	state, err := decodeOperatorDeploymentState(data)
+	if err != nil {
+		return nil, err
+	}
+	if state != nil && state.LaunchID != op.launchID {
+		return nil, nil
+	}
+	return state, nil
 }
 
 func (d *deployDocker) awaitRequestID(ctx context.Context, dir string) (string, error) {
-	return d.pollLog(ctx, dir, "enrollment request", func(log []byte) (bool, string, error) {
-		if m := operatorDeployRequestIDPattern.FindSubmatch(log); m != nil {
-			return true, string(m[1]), nil
-		}
-		if m := operatorDeployEnrollFailedPattern.Find(log); m != nil {
-			return false, "", fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, m)
-		}
-		return operatorDeploySessionIDPattern.Match(log), "", nil
-	})
+	return awaitDeploymentRequestID(ctx, d, dir)
 }
 
 func (d *deployDocker) awaitSessionID(ctx context.Context, dir string) (string, error) {
-	return d.pollLog(ctx, dir, "operator session", func(log []byte) (bool, string, error) {
-		if m := operatorDeployEnrollFailedPattern.Find(log); m != nil {
-			return false, "", fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, m)
-		}
-		if m := operatorDeploySessionIDPattern.FindSubmatch(log); m != nil {
-			return true, string(m[1]), nil
-		}
-		return false, "", nil
-	})
+	return awaitDeploymentSessionID(ctx, d, dir)
 }
 
 func (d *deployDocker) awaitReady(ctx context.Context, dir string) error {
-	_, err := d.pollLog(ctx, dir, "command subscription", func(log []byte) (bool, string, error) {
-		if bytes.Contains(log, []byte("Failed to start g8e")) || bytes.Contains(log, []byte("Enrollment failed:")) {
-			return false, "", fmt.Errorf("operator startup failed")
-		}
-		return bytes.Contains(log, []byte("Channel established - Ready to receive")), "", nil
-	})
+	_, err := awaitDeploymentState(ctx, d, dir, models.OperatorDeploymentPhaseReady)
 	return err
 }
 

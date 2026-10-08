@@ -80,6 +80,7 @@ func Cmd() *cobra.Command {
 		operatorCpCmd(),
 		operatorScpCmd(),
 		operatorDeployCmd(),
+		operatorDeploymentStateCmd(),
 		operatorStreamCmd(),
 		operatorModelCmd(),
 	)
@@ -329,6 +330,7 @@ func operatorStartCmd() *cobra.Command {
 	var clientCert string
 	var trustBundle string
 	var workingDir string
+	var deploymentID string
 	var cloud bool
 	var provider string
 	var executionVault bool
@@ -378,6 +380,7 @@ func operatorStartCmd() *cobra.Command {
 				PrivateKey:                      key,
 				ClientCert:                      clientCert,
 				WorkingDir:                      workingDir,
+				DeploymentID:                    deploymentID,
 				LaunchDir:                       workingDir,
 				CloudMode:                       cloud,
 				CloudProvider:                   provider,
@@ -422,6 +425,8 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&clientCert, "cert", "", "Path to operator client certificate")
 	cmd.Flags().StringVar(&trustBundle, "trust-bundle", "", "Path to CA trust bundle")
 	cmd.Flags().StringVar(&workingDir, "working-dir", "", "Working directory for command execution")
+	cmd.Flags().StringVar(&deploymentID, "deployment-id", "", "Launch identifier for structured deployment progress")
+	_ = cmd.Flags().MarkHidden("deployment-id")
 	cmd.Flags().BoolVarP(&cloud, "cloud", "c", false, "Cloud operator mode")
 	cmd.Flags().StringVar(&provider, "provider", "", "Cloud provider (aws, gcp, azure)")
 	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", true, "Enable execution vault (data stays in working directory)")

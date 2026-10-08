@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,24 +33,34 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-// fakeWorkerEnrolls stands in for the installed g8e binary: it prints the same
-// two records the real worker writes to start.log, keyed by its directory so
-// each Operator gets a distinct request and session ID.
-const fakeWorkerEnrolls = `#!/bin/sh
+// The worker fixture exposes the same non-secret deployment-state command as
+// the installed binary. Its human output contains no IDs or readiness markers.
+const fakeWorkerStatePreamble = `#!/bin/sh
+state='@state@'
 id=$(printf %s "$PWD" | md5sum | cut -c1-32)
-printf 'Approve with: g8e auth enroll approve %s-000\n' "$id"
-printf 'operator enrollment: completed\n  - operator_session_id: %s-111\nChannel established - Ready to receive\n' "$id"
+if [ "$2" = deployment-state ]; then
+  if [ ! -f "$state" ]; then printf 'null\n'; exit; fi
+  cat "$state"
+  launch=$(sed -n 's/.*"launch_id":"\([^"]*\)".*/\1/p' "$state")
+  printf '{"launch_id":"%s","phase":"ready","operator_session_id":"%s-111","updated_at":"2026-10-08T00:00:00Z"}\n' "$launch" "$id" > "$state"
+  exit
+fi
+for arg; do case "$arg" in --deployment-id=*) launch=${arg#*=};; esac; done
+mkdir -p "$(dirname "$state")"
 `
 
-// fakeWorkerAlreadyEnrolled is a redeploy over an Operator that already holds
-// issued credentials: no request is submitted, the session is logged directly.
-const fakeWorkerAlreadyEnrolled = `#!/bin/sh
-id=$(printf %s "$PWD" | md5sum | cut -c1-32)
-printf 'OperatorSession created\n  - operator_session_id: %s-111\nChannel established - Ready to receive\n' "$id"
+const fakeWorkerEnrolls = fakeWorkerStatePreamble + `
+printf '{"launch_id":"%s","phase":"pending_approval","request_id":"%s-000","updated_at":"2026-10-08T00:00:00Z"}\n' "$launch" "$id" > "$state"
+printf 'Worker staged\n'
 `
 
-const fakeWorkerRejected = `#!/bin/sh
-printf 'Enrollment failed: HTTP 429\n'
+const fakeWorkerAlreadyEnrolled = fakeWorkerStatePreamble + `
+printf '{"launch_id":"%s","phase":"ready","operator_session_id":"%s-111","updated_at":"2026-10-08T00:00:00Z"}\n' "$launch" "$id" > "$state"
+printf 'Worker started\n'
+`
+
+const fakeWorkerRejected = fakeWorkerStatePreamble + `
+printf '{"launch_id":"%s","phase":"failed","error":"HTTP 429","updated_at":"2026-10-08T00:00:00Z"}\n' "$launch" > "$state"
 `
 
 // useFakeSSH puts ssh and scp on PATH that run the remote command, and copy the
@@ -64,7 +75,7 @@ func useFakeSSH(t *testing.T, worker string) {
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, "ssh"), []byte("#!/bin/sh\nfor a; do cmd=\"$a\"; done\nexec sh -c \"$cmd\"\n"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, "scp"), []byte("#!/bin/sh\nfor a; do dst=\"${a#*:}\"; done\ncp \"$FAKE_WORKER\" \"$dst\"\n"), 0o755))
 	workerPath := filepath.Join(binDir, "worker")
-	require.NoError(t, os.WriteFile(workerPath, []byte(worker), 0o755))
+	require.NoError(t, os.WriteFile(workerPath, []byte(strings.ReplaceAll(worker, "@state@", constants.OperatorDeploymentStatePath)), 0o755))
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("FAKE_WORKER", workerPath)
 }
@@ -266,7 +277,7 @@ func TestOperatorDeployRejectsUnsafeBatchesAndRoles(t *testing.T) {
 }
 
 func TestOperatorDeployRoleFlagsReachWorkerWithoutShellExpansion(t *testing.T) {
-	useFakeSSH(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"+fakeWorkerAlreadyEnrolled[10:])
+	useFakeSSH(t, "#!/bin/sh\nif [ \"$2\" = start ]; then printf '%s\\n' \"$@\" > args.txt; fi\n"+fakeWorkerAlreadyEnrolled[10:])
 	root := filepath.Join(t.TempDir(), "fleet")
 	payload := "http://provider:11434/path?q='$(touch INJECTED)'"
 	client := &cmdtest.MockAPIClient{}
@@ -299,7 +310,7 @@ func TestOperatorDeployRoleIdentities(t *testing.T) {
 }
 
 func TestOperatorDeploySeparatesOwnerAndWorkerEndpoints(t *testing.T) {
-	useFakeSSH(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"+fakeWorkerAlreadyEnrolled[10:])
+	useFakeSSH(t, "#!/bin/sh\nif [ \"$2\" = start ]; then printf '%s\\n' \"$@\" > args.txt; fi\n"+fakeWorkerAlreadyEnrolled[10:])
 	root := filepath.Join(t.TempDir(), "fleet")
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
@@ -327,7 +338,7 @@ func TestOperatorDeploySeparatesOwnerAndWorkerEndpoints(t *testing.T) {
 }
 
 func TestOperatorDeployForwardsGatewayPortsToTheWorker(t *testing.T) {
-	useFakeSSH(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"+fakeWorkerAlreadyEnrolled[10:])
+	useFakeSSH(t, "#!/bin/sh\nif [ \"$2\" = start ]; then printf '%s\\n' \"$@\" > args.txt; fi\n"+fakeWorkerAlreadyEnrolled[10:])
 	root := filepath.Join(t.TempDir(), "fleet")
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")

@@ -52,6 +52,7 @@ type ServeOperatorOptions struct {
 	PrivateKey        string
 	ClientCert        string
 	WorkingDir        string
+	DeploymentID      string
 	LaunchDir         string
 	CloudMode         bool
 	CloudProvider     string
@@ -312,10 +313,21 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		logger.Error("Failed to create runtime tree", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
 	}
-	deployment := NewOperatorDeploymentRecorder(fileSvc)
+	deployment, err := NewOperatorDeploymentRecorder(fileSvc, opts.DeploymentID)
+	if err != nil {
+		logger.Error("Failed to create deployment recorder", "error", err)
+		os.Exit(exitcode.FromError(err))
+	}
 	if err := deployment.Reset(context.Background()); err != nil {
 		logger.Error("Failed to reset deployment state", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
+	}
+
+	// Keep early configuration/enrollment failures observable to the deployer.
+	recordDeploymentFailure := func() {
+		if err := deployment.Record(context.Background(), models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhaseFailed, Error: constants.ErrOperatorDeployFailed.Error()}); err != nil {
+			logger.Error("Failed to record deployment failure", "error", err)
+		}
 	}
 
 	trustStore := certs.NewTrustStore(nil)
@@ -332,6 +344,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFetchTrustBundle, err)
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e gw start\n")
+				recordDeploymentFailure()
 				os.Exit(constants.ExitConfigError)
 			}
 			LogCertBundle(logger, "fetched-trust-bundle", pemData)
@@ -339,6 +352,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		} else {
 			logger.Error("No trust bundle available and no endpoint specified")
 			fmt.Fprintf(os.Stderr, "%s. Provide --trust-bundle or --endpoint\n", constants.ErrNoTrustBundle)
+			recordDeploymentFailure()
 			os.Exit(constants.ExitConfigError)
 		}
 	}
@@ -365,11 +379,13 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			pool := x509.NewCertPool()
 			if err != nil || !pool.AppendCertsFromPEM(pemData) {
 				logger.Error("Invalid explicit trust bundle", "path", opts.TrustBundlePath)
+				recordDeploymentFailure()
 				os.Exit(constants.ExitConfigError)
 			}
 			path := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 			if err := fileSvc.WriteFile(context.Background(), path, pemData, constants.PermFilePublic); err != nil {
 				logger.Error("Failed to persist explicit trust bundle", "error", err)
+				recordDeploymentFailure()
 				os.Exit(constants.ExitConfigError)
 			}
 		}
@@ -379,6 +395,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		if err != nil {
 			logger.Error("Failed to resolve hostname for enrollment", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			recordDeploymentFailure()
 			os.Exit(constants.ExitConfigError)
 		}
 		role := operatorRoles(opts)
@@ -388,8 +405,10 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		if err != nil {
 			logger.Error("Failed to create enrollment client", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			recordDeploymentFailure()
 			os.Exit(constants.ExitConfigError)
 		}
+		enrollClient.SetDeploymentRecorder(deployment)
 		enrollClient.SetFingerprintOptions(operatorFingerprintOptions(opts, effectiveWorkDir, account))
 		result, err := enrollClient.Enroll(context.Background())
 		if err != nil {
@@ -397,6 +416,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
 			fmt.Fprintf(os.Stderr, "  Pending state is persisted; restart to resume the same request.\n")
+			recordDeploymentFailure()
 			os.Exit(constants.ExitConfigError)
 		}
 
@@ -414,6 +434,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		if err != nil {
 			logger.Error("Failed to reload trust bundle after enrollment", "path", fileSvc.Resolve(caBundleRel), string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFailedToReadTrustBundle, err)
+			recordDeploymentFailure()
 			os.Exit(constants.ExitConfigError)
 		}
 		trustStore.SetCA(pemData)
@@ -426,6 +447,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorKeyDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientKeyDesc)
 		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
+		recordDeploymentFailure()
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -434,6 +456,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorCertDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientCertDesc)
 		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
+		recordDeploymentFailure()
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -448,6 +471,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
+		recordDeploymentFailure()
 		os.Exit(constants.ExitConfigError)
 	}
 	if enrolled {
@@ -474,6 +498,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		if actionable != "" {
 			fmt.Fprintln(os.Stderr, actionable)
 		}
+		recordDeploymentFailure()
 		os.Exit(exitCode)
 	}
 
@@ -494,6 +519,13 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	})
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
+		recordDeploymentFailure()
+		os.Exit(exitcode.FromError(err))
+	}
+
+	if err := g8eoService.SetCommandSubscriptionObserver(deployment.CommandSubscriptionChanged); err != nil {
+		recordDeploymentFailure()
+		logger.Error("Failed to configure deployment observer", "error", err)
 		os.Exit(exitcode.FromError(err))
 	}
 
@@ -510,6 +542,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	go func() {
 		defer wg.Done()
 		if err := g8eoService.Start(ctx); err != nil {
+			recordDeploymentFailure()
 			logger.Error("Failed to start g8e", string(constants.ConnectionStateError), err)
 			serviceErr <- err
 		}

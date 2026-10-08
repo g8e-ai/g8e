@@ -6,6 +6,7 @@ package operatorcmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 type fakeDockerRunner struct {
@@ -211,4 +214,39 @@ func TestDockerDeploymentRestartsContainerForEnrollmentRetry(t *testing.T) {
 	assert.Contains(t, strings.Join(fake.calls[0], " "), "container start "+op.container)
 	assert.Contains(t, strings.Join(fake.calls[1], " "), "container stop --time 10 "+op.container)
 	assert.Contains(t, strings.Join(fake.calls[2], " "), "container start "+op.container)
+}
+
+func TestDockerDeploymentDiscoversProgressWithoutReadingLogs(t *testing.T) {
+	d := newDeployDocker("host", "image", "/operators", nil)
+	dir := "/operators/op-00001"
+	op := d.spec(dir, nil)
+	op.launchID = "current-launch"
+	d.operators[dir] = op
+	state := models.OperatorDeploymentState{
+		LaunchID: op.launchID, Phase: models.OperatorDeploymentPhasePendingApproval,
+		RequestID: "request", UpdatedAt: time.Now().UTC(),
+	}
+	fake := &fakeDockerRunner{run: func(args []string) ([]byte, error) {
+		line := strings.Join(args, " ")
+		if strings.Contains(line, "container inspect") {
+			return []byte("true 0"), nil
+		}
+		require.Contains(t, line, "container exec "+op.container+" ./g8e operator deployment-state --working-dir "+dir)
+		return json.Marshal(state)
+	}}
+	d.runner = fake
+	requestID, err := d.awaitRequestID(context.Background(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "request", requestID)
+	state.Phase = models.OperatorDeploymentPhaseReady
+	state.OperatorSessionID = "session"
+	sessionID, err := d.awaitSessionID(context.Background(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "session", sessionID)
+	require.NoError(t, d.awaitReady(context.Background(), dir))
+	state.LaunchID = "old-launch"
+	progress, err := d.readDeploymentState(context.Background(), dir)
+	require.NoError(t, err)
+	require.Nil(t, progress)
+	assert.NotContains(t, joinedDockerCalls(fake.calls), "container logs")
 }

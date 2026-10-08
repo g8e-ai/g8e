@@ -59,10 +59,11 @@ type G8eoService struct {
 	suspendedTxStore *storage.SuspendedTransactionService
 	gatewayDB        *gateway.CanonicalDBService
 
-	pubSubClientFactory PubSubClientFactory
-	pubSubClient        pubsub.PubSubClient
-	tlsConfig           *certs.TLSConfig
-	keystore            *keystore.Keystore
+	pubSubClientFactory   PubSubClientFactory
+	pubSubClient          pubsub.PubSubClient
+	onCommandSubscription func(context.Context, string, bool) error
+	tlsConfig             *certs.TLSConfig
+	keystore              *keystore.Keystore
 
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
@@ -107,6 +108,17 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 	service.bootstrap = bootstrapService
 
 	return service, nil
+}
+
+// SetCommandSubscriptionObserver installs a startup dependency before Start.
+func (vs *G8eoService) SetCommandSubscriptionObserver(observer func(context.Context, string, bool) error) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	if vs.ctx != nil {
+		return fmt.Errorf("operator subscription observer: %w", constants.ErrServiceUnavailable)
+	}
+	vs.onCommandSubscription = observer
+	return nil
 }
 
 func (vs *G8eoService) Start(ctx context.Context) error {
@@ -333,6 +345,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
 		Config:                   vs.config,
+		OnCommandSubscription:    vs.onCommandSubscription,
 		Logger:                   vs.logger,
 		Execution:                vs.execution,
 		FileEdit:                 vs.fileEdit,
