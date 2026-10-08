@@ -278,7 +278,7 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := s.stores.KVStore.RunMaintenance(); err != nil {
+			if err := s.stores.KVStore.RunMaintenance(ctx); err != nil {
 				s.logger.Warn("KV store maintenance error", "error", err)
 			}
 			if err := s.stores.BlobStore.RunMaintenance(); err != nil {

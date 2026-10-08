@@ -232,7 +232,7 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := c.pki.RevokeCertificate(req.Serial, req.Reason); err != nil {
+	if err := c.pki.RevokeCertificate(r.Context(), req.Serial,req.Reason); err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKIRevokeCertificate, err).Error())
 		return
 	}
@@ -253,7 +253,7 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	crlDER, err := c.pki.GenerateCRL()
+	crlDER, err := c.pki.GenerateCRL(r.Context())
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKIGenerateCRL, err).Error())
 		return

@@ -492,7 +492,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 				if err := awaitEmbedded(); err != nil {
 					return nil, err
 				}
-				result, err := d.verifyInferenceCompletion(env, resultEnv)
+				result, err := d.verifyInferenceCompletion(ctx, env, resultEnv)
 				if err != nil {
 					return nil, err
 				}
@@ -573,7 +573,7 @@ func decodeInferenceProgressEnvelope(env *commonv1.GovernanceEnvelope) (*operato
 // key, a FAILED receipt terminates the wait as a typed failure, and the
 // recomputed result digest must equal both the receipt's result_summary and
 // the result's own result_digest. Fail-closed on every check.
-func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.GovernanceEnvelope) (*DispatchResult, error) {
+func (d *DispatchService) verifyInferenceCompletion(ctx context.Context, cmdEnv, resultEnv *commonv1.GovernanceEnvelope) (*DispatchResult, error) {
 	completion := &operatorv1.InferenceCompletion{}
 	if err := proto.Unmarshal(resultEnv.Payload, completion); err != nil {
 		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceResultDecode, err)
@@ -590,7 +590,7 @@ func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.
 	if d.signerStore == nil {
 		return nil, fmt.Errorf("dispatch: %w: receipt signer store not configured", constants.ErrInferenceReceiptVerify)
 	}
-	pubKey, err := d.signerStore.GetTrustedSigner(receipt.SignerKeyId)
+	pubKey, err := d.signerStore.GetTrustedSigner(ctx, receipt.SignerKeyId)
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceReceiptVerify, err)
 	}

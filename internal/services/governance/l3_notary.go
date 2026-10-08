@@ -62,7 +62,7 @@ func (n *passkeyL3Notary) VerifyL3Proof(ctx context.Context, userID, transaction
 // Returns constants.ErrCLISessionDenied for denials (revoked certs, inactive sessions) and
 // other errors for system failures.
 type CLISessionVerifier interface {
-	VerifyCLISession(userID, cliSessionID, certFingerprint string) error
+	VerifyCLISession(ctx context.Context, userID, cliSessionID, certFingerprint string) error
 }
 
 // gatewayNotary provides L3 verification for gateway mode. It requires passkey
@@ -125,7 +125,7 @@ func (v *gatewayNotary) VerifyL3Proof(ctx context.Context, userID, transactionHa
 
 	// Layer 2: CLI mTLS session authentication (additional check for CLI callers)
 	if proof.MtlsCertFingerprint != "" && v.cliVerifier != nil {
-		if err := v.cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
+		if err := v.cliVerifier.VerifyCLISession(ctx, userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
 			if errors.Is(err, constants.ErrCLISessionDenied) {
 				return false, nil
 			}
@@ -180,7 +180,7 @@ func verifyOutboundProof(
 		if _, err := hex.DecodeString(proof.MtlsCertFingerprint); err != nil {
 			return false, fmt.Errorf("%w: %w", constants.ErrCLIL3InvalidFingerprintFormat, err)
 		}
-		if err := cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
+		if err := cliVerifier.VerifyCLISession(ctx, userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
 			if errors.Is(err, constants.ErrCLISessionDenied) {
 				return false, nil
 			}

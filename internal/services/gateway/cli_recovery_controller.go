@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -126,7 +127,7 @@ func (c *CLIRecoveryController) handleRecoveryRequest(w http.ResponseWriter, r *
 		return
 	}
 
-	requestID, token, expiresAt, err := c.recoverySvc.CreateRequest(req.CLICSRPEM, req.SystemFingerprint, req.LocalOSUser)
+	requestID, token, expiresAt, err := c.recoverySvc.CreateRequest(r.Context(), req.CLICSRPEM, req.SystemFingerprint, req.LocalOSUser)
 	if err != nil {
 		c.logger.Error("CLI recovery: failed to create request", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create recovery request")
@@ -166,7 +167,7 @@ func (c *CLIRecoveryController) handleRecoveryStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	state, err := c.recoverySvc.GetStatus(token)
+	state, err := c.recoverySvc.GetStatus(r.Context(), token)
 	if err != nil {
 		c.writeRecoveryError(w, err)
 		return
@@ -216,7 +217,7 @@ func (c *CLIRecoveryController) handleRecoveryApprove(w http.ResponseWriter, r *
 	}
 
 	// Verify the approving user is still active before binding the decision.
-	approvingUser, err := c.userSvc.GetByID(userID)
+	approvingUser, err := c.userSvc.GetByID(r.Context(), userID)
 	if err != nil {
 		c.logger.Error("CLI recovery approve: failed to look up approving user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -230,13 +231,13 @@ func (c *CLIRecoveryController) handleRecoveryApprove(w http.ResponseWriter, r *
 
 	var state models.CLIRecoveryState
 	if req.Approve {
-		if err := c.recoverySvc.Approve(req.Token, userID); err != nil {
+		if err := c.recoverySvc.Approve(r.Context(), req.Token, userID); err != nil {
 			c.writeRecoveryError(w, err)
 			return
 		}
 		state = models.CLIRecoveryStateApproved
 	} else {
-		if err := c.recoverySvc.Deny(req.Token, userID); err != nil {
+		if err := c.recoverySvc.Deny(r.Context(), req.Token, userID); err != nil {
 			c.writeRecoveryError(w, err)
 			return
 		}
@@ -292,7 +293,7 @@ func (c *CLIRecoveryController) handleRecoveryApproveCLI(w http.ResponseWriter, 
 	}
 
 	// Verify the approving user is still active before binding the decision.
-	approvingUser, err := c.userSvc.GetByID(userID)
+	approvingUser, err := c.userSvc.GetByID(r.Context(), userID)
 	if err != nil {
 		c.logger.Error("CLI recovery approve-cli: failed to look up approving user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -306,13 +307,13 @@ func (c *CLIRecoveryController) handleRecoveryApproveCLI(w http.ResponseWriter, 
 
 	var state models.CLIRecoveryState
 	if req.Approve {
-		if err := c.recoverySvc.Approve(req.Token, userID); err != nil {
+		if err := c.recoverySvc.Approve(r.Context(), req.Token, userID); err != nil {
 			c.writeRecoveryError(w, err)
 			return
 		}
 		state = models.CLIRecoveryStateApproved
 	} else {
-		if err := c.recoverySvc.Deny(req.Token, userID); err != nil {
+		if err := c.recoverySvc.Deny(r.Context(), req.Token, userID); err != nil {
 			c.writeRecoveryError(w, err)
 			return
 		}
@@ -360,7 +361,7 @@ func (c *CLIRecoveryController) handleRecoveryComplete(w http.ResponseWriter, r 
 	}
 
 	// Look up the request by token. GetByToken auto-expires stale requests.
-	recoveryReq, err := c.recoverySvc.GetByToken(req.Token)
+	recoveryReq, err := c.recoverySvc.GetByToken(r.Context(), req.Token)
 	if err != nil {
 		c.writeRecoveryError(w, err)
 		return
@@ -406,14 +407,14 @@ func (c *CLIRecoveryController) handleRecoveryComplete(w http.ResponseWriter, r 
 
 	// Atomically transition approved → completed. Only one concurrent
 	// caller can succeed; others receive ErrCLIRecoveryRequestConsumed.
-	completedReq, err := c.recoverySvc.Complete(req.Token)
+	completedReq, err := c.recoverySvc.Complete(r.Context(), req.Token)
 	if err != nil {
 		c.writeRecoveryError(w, err)
 		return
 	}
 
 	// Issue the CLI certificate bound to the approving user.
-	resp, err := c.issueCLIIdentity(completedReq)
+	resp, err := c.issueCLIIdentity(r.Context(), completedReq)
 	if err != nil {
 		c.logger.Error("CLI recovery complete: failed to issue CLI identity",
 			"error", err,
@@ -443,14 +444,14 @@ func (c *CLIRecoveryController) handleRecoveryComplete(w http.ResponseWriter, r 
 // to the gateway's canonical operator instead of accumulating a new
 // operator document on every recovery. Only when no active operator
 // session exists does recovery mint a fresh remote recovery operator.
-func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest) (models.CLIRecoveryCompleteResponse, error) {
+func (c *CLIRecoveryController) issueCLIIdentity(ctx context.Context, req *models.CLIRecoveryRequest) (models.CLIRecoveryCompleteResponse, error) {
 	userID := req.ApprovingUserID
 	if userID == "" {
 		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("recovery request has no approving user")
 	}
 
 	// Validate the approving user still exists and is active.
-	user, err := c.userSvc.GetByID(userID)
+	user, err := c.userSvc.GetByID(ctx, userID)
 	if err != nil {
 		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("look up approving user: %w", err)
 	}
@@ -469,7 +470,7 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 	// operator session requires no new operator document or session.
 	var operatorID, operatorSessionID string
 	if c.operatorSessionSvc != nil {
-		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(user.ID)
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(ctx, user.ID)
 		if opErr != nil {
 			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("look up active operator session: %w", opErr)
 		}
@@ -524,10 +525,10 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		if err != nil {
 			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("marshal operator document: %w", err)
 		}
-		if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		if err := c.docStore.DocSet(ctx, marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator document: %w", err)
 		}
-		if err := c.operatorSessionSvc.PersistOperatorSession(
+		if err := c.operatorSessionSvc.PersistOperatorSession(ctx,
 			operatorSessionID,
 			user.ID,
 			orgID,
@@ -538,11 +539,12 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		}
 		// The recovery Operator is persisted active, so announce it; this also
 		// arms its stale deadline timer.
-		c.docStore.NotifyOperatorEnrolled(operatorID, user.ID, operator.Name)
+		c.docStore.NotifyOperatorEnrolled(ctx, operatorID, user.ID, operator.Name)
 	}
 
 	// Persist CLI session linked to the operator session.
 	if err := c.cliSessionSvc.PersistCLISession(
+		ctx,
 		cliSessionID,
 		operatorSessionID,
 		user.ID,

@@ -7,9 +7,13 @@
 
 package governance
 
-import "github.com/g8e-ai/g8e/v2/internal/models"
+import (
+	"context"
+
+	"github.com/g8e-ai/g8e/v2/internal/models"
+)
 
 // AppPolicyStore defines the interface for loading AppPolicies for external apps.
 type AppPolicyStore interface {
-	GetAppPolicy(appID string) (*models.AppPolicy, error)
+	GetAppPolicy(ctx context.Context, appID string) (*models.AppPolicy, error)
 }

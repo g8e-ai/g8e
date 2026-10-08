@@ -137,7 +137,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		Enabled:   true,
 	}
 
-	if err := c.signerStore.AddTrustedSigner(signer); err != nil {
+	if err := c.signerStore.AddTrustedSigner(r.Context(), signer); err != nil {
 		c.logger.Error("failed to add trusted signer", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to add trusted signer")
 		return

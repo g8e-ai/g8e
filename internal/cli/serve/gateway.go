@@ -184,7 +184,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		if err != nil {
 			return fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
-		if err := consensusPolicyBootstrap(db.GetConsensusStore(), db.GetSignerStore(), cfg.ConsensusBootstrap, fileSvc, logger); err != nil {
+		if err := consensusPolicyBootstrap(context.Background(), db.GetConsensusStore(),db.GetSignerStore(), cfg.ConsensusBootstrap, fileSvc, logger); err != nil {
 			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
 		}
 		svc, err = gateway.NewGatewayModeServiceWithDB(gatewayCfg, fileSvc, logger, db, nil, nil)
@@ -381,7 +381,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // NewGatewayModeServiceWithDB so that build() reads the seeded policy from
 // the DB and constructs the ConsensusService internally. Member private keys
 // are saved to secretsDir so build()'s FileKeyProvider can load them.
-func consensusPolicyBootstrap(consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, bootstrapPath string, fileSvc fs.RuntimeFileService, logger *slog.Logger) error {
+func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.ConsensusStoreService,signerStore *gateway.SignerStoreService, bootstrapPath string, fileSvc fs.RuntimeFileService, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)
@@ -469,7 +469,7 @@ func consensusPolicyBootstrap(consensusStore *gateway.ConsensusStoreService, sig
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		if err := signerStore.AddTrustedSigner(signer); err != nil {
+		if err := signerStore.AddTrustedSigner(ctx, signer); err != nil {
 			return fmt.Errorf("consensus bootstrap: register signer %s: %w", appID, err)
 		}
 		if err := consensus.SaveMemberKey(fileSvc, boot.ConsensusID, appID, privKey); err != nil {

@@ -208,7 +208,7 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 	}
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, ok := c.kvStore.KVGet(webBindKey)
+		raw, ok := c.kvStore.KVGet(r.Context(), webBindKey)
 		if !ok {
 			c.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
 			c.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
@@ -224,7 +224,7 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 		// Check if any bound Operator session is associated with this appID
 		authorized := false
 		for _, opSessID := range operatorSessionIDs {
-			opDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
+			opDoc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionOperators), opSessID)
 			if err != nil || opDoc == nil {
 				continue
 			}
@@ -248,7 +248,7 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 			return
 		}
 	} else if route.CLISessionID != "" {
-		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
 			c.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
 			c.responder.Error(w, http.StatusForbidden, "target session not found")
@@ -268,7 +268,7 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 		}
 
 		// Verify app owns the Operator session bound to this CLI session
-		opDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
+		opDoc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
 		if err != nil || opDoc == nil {
 			c.logger.Warn("SSE push: Operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
 			c.responder.Error(w, http.StatusForbidden, "operator session not found")
@@ -365,7 +365,7 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 	// as belonging to this user. These checks are defense-in-depth.
 	switch {
 	case route.CLISessionID != "":
-		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
 			c.logger.Error("SSE: failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
 			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
@@ -393,7 +393,7 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 	case route.WebSessionID != "":
 		if operatorSessionID != "" {
 			// Operator mTLS: verify operator owns this web session.
-			boundWebSessionID, ok := c.kvStore.KVGet(sessionOperatorBindKey(operatorSessionID))
+			boundWebSessionID, ok := c.kvStore.KVGet(r.Context(), sessionOperatorBindKey(operatorSessionID))
 			if !ok || boundWebSessionID != route.WebSessionID {
 				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this web session"}
 			}

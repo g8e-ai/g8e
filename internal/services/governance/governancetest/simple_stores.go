@@ -40,7 +40,7 @@ type SimpleAppPolicyStore struct {
 	Policies map[string]*models.AppPolicy
 }
 
-func (s *SimpleAppPolicyStore) GetAppPolicy(appID string) (*models.AppPolicy, error) {
+func (s *SimpleAppPolicyStore) GetAppPolicy(ctx context.Context, appID string) (*models.AppPolicy, error) {
 	if s.Policies == nil {
 		return nil, nil
 	}

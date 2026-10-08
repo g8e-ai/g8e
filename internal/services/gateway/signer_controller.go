@@ -57,7 +57,7 @@ func (c *SignerController) readBody(r *http.Request) ([]byte, error) {
 func (c *SignerController) handleGovernanceSigners(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		signers, err := c.signerStore.ListTrustedSigners()
+		signers, err := c.signerStore.ListTrustedSigners(r.Context())
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("signer_controller: handleGovernanceSigners: %w", err).Error())
 			return
@@ -82,7 +82,7 @@ func (c *SignerController) handleGovernanceSigners(w http.ResponseWriter, r *htt
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 			return
 		}
-		if err := c.signerStore.AddTrustedSigner(signer); err != nil {
+		if err := c.signerStore.AddTrustedSigner(r.Context(), signer); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("signer_controller: handleGovernanceSigners: %w", err).Error())
 			return
 		}
@@ -102,7 +102,7 @@ func (c *SignerController) handleGovernanceSignerByID(w http.ResponseWriter, r *
 
 	switch r.Method {
 	case http.MethodGet:
-		pubKey, err := c.signerStore.GetTrustedSigner(id)
+		pubKey, err := c.signerStore.GetTrustedSigner(r.Context(), id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("signer_controller: handleGovernanceSignerByID: %w", err).Error())
 			return
@@ -127,7 +127,7 @@ func (c *SignerController) handleGovernanceSignerByID(w http.ResponseWriter, r *
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
-		deleted, err := c.signerStore.DeleteTrustedSigner(id)
+		deleted, err := c.signerStore.DeleteTrustedSigner(r.Context(), id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("signer_controller: handleGovernanceSignerByID: %w", err).Error())
 			return

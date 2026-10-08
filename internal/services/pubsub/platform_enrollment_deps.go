@@ -48,7 +48,7 @@ type PlatformEnrollmentPKI interface {
 	SignPlatformAppCSR(csrPEM, appName, userID string) (certPEM, chainPEM string, err error)
 	SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID, gatewayID string) (certPEM, chainPEM string, err error)
 	GatewayTrustBundle() ([]byte, error)
-	RevokeCertificate(serial string, reason string) error
+	RevokeCertificate(ctx context.Context, serial string, reason string) error
 }
 
 // PlatformEnrollmentCLISessions is the CLI-session subset required by the

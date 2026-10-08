@@ -59,14 +59,14 @@ func (c *EvalCampaignPublicationController) handlePublicationState(w http.Respon
 	}
 	switch r.Method {
 	case http.MethodGet:
-		state, err := c.service.Get(runID)
+		state, err := c.service.Get(r.Context(), runID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, state)
 	case http.MethodDelete:
-		if err := c.service.Delete(runID); err != nil {
+		if err := c.service.Delete(r.Context(), runID); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -98,7 +98,7 @@ func (c *EvalCampaignPublicationController) handlePublicationState(w http.Respon
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrEvidenceScopeMismatch.Error())
 			return
 		}
-		if err := c.service.Put(state); err != nil {
+		if err := c.service.Put(r.Context(), state); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}

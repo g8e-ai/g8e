@@ -121,7 +121,7 @@ func (tv *L4Warden) verifyL2Posture(ctx context.Context, envelope *govtypes.Gove
 			}
 			continue
 		}
-		pubKey, err := tv.signerStore.GetTrustedSigner(vote.SignerKeyId)
+		pubKey, err := tv.signerStore.GetTrustedSigner(ctx, vote.SignerKeyId)
 		if err != nil {
 			tv.logger.Error("Failed to load trusted signer", "key_id", vote.SignerKeyId, string(constants.ConnectionStateError), err)
 			continue

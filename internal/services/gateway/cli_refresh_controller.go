@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -122,7 +123,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	// Verify the user is still active. The auth middleware does this on
 	// every request, but a race between middleware and refresh could leave
 	// a disabled user with a still-valid cert.
-	user, err := c.userSvc.GetByID(userID)
+	user, err := c.userSvc.GetByID(r.Context(),userID)
 	if err != nil {
 		c.logger.Error("CLI refresh: failed to look up user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -140,7 +141,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	// the proof of identity, not the old session's state.
 	var oldSession *models.CLISession
 	if oldCLISessionID != "" {
-		oldSession, err = c.cliSessionSvc.loadCLISession(oldCLISessionID)
+		oldSession, err = c.cliSessionSvc.loadCLISession(r.Context(), oldCLISessionID)
 		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
 			c.logger.Error("CLI refresh: failed to load old session",
 				"error", err,
@@ -168,7 +169,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		certSerial = oldSession.CertSerial
 		loginMethod = oldSession.LoginMethod
 	}
-	if sessionID, opID, ok, regErr := c.registryOperatorBinding(userID); regErr != nil {
+	if sessionID, opID, ok, regErr := c.registryOperatorBinding(r.Context(), userID); regErr != nil {
 		c.logger.Error("CLI refresh: failed to look up active data operator binding",
 			"error", regErr,
 			"user_id", userID,
@@ -182,7 +183,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		operatorSessionID = oldSession.OperatorSessionID
 	}
 	if operatorSessionID != "" && operatorID == "" && c.operatorSessionSvc != nil {
-		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(userID)
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(r.Context(),userID)
 		if opErr != nil {
 			c.logger.Error("CLI refresh: failed to verify active operator session",
 				"error", opErr,
@@ -198,7 +199,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if operatorSessionID == "" && c.operatorSessionSvc != nil {
-		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(userID)
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(r.Context(),userID)
 		if opErr != nil {
 			c.logger.Error("CLI refresh: failed to look up active operator session",
 				"error", opErr,
@@ -236,6 +237,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	_, err = c.cliSessionSvc.RefreshCLISession(
+		r.Context(),
 		oldCLISessionID,
 		newCLISessionID,
 		CLISessionFields{
@@ -274,11 +276,11 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID, operatorID string, ok bool, err error) {
+func (c *CLIRefreshController) registryOperatorBinding(ctx context.Context, userID string) (sessionID, operatorID string, ok bool, err error) {
 	if c.reg == nil {
 		return "", "", false, nil
 	}
-	operators, err := c.reg.ListUserOperators(userID)
+	operators, err := c.reg.ListUserOperators(ctx, userID)
 	if err != nil {
 		return "", "", false, err
 	}

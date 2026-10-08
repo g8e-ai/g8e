@@ -505,7 +505,7 @@ func (pki *PKIAuthority) GatewayTrustBundle() ([]byte, error) {
 }
 
 // RevokeCertificate adds a certificate serial to the revocation list.
-func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
+func (pki *PKIAuthority) RevokeCertificate(ctx context.Context, serial string, reason string) error {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
@@ -523,12 +523,12 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 		return fmt.Errorf("%s: %w", constants.ErrPKIRevokeCertificate, err)
 	}
 
-	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
+	return pki.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
 // GenerateCRL creates a standard X.509 Certificate Revocation List (CRL) signed by the Operator intermediate CA.
 // The CRL contains all revoked certificate serials from the database.
-func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
+func (pki *PKIAuthority) GenerateCRL(ctx context.Context) (crlDER []byte, err error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
 
@@ -540,7 +540,7 @@ func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 		return nil, constants.ErrPKIOperatorCANotLoaded
 	}
 
-	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	docs, err := pki.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", constants.ErrPKIGenerateCRL, err)
 	}
@@ -595,12 +595,12 @@ func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 }
 
 // IsRevoked checks if a certificate serial is in the revocation list.
-func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
+func (pki *PKIAuthority) IsRevoked(ctx context.Context, serial string) (bool, error) {
 	if pki.db == nil {
 		return false, constants.ErrPKIDatabaseNotAvailable
 	}
 
-	doc, err := pki.db.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
+	doc, err := pki.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", constants.ErrPKICheckRevocation, err)
 	}
@@ -609,12 +609,12 @@ func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
 }
 
 // VerifyCertificate checks if a certificate is valid and not revoked.
-func (pki *PKIAuthority) VerifyCertificate(cert *x509.Certificate) error {
+func (pki *PKIAuthority) VerifyCertificate(ctx context.Context, cert *x509.Certificate) error {
 	if cert == nil {
 		return constants.ErrPKINoCertificate
 	}
 
-	revoked, err := pki.IsRevoked(cert.SerialNumber.String())
+	revoked, err := pki.IsRevoked(ctx, cert.SerialNumber.String())
 	if err != nil {
 		return fmt.Errorf("%s: %w", constants.ErrPKICheckRevocation, err)
 	}

@@ -636,7 +636,7 @@ func (s *AuthService) handleMTLSAuth(w http.ResponseWriter, r *http.Request, nex
 
 	// Verify certificate revocation status
 	if s.pki != nil {
-		if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
+		if err := s.pki.VerifyCertificate(r.Context(), r.TLS.PeerCertificates[0]); err != nil {
 			s.logger.Warn("gateway: auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify certificate: %w: %s", err, constants.ErrCertRevocationCheckFailed))
 			s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRevoked.Error())
 			return

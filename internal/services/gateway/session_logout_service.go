@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,8 +23,8 @@ import (
 // must skip serials that are already revoked so a retried logout never
 // overwrites the reason and time of an earlier revocation.
 type cliCertificateRevoker interface {
-	IsRevoked(serial string) (bool, error)
-	RevokeCertificate(serial string, reason string) error
+	IsRevoked(ctx context.Context, serial string) (bool, error)
+	RevokeCertificate(ctx context.Context, serial string, reason string) error
 }
 
 // SessionLogoutServiceDeps groups all dependencies for SessionLogoutService.
@@ -85,7 +86,7 @@ type SessionLogoutResult struct {
 //
 // Each step is idempotent. An error aborts the remaining steps and is
 // returned with the result accumulated so far.
-func (s *SessionLogoutService) Logout(userID, currentCLISessionID, presentedCertSerial string, scope constants.LogoutScope) (*SessionLogoutResult, error) {
+func (s *SessionLogoutService) Logout(ctx context.Context, userID,currentCLISessionID, presentedCertSerial string, scope constants.LogoutScope) (*SessionLogoutResult, error) {
 	if userID == "" {
 		return nil, constants.ErrRegistrationUserIDRequired
 	}
@@ -101,7 +102,7 @@ func (s *SessionLogoutService) Logout(userID, currentCLISessionID, presentedCert
 	}
 
 	if scope.IncludesWeb() {
-		sessionIDs, err := s.reg.UnbindUserWebOperators(userID)
+		sessionIDs, err := s.reg.UnbindUserWebOperators(ctx, userID)
 		for _, id := range sessionIDs {
 			unbound[id] = struct{}{}
 		}
@@ -116,14 +117,14 @@ func (s *SessionLogoutService) Logout(userID, currentCLISessionID, presentedCert
 	}
 
 	if scope.IncludesCLI() {
-		sessions, err := s.cliSessions.ListUserCLISessions(userID)
+		sessions, err := s.cliSessions.ListUserCLISessions(ctx, userID)
 		if err != nil {
 			return finish(), fmt.Errorf("logout CLI sessions: %w", err)
 		}
-		if err := s.terminateCLISessions(sessions, currentCLISessionID, result, unbound); err != nil {
+		if err := s.terminateCLISessions(ctx, sessions,currentCLISessionID, result, unbound); err != nil {
 			return finish(), fmt.Errorf("logout CLI sessions: %w", err)
 		}
-		revoked, err := s.revokeCLICertificates(sessions, presentedCertSerial)
+		revoked, err := s.revokeCLICertificates(ctx, sessions,presentedCertSerial)
 		result.CertificatesRevoked = revoked
 		if err != nil {
 			return finish(), fmt.Errorf("logout CLI certificates: %w", err)
@@ -146,7 +147,7 @@ func (s *SessionLogoutService) Logout(userID, currentCLISessionID, presentedCert
 // last. A session only counts, and only reports its operator bindings, when it
 // was live: a session that is active but past its expiry is cleaned up
 // without being reported as a logout.
-func (s *SessionLogoutService) terminateCLISessions(sessions []*models.CLISession, currentCLISessionID string, result *SessionLogoutResult, unbound map[string]struct{}) error {
+func (s *SessionLogoutService) terminateCLISessions(ctx context.Context, sessions[]*models.CLISession, currentCLISessionID string, result *SessionLogoutResult, unbound map[string]struct{}) error {
 	ordered := make([]*models.CLISession, 0, len(sessions))
 	var current *models.CLISession
 	for _, session := range sessions {
@@ -165,7 +166,7 @@ func (s *SessionLogoutService) terminateCLISessions(sessions []*models.CLISessio
 
 	now := time.Now().UTC()
 	for _, session := range ordered {
-		terminated, err := s.cliSessions.TerminateCLISession(session.ID)
+		terminated, err := s.cliSessions.TerminateCLISession(ctx, session.ID)
 		if err != nil {
 			return err
 		}
@@ -186,7 +187,7 @@ func (s *SessionLogoutService) terminateCLISessions(sessions []*models.CLISessio
 // small; an expired-but-active session's certificate is the very thing
 // refresh would otherwise revive. It attempts every serial and returns the
 // number it revoked together with the joined failures.
-func (s *SessionLogoutService) revokeCLICertificates(sessions []*models.CLISession, presentedCertSerial string) (int, error) {
+func (s *SessionLogoutService) revokeCLICertificates(ctx context.Context, sessions[]*models.CLISession, presentedCertSerial string) (int, error) {
 	if s.pki == nil {
 		return 0, constants.ErrPKIDatabaseNotAvailable
 	}
@@ -203,7 +204,7 @@ func (s *SessionLogoutService) revokeCLICertificates(sessions []*models.CLISessi
 	revoked := 0
 	var errs []error
 	for _, serial := range sortedKeys(serials) {
-		already, err := s.pki.IsRevoked(serial)
+		already, err := s.pki.IsRevoked(ctx, serial)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("check revocation of %s: %w", serial, err))
 			continue
@@ -211,7 +212,7 @@ func (s *SessionLogoutService) revokeCLICertificates(sessions []*models.CLISessi
 		if already {
 			continue
 		}
-		if err := s.pki.RevokeCertificate(serial, constants.CLILogoutCertRevocationReason); err != nil {
+		if err := s.pki.RevokeCertificate(ctx, serial,constants.CLILogoutCertRevocationReason); err != nil {
 			errs = append(errs, fmt.Errorf("revoke %s: %w", serial, err))
 			continue
 		}

@@ -65,7 +65,7 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user, err := c.userSvc.GetByID(userID)
+	user, err := c.userSvc.GetByID(r.Context(),userID)
 	if err != nil {
 		c.logger.Error("CLI bind: failed to look up user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -110,7 +110,7 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 
 	var oldSession *models.CLISession
 	if oldCLISessionID != "" {
-		oldSession, err = c.cliSessionSvc.loadCLISession(oldCLISessionID)
+		oldSession, err = c.cliSessionSvc.loadCLISession(r.Context(),oldCLISessionID)
 		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
 			c.logger.Error("CLI bind: failed to load old session",
 				"error", err,
@@ -146,7 +146,7 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
 		return
 	}
-	_, err = c.cliSessionSvc.RefreshCLISession(
+	_, err = c.cliSessionSvc.RefreshCLISession(r.Context(),
 		oldCLISessionID,
 		newCLISessionID,
 		CLISessionFields{
@@ -260,7 +260,7 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 	}
 	oldCLISessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
 
-	user, err := c.userSvc.GetByID(userID)
+	user, err := c.userSvc.GetByID(r.Context(),userID)
 	if err != nil {
 		c.logger.Error("CLI unbind: failed to look up user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -274,7 +274,7 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 
 	var oldSession *models.CLISession
 	if oldCLISessionID != "" {
-		oldSession, err = c.cliSessionSvc.loadCLISession(oldCLISessionID)
+		oldSession, err = c.cliSessionSvc.loadCLISession(r.Context(),oldCLISessionID)
 		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
 			c.logger.Error("CLI unbind: failed to load old session",
 				"error", err,
@@ -307,7 +307,7 @@ func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Reque
 		c.responder.Error(w, http.StatusInternalServerError, "failed to generate session ID")
 		return
 	}
-	_, err = c.cliSessionSvc.UnbindCLISession(
+	_, err = c.cliSessionSvc.UnbindCLISession(r.Context(),
 		oldCLISessionID,
 		newCLISessionID,
 		CLISessionFields{

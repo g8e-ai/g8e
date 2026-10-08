@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
@@ -27,7 +28,7 @@ type HealthController struct {
 	stateRootSvc      *StateRootService
 	responder         *response.Writer
 	isReady           func() bool
-	isGovernanceReady func() bool
+	isGovernanceReady func(context.Context) bool
 }
 
 // HealthControllerDeps groups all dependencies for HealthController.
@@ -38,7 +39,7 @@ type HealthControllerDeps struct {
 	StateRootSvc      *StateRootService
 	Responder         *response.Writer
 	IsReady           func() bool
-	IsGovernanceReady func() bool
+	IsGovernanceReady func(context.Context) bool
 }
 
 func newHealthController(d HealthControllerDeps) *HealthController {
@@ -81,7 +82,7 @@ func (c *HealthController) handleHealth(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+	doc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
 		c.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
 		c.responder.Error(w, http.StatusServiceUnavailable, "platform_settings not ready")
@@ -105,7 +106,7 @@ func (c *HealthController) handleHealth(w http.ResponseWriter, r *http.Request) 
 		Mode:            constants.GatewayModeGateway,
 		Version:         c.cfg.Version,
 		PID:             os.Getpid(),
-		GovernanceReady: c.isGovernanceReady != nil && c.isGovernanceReady(),
+		GovernanceReady: c.isGovernanceReady != nil && c.isGovernanceReady(r.Context()),
 		Posture:         string(c.cfg.Gateway.Posture),
 		StateMerkleRoot: root,
 	})
@@ -129,7 +130,7 @@ func (c *HealthController) handleBootstrapHealth(w http.ResponseWriter, r *http.
 		Mode:            constants.GatewayModeGateway,
 		Version:         c.cfg.Version,
 		PID:             os.Getpid(),
-		GovernanceReady: c.isGovernanceReady != nil && c.isGovernanceReady(),
+		GovernanceReady: c.isGovernanceReady != nil && c.isGovernanceReady(r.Context()),
 		Posture:         string(c.cfg.Gateway.Posture),
 	})
 }

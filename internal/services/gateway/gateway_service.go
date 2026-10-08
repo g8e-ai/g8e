@@ -64,6 +64,9 @@ type GatewayModeService struct {
 	logger   *slog.Logger
 	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
+	// serviceCtx is the Start lifecycle context. Pub/sub callbacks dispatched
+	// by the broker carry no request context, so they read it from here.
+	serviceCtx context.Context
 
 	db                       *CanonicalDBService
 	docStore                 *DocumentStoreService
@@ -964,7 +967,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	// A deploy-launched worker's established command subscription is its
 	// readiness; announce it to the owner so the deploying CLI need not poll.
 	pubsub.SetCommandSubscribedHandler(func(operatorID, sessionID, deploymentID string) {
-		if err := ls.docStore.OperatorCommandSubscribed(operatorID, sessionID, deploymentID); err != nil {
+		if err := ls.docStore.OperatorCommandSubscribed(ls.serviceCtx, operatorID, sessionID, deploymentID); err != nil {
 			ls.logger.Warn("operator command subscription not announced",
 				"operator_id", operatorID, "deployment_id", deploymentID, "error", err)
 		}
@@ -1184,13 +1187,13 @@ func (ls *GatewayModeService) Ready() <-chan struct{} {
 	return ls.readyCh
 }
 
-func (ls *GatewayModeService) IsGovernanceReady() bool {
+func (ls *GatewayModeService) IsGovernanceReady(ctx context.Context) bool {
 	// When L2 is audited rather than enforced, governance is ready as soon as
 	// the service is running without requiring registered L2 signers.
 	if !ls.cfg.Gateway.Posture.RequiresL2() {
 		return true
 	}
-	ready, err := ls.signerStore.HasTrustedSigners()
+	ready, err := ls.signerStore.HasTrustedSigners(ctx)
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", "state", string(constants.ConnectionStateError), "error", err)
 		return false
@@ -1236,6 +1239,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GatewayModeDeps {
 // Start begins serving HTTP/WS requests. Blocks until the context is cancelled
 // or the server encounters a fatal error.
 func (ls *GatewayModeService) Start(ctx context.Context) error {
+	ls.serviceCtx = ctx
 	ls.mu.Lock()
 	if ls.running {
 		ls.mu.Unlock()
@@ -1492,13 +1496,13 @@ func (ls *GatewayModeService) runEnrollmentTokenCleanup(ctx context.Context) {
 // notifyOperatorRecovered reports a stale Operator restored to active so a
 // dashboard showing it stale clears the row. The document is already updated;
 // a failed lookup only costs the push, so it is logged.
-func (ls *GatewayModeService) notifyOperatorRecovered(operatorID string) {
-	transition, err := ls.docStore.OperatorStatusTransition(operatorID, constants.OperatorStatusActive)
+func (ls *GatewayModeService) notifyOperatorRecovered(ctx context.Context, operatorID string) {
+	transition, err := ls.docStore.OperatorStatusTransition(ctx, operatorID, constants.OperatorStatusActive)
 	if err != nil {
 		ls.logger.Warn("heartbeat: recovered operator not reported", "operator_id", operatorID, "error", err)
 		return
 	}
-	ls.docStore.NotifyOperatorStatusChanged(transition)
+	ls.docStore.NotifyOperatorStatusChanged(ctx, transition)
 }
 
 // runServiceCertRenewalLoop runs a background goroutine that periodically checks
@@ -1549,6 +1553,7 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 // bound Operator document and state root do not change. A heartbeat from an
 // Operator previously marked stale restores it to active.
 func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte) {
+	ctx := ls.serviceCtx
 	var env commonv1.GovernanceEnvelope
 	if err := protojson.Unmarshal(data, &env); err != nil {
 		ls.logger.Warn("heartbeat: failed to decode envelope", "channel", channel, "error", err)
@@ -1572,7 +1577,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 	}
 
 	heartbeatAt := time.Now().UTC()
-	if err := ls.docStore.RecordOperatorHeartbeat(env.GetOperatorId(), heartbeatUpdate{
+	if err := ls.docStore.RecordOperatorHeartbeat(ctx, env.GetOperatorId(), heartbeatUpdate{
 		LatestHeartbeatSnapshot: snapshot,
 		LastHeartbeatAt:         heartbeatAt,
 		CurrentHostname:         currentHostnameFromHeartbeat(heartbeat),
@@ -1580,12 +1585,12 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		ls.logger.Warn("heartbeat: failed to record telemetry", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}
-	ls.docStore.ExtendOperatorStaleness(env.GetOperatorId(), heartbeatAt)
+	ls.docStore.ExtendOperatorStaleness(ctx, env.GetOperatorId(), heartbeatAt)
 
 	// Conditional on the document still being stale so a stopped or
 	// terminated Operator that keeps publishing is never revived.
 	restored, err := ls.docStore.DocConditionalUpdate(
-		string(constants.CollectionOperators), env.GetOperatorId(),
+		ctx, string(constants.CollectionOperators), env.GetOperatorId(),
 		json.RawMessage(fmt.Sprintf(`{"status":%q}`, constants.OperatorStatusActive)),
 		"status", string(constants.OperatorStatusStale),
 	)
@@ -1595,7 +1600,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 	}
 	if restored {
 		ls.logger.Info("heartbeat: stale operator restored to active", "operator_id", env.GetOperatorId())
-		ls.notifyOperatorRecovered(env.GetOperatorId())
+		ls.notifyOperatorRecovered(ctx, env.GetOperatorId())
 	}
 
 	ls.logger.Debug("heartbeat: operator snapshot updated", "operator_id", env.GetOperatorId(), "channel", channel)

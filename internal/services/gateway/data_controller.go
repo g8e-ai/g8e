@@ -68,7 +68,7 @@ func (c *DataController) readBody(r *http.Request) ([]byte, error) {
 func (c *DataController) handleDataSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+		doc, err := c.docStore.DocGet(r.Context(), marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleDataSettings: %w", err).Error())
 			return
@@ -90,9 +90,9 @@ func (c *DataController) handleDataSettings(w http.ResponseWriter, r *http.Reque
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = c.docStore.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			err2 = c.docStore.DocSet(r.Context(), marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = c.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			_, err2 = c.docStore.DocUpdate(r.Context(), marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleDataSettings: %w", err2).Error())
@@ -135,7 +135,7 @@ func (c *DataController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := c.docStore.DocGet(collection, id)
+		doc, err := c.docStore.DocGet(r.Context(), collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleDataDB: %w", err).Error())
 			return
@@ -160,7 +160,7 @@ func (c *DataController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
-		if err := c.docStore.DocSet(collection, id, json.RawMessage(body)); err != nil {
+		if err := c.docStore.DocSet(r.Context(), collection, id, json.RawMessage(body)); err != nil {
 			if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrDatabaseLocked.Error())
 			} else {
@@ -184,7 +184,7 @@ func (c *DataController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
-		doc, err := c.docStore.DocUpdate(collection, id, json.RawMessage(body))
+		doc, err := c.docStore.DocUpdate(r.Context(), collection, id, json.RawMessage(body))
 		if err != nil {
 			if errors.Is(err, constants.ErrNotFound) {
 				c.responder.Error(w, http.StatusNotFound, err.Error())
@@ -204,7 +204,7 @@ func (c *DataController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
-		deleted, err := c.docStore.DocDeleteWithResult(collection, id)
+		deleted, err := c.docStore.DocDeleteWithResult(r.Context(), collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleDataDB: %w", err).Error())
 			return
@@ -235,7 +235,7 @@ func (c *DataController) handleDBQuery(w http.ResponseWriter, r *http.Request, c
 		}
 	}
 
-	docs, err := c.docStore.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
+	docs, err := c.docStore.DocQuery(r.Context(), collection, req.Filters, req.OrderBy, req.Limit)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleDBQuery: %w", err).Error())
 		return

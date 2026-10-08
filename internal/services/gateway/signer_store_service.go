@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -40,8 +41,8 @@ func NewSignerStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *Docum
 
 // GetTrustedSigner retrieves an L2 signer public key from the database.
 // Implements governance.SignerStore.
-func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
-	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
+func (s *SignerStoreService) GetTrustedSigner(ctx context.Context, keyID string) (ed25519.PublicKey, error) {
+	doc, err := s.docSvc.DocGet(ctx, marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", constants.ErrDocumentStoreUnmarshalData, keyID)
 	}
@@ -81,7 +82,7 @@ func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, 
 }
 
 // AddTrustedSigner adds or updates a trusted L2 signer in the database.
-func (s *SignerStoreService) AddTrustedSigner(signer models.TrustedSigner) error {
+func (s *SignerStoreService) AddTrustedSigner(ctx context.Context, signer models.TrustedSigner) error {
 	if signer.ID == "" {
 		return fmt.Errorf("%w: signer ID", constants.ErrMissingRequiredField)
 	}
@@ -98,12 +99,12 @@ func (s *SignerStoreService) AddTrustedSigner(signer models.TrustedSigner) error
 		return fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
-	return s.docSvc.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), signer.ID, data)
+	return s.docSvc.DocSet(ctx, marshaler.CollectionName(constants.CollectionTrustedSigners), signer.ID, data)
 }
 
 // ListTrustedSigners returns all trusted L2 signers in the database.
-func (s *SignerStoreService) ListTrustedSigners() ([]models.TrustedSigner, error) {
-	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
+func (s *SignerStoreService) ListTrustedSigners(ctx context.Context) ([]models.TrustedSigner, error) {
+	docs, err := s.docSvc.DocQuery(ctx, marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
 	}
@@ -128,16 +129,16 @@ func (s *SignerStoreService) ListTrustedSigners() ([]models.TrustedSigner, error
 }
 
 // DeleteTrustedSigner removes a trusted L2 signer from the database.
-func (s *SignerStoreService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.docSvc.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
+func (s *SignerStoreService) DeleteTrustedSigner(ctx context.Context, keyID string) (bool, error) {
+	return s.docSvc.DocDeleteWithResult(ctx, marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 }
 
 // HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.
-func (s *SignerStoreService) HasTrustedSigners() (bool, error) {
+func (s *SignerStoreService) HasTrustedSigners(ctx context.Context) (bool, error) {
 	filters := []models.DocFilter{
 		{Field: "enabled", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), filters, "", 1)
+	docs, err := s.docSvc.DocQuery(ctx, marshaler.CollectionName(constants.CollectionTrustedSigners), filters, "", 1)
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
 	}

@@ -22,7 +22,7 @@ import (
 
 // SignerStore defines the interface for loading trusted L2 signers.
 type SignerStore interface {
-	GetTrustedSigner(keyID string) (ed25519.PublicKey, error)
+	GetTrustedSigner(ctx context.Context, keyID string) (ed25519.PublicKey, error)
 }
 
 // FailClosedSignerStore implements SignerStore using a static map.
@@ -31,7 +31,7 @@ type FailClosedSignerStore struct {
 	Signers map[string]ed25519.PublicKey
 }
 
-func (s *FailClosedSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+func (s *FailClosedSignerStore) GetTrustedSigner(_ context.Context, keyID string) (ed25519.PublicKey, error) {
 	if s.Signers == nil {
 		return nil, nil
 	}
@@ -101,7 +101,7 @@ func NewFilesystemSignerStore(fileSvc fs.RuntimeFileService, relDir string, logg
 	return &FilesystemSignerStore{signers: signers}, nil
 }
 
-func (s *FilesystemSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+func (s *FilesystemSignerStore) GetTrustedSigner(_ context.Context, keyID string) (ed25519.PublicKey, error) {
 	if s.signers == nil {
 		return nil, nil
 	}

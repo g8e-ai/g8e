@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
@@ -83,7 +84,7 @@ func NewCLIRecoveryService(docStore *DocumentStoreService, logger *slog.Logger) 
 // its hash, and returns the raw token along with the request ID and expiration.
 // The raw token is only returned once and must be conveyed to the user
 // out-of-band (via the browser URL fragment).
-func (s *CLIRecoveryService) CreateRequest(cliCSRPEM, systemFingerprint string, localOSUser *models.LocalOSUser) (requestID, token string, expiresAt time.Time, err error) {
+func (s *CLIRecoveryService) CreateRequest(ctx context.Context, cliCSRPEM, systemFingerprint string, localOSUser *models.LocalOSUser) (requestID, token string, expiresAt time.Time, err error) {
 	// Compute the CSR public-key fingerprint for proof-of-possession binding.
 	csrFingerprint, err := csrPublicKeyFingerprint(cliCSRPEM)
 	if err != nil {
@@ -126,7 +127,7 @@ func (s *CLIRecoveryService) CreateRequest(cliCSRPEM, systemFingerprint string, 
 	}
 
 	// Use the token hash as the document ID for direct O(1) lookup by token.
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, data); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, data); err != nil {
 		s.logger.Error("CLI recovery: failed to persist request", "error", err)
 		return "", "", time.Time{}, constants.ErrCLIRecoveryRequestFailed
 	}
@@ -145,11 +146,11 @@ func (s *CLIRecoveryService) CreateRequest(cliCSRPEM, systemFingerprint string, 
 // atomically transitioned to the expired state and ErrCLIRecoveryRequestExpired
 // is returned. If no request exists for the token, ErrCLIRecoveryRequestNotFound
 // is returned.
-func (s *CLIRecoveryService) GetByToken(token string) (*models.CLIRecoveryRequest, error) {
+func (s *CLIRecoveryService) GetByToken(ctx context.Context, token string) (*models.CLIRecoveryRequest, error) {
 	tokenHash := hashToken(token)
 	prefix := safePrefix(token)
 
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	if err != nil {
 		s.logger.Error("CLI recovery: failed to look up request", "error", err, "token_prefix", prefix)
 		return nil, constants.ErrCLIRecoveryRequestNotFound
@@ -172,7 +173,7 @@ func (s *CLIRecoveryService) GetByToken(token string) (*models.CLIRecoveryReques
 		return req, nil
 	}
 	if time.Now().UTC().After(req.ExpiresAt) {
-		s.expireRequest(req, tokenHash, prefix)
+		s.expireRequest(ctx, req, tokenHash, prefix)
 		return nil, constants.ErrCLIRecoveryRequestExpired
 	}
 
@@ -182,8 +183,8 @@ func (s *CLIRecoveryService) GetByToken(token string) (*models.CLIRecoveryReques
 // GetStatus returns the current lifecycle state of a CLI recovery request. If
 // the request has expired, it is atomically transitioned to the expired state
 // before returning.
-func (s *CLIRecoveryService) GetStatus(token string) (models.CLIRecoveryState, error) {
-	req, err := s.GetByToken(token)
+func (s *CLIRecoveryService) GetStatus(ctx context.Context, token string) (models.CLIRecoveryState, error) {
+	req, err := s.GetByToken(ctx, token)
 	if err != nil {
 		return "", err
 	}
@@ -194,21 +195,21 @@ func (s *CLIRecoveryService) GetStatus(token string) (models.CLIRecoveryState, e
 // state, binding it to the approving user. Only a pending request can be
 // approved. If the request has already expired, been denied, or been completed,
 // the transition fails with the appropriate typed error.
-func (s *CLIRecoveryService) Approve(token, approvingUserID string) error {
-	return s.transitionOnApproval(token, approvingUserID, true)
+func (s *CLIRecoveryService) Approve(ctx context.Context, token, approvingUserID string) error {
+	return s.transitionOnApproval(ctx, token, approvingUserID, true)
 }
 
 // Deny atomically transitions a pending recovery request to the denied state,
 // binding it to the denying user. Only a pending request can be denied.
-func (s *CLIRecoveryService) Deny(token, denyingUserID string) error {
-	return s.transitionOnApproval(token, denyingUserID, false)
+func (s *CLIRecoveryService) Deny(ctx context.Context, token, denyingUserID string) error {
+	return s.transitionOnApproval(ctx, token, denyingUserID, false)
 }
 
-func (s *CLIRecoveryService) transitionOnApproval(token, userID string, approve bool) error {
+func (s *CLIRecoveryService) transitionOnApproval(ctx context.Context, token, userID string, approve bool) error {
 	tokenHash := hashToken(token)
 	prefix := safePrefix(token)
 
-	req, err := s.fetchByHash(tokenHash, prefix)
+	req, err := s.fetchByHash(ctx, tokenHash, prefix)
 	if err != nil {
 		return err
 	}
@@ -232,7 +233,7 @@ func (s *CLIRecoveryService) transitionOnApproval(token, userID string, approve 
 
 	// Check expiry before transitioning.
 	if time.Now().UTC().After(req.ExpiresAt) {
-		s.expireRequest(req, tokenHash, prefix)
+		s.expireRequest(ctx, req, tokenHash, prefix)
 		return constants.ErrCLIRecoveryRequestExpired
 	}
 
@@ -258,7 +259,7 @@ func (s *CLIRecoveryService) transitionOnApproval(token, userID string, approve 
 		return fmt.Errorf("CLI recovery: marshal decision update: %w", err)
 	}
 
-	applied, err := s.db.DocConditionalUpdate(
+	applied, err := s.db.DocConditionalUpdate(ctx,
 		marshaler.CollectionName(constants.CollectionCLIRecoveryRequests),
 		tokenHash,
 		setFields,
@@ -271,7 +272,7 @@ func (s *CLIRecoveryService) transitionOnApproval(token, userID string, approve 
 	if !applied {
 		// Another caller transitioned the request between our read and the
 		// conditional update. Re-read to determine the actual state.
-		current, err := s.fetchByHash(tokenHash, prefix)
+		current, err := s.fetchByHash(ctx, tokenHash, prefix)
 		if err != nil {
 			return err
 		}
@@ -304,11 +305,11 @@ func (s *CLIRecoveryService) transitionOnApproval(token, userID string, approve 
 // proof-of-possession of the CSR private key before calling this method; the
 // atomic transition ensures that only one concurrent caller can complete the
 // request even if multiple callers possess a valid token.
-func (s *CLIRecoveryService) Complete(token string) (*models.CLIRecoveryRequest, error) {
+func (s *CLIRecoveryService) Complete(ctx context.Context, token string) (*models.CLIRecoveryRequest, error) {
 	tokenHash := hashToken(token)
 	prefix := safePrefix(token)
 
-	req, err := s.fetchByHash(tokenHash, prefix)
+	req, err := s.fetchByHash(ctx, tokenHash, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +333,7 @@ func (s *CLIRecoveryService) Complete(token string) (*models.CLIRecoveryRequest,
 
 	// Check expiry before transitioning.
 	if time.Now().UTC().After(req.ExpiresAt) {
-		s.expireRequest(req, tokenHash, prefix)
+		s.expireRequest(ctx, req, tokenHash, prefix)
 		return nil, constants.ErrCLIRecoveryRequestExpired
 	}
 
@@ -346,7 +347,7 @@ func (s *CLIRecoveryService) Complete(token string) (*models.CLIRecoveryRequest,
 	if err != nil {
 		return nil, fmt.Errorf("CLI recovery: marshal completion update: %w", err)
 	}
-	applied, err := s.db.DocConditionalUpdate(
+	applied, err := s.db.DocConditionalUpdate(ctx,
 		marshaler.CollectionName(constants.CollectionCLIRecoveryRequests),
 		tokenHash, completionUpdate,
 		"state", string(models.CLIRecoveryStateApproved),
@@ -358,7 +359,7 @@ func (s *CLIRecoveryService) Complete(token string) (*models.CLIRecoveryRequest,
 	if !applied {
 		// Another caller completed or transitioned the request between our read
 		// and the conditional update. Re-read to determine the actual state.
-		current, err := s.fetchByHash(tokenHash, prefix)
+		current, err := s.fetchByHash(ctx, tokenHash, prefix)
 		if err != nil {
 			return nil, err
 		}
@@ -390,19 +391,19 @@ func (s *CLIRecoveryService) Complete(token string) (*models.CLIRecoveryRequest,
 // CleanupExpired removes recovery requests that have expired from the database.
 // This should be called periodically to prevent unbounded growth of the
 // cli_recovery_requests collection.
-func (s *CLIRecoveryService) CleanupExpired() error {
+func (s *CLIRecoveryService) CleanupExpired(ctx context.Context) error {
 	now := timesvc.NowTimestamp()
 	filters := []models.DocFilter{
 		{Field: "expires_at", Op: "<", Value: json.RawMessage(`"` + now + `"`)},
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), filters, "", 0)
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), filters, "", 0)
 	if err != nil {
 		return fmt.Errorf("cli recovery: cleanup: query: %w", err)
 	}
 
 	var deleted int
 	for _, doc := range docs {
-		err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), doc.ID)
+		err := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), doc.ID)
 		if err != nil {
 			s.logger.Warn("Failed to delete expired CLI recovery request", "doc_id", doc.ID, "error", err)
 			continue
@@ -417,8 +418,8 @@ func (s *CLIRecoveryService) CleanupExpired() error {
 
 // fetchByHash retrieves a request by its token hash and returns precise errors
 // for not-found and decode failures.
-func (s *CLIRecoveryService) fetchByHash(tokenHash, prefix string) (*models.CLIRecoveryRequest, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+func (s *CLIRecoveryService) fetchByHash(ctx context.Context, tokenHash, prefix string) (*models.CLIRecoveryRequest, error) {
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	if err != nil {
 		s.logger.Error("CLI recovery: failed to look up request", "error", err, "token_prefix", prefix)
 		return nil, constants.ErrCLIRecoveryRequestNotFound
@@ -438,7 +439,7 @@ func (s *CLIRecoveryService) fetchByHash(tokenHash, prefix string) (*models.CLIR
 // expireRequest attempts to atomically transition a non-terminal request to the
 // expired state. Failures are logged but not returned; the caller has already
 // decided to treat the request as expired.
-func (s *CLIRecoveryService) expireRequest(req *models.CLIRecoveryRequest, tokenHash, prefix string) {
+func (s *CLIRecoveryService) expireRequest(ctx context.Context, req *models.CLIRecoveryRequest, tokenHash, prefix string) {
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 	expiryUpdate, err := json.Marshal(struct {
 		State string `json:"state"`
@@ -447,7 +448,7 @@ func (s *CLIRecoveryService) expireRequest(req *models.CLIRecoveryRequest, token
 		s.logger.Warn("CLI recovery: failed to marshal expiry update", "error", err, "token_prefix", prefix)
 		return
 	}
-	applied, err := s.db.DocConditionalUpdate(
+	applied, err := s.db.DocConditionalUpdate(ctx,
 		marshaler.CollectionName(constants.CollectionCLIRecoveryRequests),
 		tokenHash, expiryUpdate,
 		"state", string(req.State),

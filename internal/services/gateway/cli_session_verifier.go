@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -46,17 +47,17 @@ func NewCLISessionVerifier(docStore *DocumentStoreService, pki *PKIAuthority, lo
 // session ownership/fingerprint/active/expiry, and certificate revocation.
 // Returns constants.ErrCLISessionDenied for denials (revoked certs) and other
 // errors for system failures.
-func (v *cliSessionVerifier) VerifyCLISession(userID, cliSessionID, certFingerprint string) error {
-	if err := v.verifyUserActive(userID); err != nil {
+func (v *cliSessionVerifier) VerifyCLISession(ctx context.Context, userID, cliSessionID, certFingerprint string) error {
+	if err := v.verifyUserActive(ctx, userID); err != nil {
 		return err
 	}
 
-	session, err := v.verifyCLISession(userID, cliSessionID, certFingerprint)
+	session, err := v.verifyCLISession(ctx, userID, cliSessionID, certFingerprint)
 	if err != nil {
 		return err
 	}
 
-	if err := v.verifyCertNotRevoked(userID, cliSessionID, session); err != nil {
+	if err := v.verifyCertNotRevoked(ctx, userID, cliSessionID, session); err != nil {
 		return err
 	}
 
@@ -64,11 +65,11 @@ func (v *cliSessionVerifier) VerifyCLISession(userID, cliSessionID, certFingerpr
 }
 
 // verifyUserActive loads the user and verifies they are active.
-func (v *cliSessionVerifier) verifyUserActive(userID string) error {
+func (v *cliSessionVerifier) verifyUserActive(ctx context.Context, userID string) error {
 	if v.userSvc == nil {
 		return constants.ErrCLIL3UserServiceNotConfigured
 	}
-	user, err := v.userSvc.GetByID(userID)
+	user, err := v.userSvc.GetByID(ctx, userID)
 	if err != nil {
 		v.logger.Error("Failed to load user for CLI L3 verification", "user_id", userID, "error", err)
 		return fmt.Errorf("cli session verifier: load user: %w", err)
@@ -85,7 +86,7 @@ func (v *cliSessionVerifier) verifyUserActive(userID string) error {
 
 // verifyCLISession loads the CLI session by ID and verifies session ownership,
 // certificate fingerprint match, active status, and expiry.
-func (v *cliSessionVerifier) verifyCLISession(userID, cliSessionID, certFingerprint string) (*models.CLISession, error) {
+func (v *cliSessionVerifier) verifyCLISession(ctx context.Context, userID, cliSessionID, certFingerprint string) (*models.CLISession, error) {
 	if v.db == nil {
 		return nil, constants.ErrGatewayDatabaseServiceNotConfigured
 	}
@@ -93,7 +94,7 @@ func (v *cliSessionVerifier) verifyCLISession(userID, cliSessionID, certFingerpr
 		return nil, constants.ErrCLIL3SessionIDRequired
 	}
 
-	doc, err := v.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := v.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		v.logger.Error("Failed to load CLI session for L3 verification", "cli_session_id", cliSessionID, "error", err)
 		return nil, fmt.Errorf("cli session verifier: load cli session: %w", err)
@@ -148,12 +149,12 @@ func (v *cliSessionVerifier) verifyCLISession(userID, cliSessionID, certFingerpr
 
 // verifyCertNotRevoked checks that the session's certificate has not been revoked
 // via the PKI authority. Returns constants.ErrCLISessionDenied if the certificate is revoked.
-func (v *cliSessionVerifier) verifyCertNotRevoked(userID, cliSessionID string, session *models.CLISession) error {
+func (v *cliSessionVerifier) verifyCertNotRevoked(ctx context.Context, userID, cliSessionID string, session *models.CLISession) error {
 	if v.pki == nil {
 		return constants.ErrCLIL3PKINotConfigured
 	}
 	if session.CertSerial != "" {
-		revoked, err := v.pki.IsRevoked(session.CertSerial)
+		revoked, err := v.pki.IsRevoked(ctx, session.CertSerial)
 		if err != nil {
 			v.logger.Error("Failed to check certificate revocation status", "user_id", userID, "cli_session_id", cliSessionID, "cert_serial", session.CertSerial, "error", err)
 			return fmt.Errorf("cli session verifier: check cert revocation: %w", err)

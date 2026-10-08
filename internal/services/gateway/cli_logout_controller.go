@@ -72,7 +72,7 @@ func (c *CLIRefreshController) handleLogout(w http.ResponseWriter, r *http.Reque
 		presentedCertSerial = r.TLS.PeerCertificates[0].SerialNumber.String()
 	}
 
-	result, err := c.logoutSvc.Logout(userID, cliSessionID, presentedCertSerial, req.Scope)
+	result, err := c.logoutSvc.Logout(r.Context(), userID,cliSessionID, presentedCertSerial, req.Scope)
 	if err != nil {
 		if errors.Is(err, constants.ErrLogoutScopeInvalid) {
 			c.responder.Error(w, http.StatusBadRequest, constants.ErrLogoutScopeInvalid.Error())

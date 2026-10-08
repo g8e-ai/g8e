@@ -601,7 +601,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		reason = string(constants.PlatformEnrollmentIntentRevoke)
 	}
 	if req.CertificateSerial != "" {
-		if err := h.deps.PKI.RevokeCertificate(req.CertificateSerial, reason); err != nil {
+		if err := h.deps.PKI.RevokeCertificate(ctx, req.CertificateSerial, reason); err != nil {
 			return "", fmt.Errorf("platform enrollment: revoke certificate: %w", err)
 		}
 	}
@@ -622,7 +622,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if operatorSerial == "" {
 			return "", constants.ErrPlatformEnrollmentInvalidPayload
 		}
-		if err := h.deps.PKI.RevokeCertificate(operatorSerial, reason); err != nil {
+		if err := h.deps.PKI.RevokeCertificate(ctx, operatorSerial, reason); err != nil {
 			return "", fmt.Errorf("platform enrollment: revoke operator certificate: %w", err)
 		}
 		operatorSPIFFEID, err := spiffeIDFromCertificate(req.Issued.Operator.OperatorCert)

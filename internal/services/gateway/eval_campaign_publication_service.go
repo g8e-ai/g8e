@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -29,12 +30,12 @@ func NewEvalCampaignPublicationService(docStore *DocumentStoreService) *EvalCamp
 	return &EvalCampaignPublicationService{docStore: docStore}
 }
 
-func (s *EvalCampaignPublicationService) Get(runID string) (*models.EvalCampaignPublicationState, error) {
+func (s *EvalCampaignPublicationService) Get(ctx context.Context, runID string) (*models.EvalCampaignPublicationState, error) {
 	if s == nil || s.docStore == nil || runID == "" {
 		return nil, fmt.Errorf("eval campaign publication: %w", constants.ErrMissingRequiredField)
 	}
 	collection := marshaler.CollectionName(constants.CollectionEvalCampaignPublicationState)
-	doc, err := s.docStore.DocGet(collection, runID)
+	doc, err := s.docStore.DocGet(ctx, collection, runID)
 	if err != nil {
 		return nil, fmt.Errorf("eval campaign publication: get: %w", err)
 	}
@@ -61,18 +62,18 @@ func (s *EvalCampaignPublicationService) Get(runID string) (*models.EvalCampaign
 	return state, nil
 }
 
-func (s *EvalCampaignPublicationService) Delete(runID string) error {
+func (s *EvalCampaignPublicationService) Delete(ctx context.Context, runID string) error {
 	if s == nil || s.docStore == nil || runID == "" {
 		return fmt.Errorf("eval campaign publication: %w", constants.ErrMissingRequiredField)
 	}
 	collection := marshaler.CollectionName(constants.CollectionEvalCampaignPublicationState)
-	if err := s.docStore.DocDelete(collection, runID); err != nil {
+	if err := s.docStore.DocDelete(ctx, collection, runID); err != nil {
 		return fmt.Errorf("eval campaign publication: delete: %w", err)
 	}
 	return nil
 }
 
-func (s *EvalCampaignPublicationService) Put(state models.EvalCampaignPublicationState) error {
+func (s *EvalCampaignPublicationService) Put(ctx context.Context, state models.EvalCampaignPublicationState) error {
 	if s == nil || s.docStore == nil || state.RunID == "" {
 		return fmt.Errorf("eval campaign publication: %w", constants.ErrMissingRequiredField)
 	}
@@ -88,7 +89,7 @@ func (s *EvalCampaignPublicationService) Put(state models.EvalCampaignPublicatio
 		return fmt.Errorf("eval campaign publication: marshal: %w", err)
 	}
 	collection := marshaler.CollectionName(constants.CollectionEvalCampaignPublicationState)
-	if err := s.docStore.DocSet(collection, state.RunID, body); err != nil {
+	if err := s.docStore.DocSet(ctx, collection, state.RunID, body); err != nil {
 		return fmt.Errorf("eval campaign publication: put: %w", err)
 	}
 	return nil

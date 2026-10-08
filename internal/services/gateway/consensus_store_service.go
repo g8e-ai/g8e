@@ -123,7 +123,7 @@ func (s *ConsensusStoreService) AddConsensus(ctx context.Context, policy models.
 
 	// Verify every member ID resolves to an enabled TrustedSigner
 	for _, appID := range policy.MemberAppIDs {
-		pubKey, err := s.signerSvc.GetTrustedSigner(appID)
+		pubKey, err := s.signerSvc.GetTrustedSigner(ctx, appID)
 		if err != nil {
 			return fmt.Errorf("%w: failed to verify signer %s: %v", constants.ErrConstraintViolation, appID, err)
 		}

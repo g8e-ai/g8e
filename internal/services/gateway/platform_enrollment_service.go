@@ -178,10 +178,10 @@ func (s *PlatformEnrollmentService) runCleanup(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := s.ReconcileExpiredLeases(); err != nil {
+			if err := s.ReconcileExpiredLeases(ctx); err != nil {
 				s.logger.Warn("platform enrollment: reconcile expired leases failed", "error", err)
 			}
-			if err := s.CleanupTerminalRequests(); err != nil {
+			if err := s.CleanupTerminalRequests(ctx); err != nil {
 				s.logger.Warn("platform enrollment: cleanup terminal requests failed", "error", err)
 			}
 		}
@@ -262,7 +262,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 	}
 	if existing != nil {
 		if req.DeploymentID != "" {
-			s.approvals.EnrollmentRequested(existing.ID, req.DeploymentID)
+			s.approvals.EnrollmentRequested(ctx, existing.ID, req.DeploymentID)
 		}
 		return &models.PlatformEnrollmentCreateResponse{
 			RequestID:     existing.ID,
@@ -309,7 +309,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		"component_kind", string(req.ComponentKind),
 		"instance_id", req.InstanceID,
 		"expires_at", expiresAt)
-	s.approvals.EnrollmentRequested(requestID, req.DeploymentID)
+	s.approvals.EnrollmentRequested(ctx, requestID, req.DeploymentID)
 
 	return &models.PlatformEnrollmentCreateResponse{
 		RequestID:     requestID,
@@ -332,7 +332,7 @@ func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string)
 	if token == "" {
 		return nil, constants.ErrPlatformEnrollmentTokenRequired
 	}
-	req, err := s.loadByToken(token)
+	req, err := s.loadByToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string)
 		return s.statusResponse(req), nil
 	}
 	if time.Now().UTC().After(req.ExpiresAt) {
-		s.expireRequest(req)
+		s.expireRequest(ctx,req)
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
 	}
 	return s.statusResponse(req), nil
@@ -408,14 +408,14 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	// direct caller (e.g. a future internal admin path) cannot bypass
 	// the active-owner check. A disabled first user fails closed with
 	// the same typed authorization error as a non-owner.
-	user, err := s.userSvc.GetByID(actorUserID)
+	user, err := s.userSvc.GetByID(ctx, actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize decision: %w", err)
 	}
 	if user == nil || !user.IsActive() {
 		return nil, constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	isFirst, err := s.userSvc.IsFirstUser(actorUserID)
+	isFirst, err := s.userSvc.IsFirstUser(ctx, actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize decision: %w", err)
 	}
@@ -427,7 +427,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	// submitting the envelope. The handler re-checks the state via
 	// conditional update, but an early check gives a precise error
 	// without consuming a governance receipt.
-	existing, err := s.loadByID(req.RequestID)
+	existing, err := s.loadByID(ctx,req.RequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +441,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		return nil, constants.ErrPlatformEnrollmentAlreadyDecided
 	}
 	if time.Now().UTC().After(existing.ExpiresAt) {
-		s.expireRequest(existing)
+		s.expireRequest(ctx,existing)
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
 	}
 
@@ -464,7 +464,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	}
 
 	// Reload to get the post-decision state.
-	updated, err := s.loadByID(req.RequestID)
+	updated, err := s.loadByID(ctx,req.RequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +476,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		"request_id", req.RequestID,
 		"decision", string(req.Decision),
 		"actor_user_id", actorUserID)
-	s.approvals.EnrollmentsDecided()
+	s.approvals.EnrollmentsDecided(ctx)
 
 	return &models.PlatformEnrollmentDecisionResponse{
 		RequestID: req.RequestID,
@@ -490,14 +490,14 @@ func (s *PlatformEnrollmentService) DecideBatch(ctx context.Context, actorUserID
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	user, err := s.userSvc.GetByID(actorUserID)
+	user, err := s.userSvc.GetByID(ctx, actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize batch: %w", err)
 	}
 	if user == nil || !user.IsActive() {
 		return nil, constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	first, err := s.userSvc.IsFirstUser(actorUserID)
+	first, err := s.userSvc.IsFirstUser(ctx, actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize batch owner: %w", err)
 	}
@@ -527,7 +527,7 @@ func (s *PlatformEnrollmentService) DecideBatch(ctx context.Context, actorUserID
 	for i, target := range req.Requests {
 		resp.Requests[i] = models.PlatformEnrollmentDecisionResponse{RequestID: target.RequestID, State: state}
 	}
-	s.approvals.EnrollmentsDecided()
+	s.approvals.EnrollmentsDecided(ctx)
 	return resp, nil
 }
 
@@ -535,21 +535,21 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	user, err := s.userSvc.GetByID(actorUserID)
+	user, err := s.userSvc.GetByID(ctx, actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize revocation: %w", err)
 	}
 	if user == nil || !user.IsActive() {
 		return nil, constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	isFirst, err := s.userSvc.IsFirstUser(actorUserID)
+	isFirst, err := s.userSvc.IsFirstUser(ctx, actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize revocation: %w", err)
 	}
 	if !isFirst {
 		return nil, constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	existing, err := s.loadByID(req.RequestID)
+	existing, err := s.loadByID(ctx,req.RequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +585,7 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	}); err != nil {
 		return nil, fmt.Errorf("platform enrollment: revoke envelope: %w", err)
 	}
-	updated, err := s.loadByID(existing.ID)
+	updated, err := s.loadByID(ctx,existing.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -601,8 +601,7 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 // the active first user (enforced by the controller before calling this
 // method).
 func (s *PlatformEnrollmentService) ListEnrolled(ctx context.Context) (*models.PlatformEnrollmentEnrolledResponse, error) {
-	_ = ctx
-	docs, err := s.db.DocQuery(platformEnrollmentCollectionName(), nil, "created_at", 0)
+	docs, err := s.db.DocQuery(ctx, platformEnrollmentCollectionName(), nil, "created_at", 0)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: list enrolled: %w", err)
 	}
@@ -672,7 +671,7 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 	if token == "" {
 		return nil, constants.ErrPlatformEnrollmentTokenRequired
 	}
-	req, err := s.loadByToken(token)
+	req, err := s.loadByToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
@@ -680,7 +679,7 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 	// Verify token freshness: the token hash matched, so the caller
 	// possesses the correct token. Now check state and expiry.
 	if time.Now().UTC().After(req.ExpiresAt) && !req.State.IsTerminal() {
-		s.expireRequest(req)
+		s.expireRequest(ctx,req)
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
 	}
 
@@ -759,7 +758,7 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 		return nil, fmt.Errorf("platform enrollment: marshal issuance lease: %w", err)
 	}
 	applied, err := s.db.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), req.ID,
+		ctx, platformEnrollmentCollectionName(), req.ID,
 		leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
@@ -782,13 +781,13 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 	}); err != nil {
 		// Roll back the lease so a retry can re-acquire. A failed
 		// ISSUE must not permanently consume approval.
-		s.rollbackLease(req.ID)
+		s.rollbackLease(ctx, req.ID)
 		return nil, fmt.Errorf("platform enrollment: issue envelope: %w", err)
 	}
 
 	// Reload to get the issued material and generated IDs written by
 	// the ISSUE handler.
-	completed, err := s.loadByID(req.ID)
+	completed, err := s.loadByID(ctx,req.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -875,9 +874,9 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 // state so a new completion attempt can re-acquire the lease. This
 // recovers from a crash between lease acquisition and ISSUE completion.
 // Requests with a live lease are left in the issuing state.
-func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
+func (s *PlatformEnrollmentService) ReconcileExpiredLeases(ctx context.Context) error {
 	now := timesvc.NowTimestamp()
-	result, err := s.db.db.ExecWithRetry(context.Background(), `UPDATE documents SET data = json_patch(data, json_object(
+	result, err := s.db.db.ExecWithRetry(ctx, `UPDATE documents SET data = json_patch(data, json_object(
   'state', CASE WHEN julianday(json_extract(data, '$.expires_at')) < julianday(?) THEN ? ELSE ? END,
   'issuance_lease_owner', '', 'issuance_lease_expires_at', NULL, 'last_transition_at', ?)), updated_at = ?
   WHERE collection = ? AND json_extract(data, '$.state') = ?
@@ -892,7 +891,7 @@ func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
 		return fmt.Errorf("platform enrollment: count recovered leases: %w", err)
 	}
 	if count > 0 {
-		s.approvals.EnrollmentsChanged()
+		s.approvals.EnrollmentsChanged(ctx)
 	}
 	return nil
 }
@@ -900,10 +899,10 @@ func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
 // CleanupTerminalRequests explicitly expires abandoned live requests, then
 // removes denied/expired records past retention. Completed records retain the
 // issued credentials needed for idempotent completion. Reads never do this work.
-func (s *PlatformEnrollmentService) CleanupTerminalRequests() error {
+func (s *PlatformEnrollmentService) CleanupTerminalRequests(ctx context.Context) error {
 	now := time.Now().UTC()
 	stamp := timesvc.FormatTimestamp(now)
-	result, err := s.db.db.ExecWithRetry(context.Background(), `UPDATE documents SET data = json_patch(data, json_object('state', ?, 'last_transition_at', ?)), updated_at = ?
+	result, err := s.db.db.ExecWithRetry(ctx, `UPDATE documents SET data = json_patch(data, json_object('state', ?, 'last_transition_at', ?)), updated_at = ?
   WHERE collection = ? AND json_extract(data, '$.state') IN ('pending', 'approved', 'issuing')
   AND julianday(json_extract(data, '$.expires_at')) < julianday(?)`,
 		models.PlatformEnrollmentStateExpired, stamp, stamp, platformEnrollmentCollectionName(), stamp)
@@ -915,9 +914,9 @@ func (s *PlatformEnrollmentService) CleanupTerminalRequests() error {
 		return fmt.Errorf("platform enrollment: count expired requests: %w", err)
 	}
 	if count > 0 {
-		s.approvals.EnrollmentsChanged()
+		s.approvals.EnrollmentsChanged(ctx)
 	}
-	_, err = s.db.db.ExecWithRetry(context.Background(), `DELETE FROM documents WHERE collection = ? AND json_extract(data, '$.state') IN ('denied', 'expired')
+	_, err = s.db.db.ExecWithRetry(ctx, `DELETE FROM documents WHERE collection = ? AND json_extract(data, '$.state') IN ('denied', 'expired')
   AND julianday(json_extract(data, '$.last_transition_at')) < julianday(?)`,
 		platformEnrollmentCollectionName(), timesvc.FormatTimestamp(now.Add(-constants.PlatformEnrollmentCleanupRetention)))
 	if err != nil {
@@ -1028,14 +1027,14 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 // rollbackLease transitions a request from issuing back to approved so
 // a retry can re-acquire the lease. Failures are logged; the caller
 // has already decided to return an error.
-func (s *PlatformEnrollmentService) rollbackLease(requestID string) {
+func (s *PlatformEnrollmentService) rollbackLease(ctx context.Context, requestID string) {
 	update, err := marshalPlatformEnrollmentApprovedUpdate(time.Now().UTC())
 	if err != nil {
 		s.logger.Error("platform enrollment: marshal rollback lease failed", "request_id", requestID, "error", err)
 		return
 	}
 	applied, err := s.db.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), requestID, update,
+		ctx, platformEnrollmentCollectionName(), requestID, update,
 		"state", string(models.PlatformEnrollmentStateIssuing),
 	)
 	if err != nil {
@@ -1050,14 +1049,14 @@ func (s *PlatformEnrollmentService) rollbackLease(requestID string) {
 // expireRequest attempts to atomically transition a non-terminal request
 // to the expired state. Failures are logged; the caller has already
 // decided to treat the request as expired.
-func (s *PlatformEnrollmentService) expireRequest(req *models.PlatformEnrollmentRequest) {
+func (s *PlatformEnrollmentService) expireRequest(ctx context.Context, req *models.PlatformEnrollmentRequest) {
 	update, err := marshalPlatformEnrollmentExpiredUpdate(time.Now().UTC())
 	if err != nil {
 		s.logger.Warn("platform enrollment: marshal expire failed", "request_id", req.ID, "error", err)
 		return
 	}
 	applied, err := s.db.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), req.ID, update,
+		ctx, platformEnrollmentCollectionName(), req.ID, update,
 		"state", string(req.State),
 	)
 	if err != nil {
@@ -1066,14 +1065,14 @@ func (s *PlatformEnrollmentService) expireRequest(req *models.PlatformEnrollment
 	}
 	if applied {
 		s.logger.Info("platform enrollment request expired", "request_id", req.ID)
-		s.approvals.EnrollmentsChanged()
+		s.approvals.EnrollmentsChanged(ctx)
 	}
 }
 
 // loadByToken resolves the opaque token through the indexed token hash.
-func (s *PlatformEnrollmentService) loadByToken(token string) (*models.PlatformEnrollmentRequest, error) {
+func (s *PlatformEnrollmentService) loadByToken(ctx context.Context, token string) (*models.PlatformEnrollmentRequest, error) {
 	var data []byte
-	err := s.db.db.QueryRowWithRetry(context.Background(), `SELECT json_set(data, '$.id', id, '$.created_at', created_at)
+	err := s.db.db.QueryRowWithRetry(ctx, `SELECT json_set(data, '$.id', id, '$.created_at', created_at)
 		FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ? LIMIT 1`,
 		platformEnrollmentCollectionName(), platformEnrollmentTokenHash(token)).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1090,8 +1089,8 @@ func (s *PlatformEnrollmentService) loadByToken(token string) (*models.PlatformE
 }
 
 // loadByID loads a request by its request ID (the document ID).
-func (s *PlatformEnrollmentService) loadByID(requestID string) (*models.PlatformEnrollmentRequest, error) {
-	doc, err := s.db.DocGet(platformEnrollmentCollectionName(), requestID)
+func (s *PlatformEnrollmentService) loadByID(ctx context.Context, requestID string) (*models.PlatformEnrollmentRequest, error) {
+	doc, err := s.db.DocGet(ctx, platformEnrollmentCollectionName(), requestID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: load by id: %w", err)
 	}

@@ -34,7 +34,7 @@ func NewEncryptedKVAdapter(kv *KVStoreService, v *vault.Vault) *EncryptedKVAdapt
 	return &EncryptedKVAdapter{kv: kv, vault: v}
 }
 
-func (a *EncryptedKVAdapter) KVSet(_ context.Context, key, value string, ttlSeconds int) error {
+func (a *EncryptedKVAdapter) KVSet(ctx context.Context, key, value string, ttlSeconds int) error {
 	if !a.vault.IsUnlocked() {
 		return fmt.Errorf("encrypted_kv_adapter: cannot encrypt key %s: %w", key, constants.ErrVaultLocked)
 	}
@@ -42,11 +42,11 @@ func (a *EncryptedKVAdapter) KVSet(_ context.Context, key, value string, ttlSeco
 	if err != nil {
 		return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
 	}
-	return a.kv.KVSetObserved(constants.SentinelKeyPrefix+key, string(encrypted), ttlSeconds)
+	return a.kv.KVSetObserved(ctx, constants.SentinelKeyPrefix+key, string(encrypted), ttlSeconds)
 }
 
-func (a *EncryptedKVAdapter) KVGet(_ context.Context, key string) (string, error) {
-	value, found := a.kv.KVGet(constants.SentinelKeyPrefix + key)
+func (a *EncryptedKVAdapter) KVGet(ctx context.Context, key string) (string, error) {
+	value, found := a.kv.KVGet(ctx, constants.SentinelKeyPrefix + key)
 	if !found {
 		return "", fmt.Errorf("encrypted_kv_adapter: key %s: %w", key, constants.ErrKeyNotFound)
 	}
@@ -60,8 +60,8 @@ func (a *EncryptedKVAdapter) KVGet(_ context.Context, key string) (string, error
 	return string(decrypted), nil
 }
 
-func (a *EncryptedKVAdapter) KVScanPrefix(_ context.Context, prefix string) (map[string]string, error) {
-	fullKeys, err := a.kv.KVKeys(constants.SentinelKeyPrefix + prefix + "*")
+func (a *EncryptedKVAdapter) KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error) {
+	fullKeys, err := a.kv.KVKeys(ctx, constants.SentinelKeyPrefix + prefix + "*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan keys with prefix %q: %w", prefix, err)
 	}
@@ -72,7 +72,7 @@ func (a *EncryptedKVAdapter) KVScanPrefix(_ context.Context, prefix string) (map
 
 	result := make(map[string]string, len(fullKeys))
 	for _, fullKey := range fullKeys {
-		value, found := a.kv.KVGet(fullKey)
+		value, found := a.kv.KVGet(ctx, fullKey)
 		if !found {
 			continue
 		}

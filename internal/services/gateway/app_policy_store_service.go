@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -37,8 +38,8 @@ func NewAppPolicyStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *Do
 
 // GetAppPolicy retrieves an AppPolicy by app_id from the database.
 // Implements governance.AppPolicyStore.
-func (s *AppPolicyStoreService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
-	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+func (s *AppPolicyStoreService) GetAppPolicy(ctx context.Context, appID string) (*models.AppPolicy, error) {
+	doc, err := s.docSvc.DocGet(ctx, marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", constants.ErrAppPolicyStoreGetFailed, appID)
 	}
