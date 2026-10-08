@@ -84,7 +84,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-ENS-DATA-01 | g8ee maintains no local durable database. The Gateway owns all durable application documents, KV entries, and blob objects in its own runtime storage. g8ee accesses these services via mTLS clients orchestrated by `CacheAsideService`. |
+| INV-ENS-DATA-01 | g8ee maintains no local durable database. The Gateway owns all durable application documents and blob objects in its own runtime storage. g8ee accesses them via mTLS clients; `DocumentService` is the single owner of document access and keeps no cache. |
 | INV-ENS-DATA-02 | The g8ee process owns only ephemeral coordination state (active model turns, pending application approvals, background task tracking, and command-result correlations). This state does not survive container restarts. |
 | INV-ENS-DATA-03 | The Gateway is the sole authoritative owner of the Operator domain (documents, sessions, bindings, lifecycle states including heartbeat-driven `stale` transitions, command dispatch, results, and heartbeat snapshots). g8ee maintains no Operator service and queries or dispatches via Gateway protocol endpoints. |
 
@@ -107,8 +107,8 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Wheel API path registry | `ensemble/pyproject.toml` (`tool.setuptools.package-data`) | `uv build` includes `app/constants/api_paths.json` in the wheel so installed applications can load their internal route registry |
 | Gateway Operator Client | `ensemble/app/clients/gateway_operator_client.py` | Operator protocol dispatch and audit record ingest |
 | Governed Application Client | `ensemble/app/clients/governance_client.py` | Canonical envelope construction and retry on state root mismatch |
-| Gateway Data Transport | `ensemble/app/clients/db_client.py`, `kv_cache_client.py`, `blob_client.py` | mTLS transport clients for Gateway-backed persistence |
-| Cache-Aside Orchestrator | `ensemble/app/services/cache/cache_aside.py` | Unified KV caching and DB persistence coordination |
+| Gateway Data Transport | `ensemble/app/clients/db_client.py`, `blob_client.py` | mTLS transport clients for Gateway-backed persistence |
+| Document Service | `ensemble/app/db/document_service.py` | Single owner of Gateway document access: uncached reads, raise-on-failure writes |
 | Declarative Tool Registry | `ensemble/app/services/ai/tool_registry.py` | Universal and operator-gated tool definitions |
 | Tribunal & Safety Pipeline | `ensemble/app/services/ai/tribunal/`, `generator.py` | Multi-seat candidate generation, clustering, voting, and validation |
 | Operator Execution & Approval | `ensemble/app/services/operator/execution_service.py`, `approval_service.py` | Command execution dispatch and application approval lifecycle |
@@ -140,7 +140,7 @@ The FastAPI application registers three router groups across root and internal p
 1. **Health Router (`ensemble/app/routers/health_router.py`)**:
    - `GET /health`: Basic unauthenticated health check returning `{"status": "ok"}` for load balancers and Compose health checks.
    - `GET /health/live`: Internal process liveness probe returning `{"status": "alive", "service": "g8ee"}`.
-   - `GET /health/details`: Detailed component health reporting status for `cache_aside_service`, `operator_kv`, `internal_http_client`, `operator_command_service`, and `chat_pipeline`.
+   - `GET /health/details`: Detailed component health reporting status for `document_service`, `internal_http_client`, `operator_command_service`, and `chat_pipeline`.
 
 2. **Chat Router (`ensemble/app/routers/chat_router.py`)**:
    - `POST /chat/triage/answer`: Submits a user response to a triage clarifying question.
@@ -205,9 +205,8 @@ sequenceDiagram
         Enroll-->>Main: Install cert, key, CA bundle atomically
     end
     Main->>Main: Phase 0.5: Build TLSConfig from the enrolled identity
-    Main->>Clients: Phase 1: Connect DBClient, KVCacheClient, BlobClient (mTLS)
-    Main->>Main: Phase 2: Initialize DBService, KVService, BlobService
-    Main->>Main: Phase 3: Construct CacheAsideService (KV + DB)
+    Main->>Clients: Phase 1: Connect DBClient, BlobClient (mTLS)
+    Main->>Main: Phase 2: Construct DocumentService, BlobService
     Main->>Settings: Phase 4: Fetch & merge platform settings from Gateway
     Main->>Main: Phase 4.5: Initialize GovernanceClient
     Main->>Factory: Phase 5: ServiceFactory.create_all_services()
@@ -339,32 +338,27 @@ sequenceDiagram
 - **Identity Binding**: Resolves `operator_id` and `operator_session_id` from the client certificate's SPIFFE URI SAN (`spiffe://g8e.local/operator/<org>/<id>/<session>`), ensuring stamped metadata matches transport identity. Every envelope also carries `acting_app_id` set to `g8ee`. A record written for a browser session with no Operator in the request context carries no Operator fields, and the Gateway admits it only because `acting_app_id` matches g8ee's app certificate (INV-AUTH-ID-05 in [Authentication](auth.md)).
 - **State Root Verification & Retry**: Fetches the current `state_merkle_root` from `GET /api/v1/health`. If concurrent writes trigger a `403 Forbidden` with `TX_STATE_MISMATCH`, `GovernanceClient` retries up to 3 times by re-fetching the state root and re-signing the envelope under its internal submission lock.
 
-### Persistence, Cache-Aside Architecture, and State Ownership
+### Persistence and State Ownership
 
 g8ee operates entirely without a local database. Data durability is governed by strict ownership boundaries:
 
 ```mermaid
 flowchart LR
     subgraph g8ee Runtime
-        CacheAside[CacheAsideService]
-        KVSvc[KVService]
-        DBSvc[DBService]
+        DocSvc[DocumentService]
         BlobSvc[BlobService]
         MemState[Ephemeral State: Turns, Approvals, Tasks]
     end
     subgraph Gateway Runtime
-        GWKV[Gateway KV Store]
         GWDoc[Gateway Document DB - SQLite]
         GWBlob[Gateway Blob Store]
     end
-    CacheAside --> KVSvc & DBSvc
-    KVSvc -->|mTLS| GWKV
-    DBSvc -->|mTLS| GWDoc
+    DocSvc -->|mTLS| GWDoc
     BlobSvc -->|mTLS| GWBlob
 ```
 
-1. **Gateway-Owned Stores**: The Gateway owns all persistent storage for application documents (cases, investigations, memories, user settings), key-value cache entries, and binary blobs.
-2. **Cache-Aside Orchestration**: `CacheAsideService` provides read-through caching and write-through/invalidation over `KVService` and `DBService`. Read operations check KV cache before falling back to the Gateway document service; write operations update the document service and invalidate or refresh KV cache keys. When cache reads are disabled, document and query reads do not warm the cache. The external KV API admits only `g8e:cache:doc:` and `g8e:cache:query:` keys or patterns with those literal prefixes. Cache writes are observed state and change neither state roots nor `state_version`. Gateway document writes own related cache invalidation; g8ee contains no replay guard or Redis primitive emulation. See [Storage Architecture](storage.md).
+1. **Gateway-Owned Stores**: The Gateway owns all persistent storage for application documents (cases, investigations, memories, user settings) and binary blobs.
+2. **Uncached Document Access**: `DocumentService` wraps `DBClient` directly. Every read goes to the Gateway document API and every failed write raises `DatabaseError`; g8ee keeps no document or query cache, and the Gateway no longer exposes a KV HTTP surface. g8ee contains no replay guard or Redis primitive emulation. See [Storage Architecture](storage.md).
 3. **Operator Domain Exclusivity**: The Gateway is the sole owner of Operator documents, sessions, bindings, lifecycle states, command dispatch records, and heartbeat state (`latest_heartbeat_snapshot` and the Gateway-stamped `last_heartbeat_at`, from which the Gateway derives `stale`; g8ee defines no staleness threshold of its own and reads the status the Gateway returns). g8ee never subscribes to Operator pub/sub or persists Operator records.
 4. **Ephemeral Coordination**: The ensemble process retains only active in-memory turns, background task handles, pending application approvals, and command correlation IDs. A container restart cleanly drops ephemeral state while persistent application data remains safe in the Gateway.
 

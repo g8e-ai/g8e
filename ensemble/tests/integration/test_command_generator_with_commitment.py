@@ -58,7 +58,7 @@ _TEST_HMAC_KEY = "a" * 64
 class TestCommandGeneratorWithCommitment:
     """Verify reputation commitment flows through the Tribunal generator pipeline."""
 
-    async def test_successful_audit_triggers_reputation_commitment(self, fake_cache_aside_service):
+    async def test_successful_audit_triggers_reputation_commitment(self, fake_document_service):
         """A verified Tribunal outcome must produce a reputation commitment."""
         inputs, _ = make_agent_run_args(
             case_id="commitment-test-case-001",
@@ -73,7 +73,7 @@ class TestCommandGeneratorWithCommitment:
         # Use real ReputationDataService with fake cache/db
 
         async def _write_through(collection, document_id, updates, **kwargs):
-            return await fake_cache_aside_service.db_client.update_document(
+            return await fake_document_service.db_client.update_document(
                 collection=collection,
                 document_id=document_id,
                 data=updates,
@@ -85,7 +85,7 @@ class TestCommandGeneratorWithCommitment:
             return_value=ReputationSignResponse(signature="a" * 64)
         )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through)
-        reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
+        reputation_svc = ReputationDataService(fake_document_service, gov)
 
         # Seed some initial reputation state
         await reputation_svc.upsert_state(
@@ -200,7 +200,7 @@ class TestCommandGeneratorWithCommitment:
         assert payload.commitment_id == gen_result.reputation_commitment_id
         assert payload.correlation_id == "mock-correlation-id"
 
-    async def test_failed_audit_skips_reputation_commitment(self, fake_cache_aside_service):
+    async def test_failed_audit_skips_reputation_commitment(self, fake_document_service):
         """An unverified Tribunal outcome must NOT produce a reputation commitment."""
         inputs, _ = make_agent_run_args(
             case_id="commitment-fail-case-001",
@@ -211,7 +211,7 @@ class TestCommandGeneratorWithCommitment:
         event_svc = make_event_service()
 
         async def _write_through2(collection, document_id, updates, **kwargs):
-            return await fake_cache_aside_service.db_client.update_document(
+            return await fake_document_service.db_client.update_document(
                 collection=collection,
                 document_id=document_id,
                 data=updates,
@@ -223,7 +223,7 @@ class TestCommandGeneratorWithCommitment:
             return_value=ReputationSignResponse(signature="a" * 64)
         )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through2)
-        reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
+        reputation_svc = ReputationDataService(fake_document_service, gov)
 
         with (
             patch(
@@ -284,7 +284,7 @@ class TestCommandGeneratorWithCommitment:
         assert len(commitment_events) == 0
 
     async def test_commitment_failure_is_fatal_to_command_generation(
-        self, fake_cache_aside_service
+        self, fake_document_service
     ):
         """A failure in the commitment step should crash the generator (prevents ghost verdicts)."""
         inputs, _ = make_agent_run_args()
@@ -293,7 +293,7 @@ class TestCommandGeneratorWithCommitment:
         event_svc = make_event_service()
 
         async def _write_through3(collection, document_id, updates, **kwargs):
-            return await fake_cache_aside_service.db_client.update_document(
+            return await fake_document_service.db_client.update_document(
                 collection=collection,
                 document_id=document_id,
                 data=updates,
@@ -305,7 +305,7 @@ class TestCommandGeneratorWithCommitment:
             return_value=ReputationSignResponse(signature="a" * 64)
         )
         gov.update_governed_doc = AsyncMock(side_effect=_write_through3)
-        reputation_svc = ReputationDataService(fake_cache_aside_service, gov)
+        reputation_svc = ReputationDataService(fake_document_service, gov)
 
         # Force commitment failure by mocking create_commitment to raise
         reputation_svc.create_commitment = AsyncMock(side_effect=RuntimeError("DB Offline"))

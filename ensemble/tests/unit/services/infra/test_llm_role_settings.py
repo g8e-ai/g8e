@@ -239,7 +239,6 @@ class TestSettingsServiceLLMRoles:
     async def test_update_persists_provider_connection_and_role_selection(self):
         cache = MagicMock()
         cache.update_document = AsyncMock()
-        cache.invalidate_document = AsyncMock(return_value=True)
         service = SettingsService(document_service=cache)
         service.get_user_settings = AsyncMock(return_value=G8eeUserSettings(llm=LLMSettings()))
         request = _request(
@@ -264,7 +263,6 @@ class TestSettingsServiceLLMRoles:
         assert stored.primary_model == "gemma4:e4b"
         assert stored.ollama_endpoint == "http://192.168.1.2:11434"
         assert stored.ollama_api_key == "k"
-        cache.invalidate_document.assert_awaited_once_with(DB_COLLECTION_SETTINGS, doc_id)
         ollama = next(option for option in view.providers if option.provider is LLMProvider.OLLAMA)
         assert ollama.api_key_set is True
 
@@ -276,7 +274,6 @@ class TestSettingsServiceLLMRoles:
 
         cache = MagicMock()
         cache.update_document = AsyncMock(side_effect=update_document)
-        cache.invalidate_document = AsyncMock(return_value=True)
         cache.get_document_data = AsyncMock(
             side_effect=lambda *_args, document_id, **_kwargs: stored.get(document_id)
         )
@@ -306,7 +303,6 @@ class TestEvalJudgeModel:
 
         cache = MagicMock()
         cache.update_document = AsyncMock(side_effect=update_document)
-        cache.invalidate_document = AsyncMock(return_value=True)
         cache.get_document_data = AsyncMock(
             side_effect=lambda *_args, document_id, **_kwargs: stored.get(document_id)
         )

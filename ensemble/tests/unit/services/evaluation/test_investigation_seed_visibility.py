@@ -30,12 +30,12 @@ from g8e.models.internal_api import (
 )
 
 from app.clients.governance_client import GovernanceClient
+from app.db.document_service import DocumentService
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeUserSettings
 from app.models.tool_results import InvestigationContextResult
 from app.services.ai.tool_service import AIToolService
 from app.services.ai.tools import query_investigation_context
-from app.db.document_service import DocumentService
 from app.services.evaluation.investigation_seed import InvestigationSeedService
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.investigation_service import InvestigationService

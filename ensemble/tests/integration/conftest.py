@@ -44,7 +44,7 @@ from app.utils.time_ids.timestamp import now
 logger = logging.getLogger(__name__)
 
 
-def make_write_through_governance_client(cache_aside_service):
+def make_write_through_governance_client(document_service):
     """Governance client mock that persists governed writes to the fake DB client.
 
     Data services route creates/updates/deletes through governance envelopes;
@@ -58,13 +58,13 @@ def make_write_through_governance_client(cache_aside_service):
             data = payload.model_dump(mode="json")
             data["id"] = message.id
             data["created_at"] = datetime.now(UTC).isoformat()
-            await cache_aside_service.db_client.create_document(
+            await document_service.client.create_document(
                 collection="investigations",
                 document_id=message.id,
                 data=data,
             )
         elif payload is not None and hasattr(payload, "collection") and hasattr(payload, "updates"):
-            await cache_aside_service.db_client.create_document(
+            await document_service.client.create_document(
                 collection=payload.collection,
                 document_id=payload.document_id,
                 data=payload.updates,
@@ -72,7 +72,7 @@ def make_write_through_governance_client(cache_aside_service):
         return {"status": "accepted"}
 
     async def _update_write_through(collection, document_id, updates, **kwargs):
-        return await cache_aside_service.db_client.update_document(
+        return await document_service.client.update_document(
             collection=collection,
             document_id=document_id,
             data=updates,
@@ -223,7 +223,7 @@ async def approve_via_http(
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def all_services(cache_aside_service, test_settings):
+async def all_services(document_service, test_settings):
     """Fixture that returns all g8ee services properly configured.
 
     This is the recommended way to get services for integration tests.
@@ -281,11 +281,9 @@ async def all_services(cache_aside_service, test_settings):
 
     services = service_factory.create_all_services(
         test_settings,
-        cache_aside_service,
-        db_service=MagicMock(),
-        kv_service=MagicMock(),
+        document_service,
         blob_service=MagicMock(),
-        governance_client=make_write_through_governance_client(cache_aside_service),
+        governance_client=make_write_through_governance_client(document_service),
         web_search_provider=web_search_provider,
     )
 
@@ -313,7 +311,7 @@ def chat_pipeline(all_services):
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def cleanup(cache_aside_service, all_services):
+async def cleanup(document_service, all_services):
     """Autouse-friendly cleanup tracker for integration tests.
 
     Track documents created during a test via ``cleanup.track_investigation(id)``
@@ -325,14 +323,14 @@ async def cleanup(cache_aside_service, all_services):
         "tests.integration.cleanup"
     ).IntegrationCleanupTracker
 
-    tracker = integration_cleanup_tracker(cache_aside_service)
+    tracker = integration_cleanup_tracker(document_service)
     yield tracker
 
     await tracker.cleanup()
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def user_settings(cache_aside_service, test_settings):
+async def user_settings(document_service, test_settings):
     """Returns user settings for integration tests.
 
     Uses TEST_LLM settings when available (set via ./g8e test flags),
@@ -351,7 +349,7 @@ async def user_settings(cache_aside_service, test_settings):
         return g8ee_user_settings(llm=llm, search=search or test_settings.search)
 
     # Otherwise load from operator
-    settings_service = settings_service(cache_aside_service=cache_aside_service)
+    settings_service = settings_service(document_service=document_service)
     try:
         return await settings_service.get_user_settings("test-user-id")
     except Exception as e:

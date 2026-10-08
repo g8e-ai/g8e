@@ -71,16 +71,12 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 - **Go 1.26.6 or later**, as declared by the root Go module.
 - **Make** on Linux and macOS. Windows builds use the repository's PowerShell workflow and still invoke Make.
-- **Node.js 22 or later** and **npm**, only when rebuilding the Evaluation Explorer or Console. Fresh clones use the committed embeds.
+- **Node.js 22 or later** and **npm**, required by `make build` to build the Evaluation Explorer and Console embeds.
 - **PowerShell 7 or later (`pwsh`)** for the native Windows setup script.
 
-To refresh the Evaluation Explorer embed, run these commands from the repository root:
+To refresh only the Evaluation Explorer embed, run this from the repository root:
 
 ```bash
-cd evaluation-explorer
-npm ci
-npm run build
-cd ..
 make explorer-embed
 ```
 

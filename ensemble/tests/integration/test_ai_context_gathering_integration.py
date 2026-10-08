@@ -34,7 +34,7 @@ Real code under test:
     InvestigationService (app/services/investigation/investigation_service.py)
     MemoryDataService (app/services/investigation/memory_data_service.py)
     OperatorDataService (app/services/operators/operator_data_service.py)
-    CacheAsideService (app/services/cache/cache_aside.py)
+    DocumentService (app/db/document_service.py)
     extract_system_context, extract_all_operators_context
 
 All tests use real g8ee services backed by an in-memory operator cache fake.
@@ -122,20 +122,18 @@ async def seed_operator_document(
 
 
 @pytest.fixture
-def cache_aside_service(fake_cache_aside_service):
-    return fake_cache_aside_service
+def document_service(fake_document_service):
+    return fake_document_service
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def all_services(cache_aside_service, test_settings):
+async def all_services(document_service, test_settings):
 
     services = ServiceFactory.create_all_services(
         test_settings,
-        cache_aside_service,
-        db_service=MagicMock(),
-        kv_service=MagicMock(),
+        document_service,
         blob_service=MagicMock(),
-        governance_client=make_write_through_governance_client(cache_aside_service),
+        governance_client=make_write_through_governance_client(document_service),
     )
     wire_gateway_operator_registry(services.gateway_operator_client)
     yield services
@@ -143,9 +141,9 @@ async def all_services(cache_aside_service, test_settings):
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def cleanup(cache_aside_service):
+async def cleanup(document_service):
 
-    tracker = IntegrationCleanupTracker(cache_aside_service)
+    tracker = IntegrationCleanupTracker(document_service)
     yield tracker
     await tracker.cleanup()
 
@@ -161,7 +159,7 @@ class TestInvestigationContextResolution:
     """Test basic investigation context resolution with retry logic."""
 
     async def test_resolve_by_investigation_id_success(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Happy path: resolve investigation by investigation_id."""
         # Setup services properly using real infrastructure
@@ -200,7 +198,7 @@ class TestInvestigationContextResolution:
         assert result.operator_documents == []  # No operators enriched yet
 
     async def test_resolve_by_case_id_returns_latest(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """When resolving by case_id, return the most recently created investigation."""
         # Setup
@@ -256,7 +254,7 @@ class TestInvestigationContextResolution:
 
     async def test_resolve_missing_investigation_raises_resource_not_found(
         self,
-        cache_aside_service,
+        document_service,
         test_settings,
         all_services,
         cleanup,
@@ -283,7 +281,7 @@ class TestInvestigationContextResolution:
 
     async def test_resolve_case_id_no_investigations_raises_resource_not_found(
         self,
-        cache_aside_service,
+        document_service,
         test_settings,
         all_services,
         cleanup,
@@ -306,7 +304,7 @@ class TestInvestigationContextResolution:
         assert exc_info.value.resource_type == "investigation"
 
     async def test_resolve_without_user_id_logs_security_warning(
-        self, cache_aside_service, test_settings, all_services, cleanup, caplog
+        self, document_service, test_settings, all_services, cleanup, caplog
     ):
         """Calling without user_id logs a security warning but still works."""
         # Setup
@@ -361,7 +359,7 @@ class TestMemoryContextAttachment:
     """Test memory context attachment to investigations."""
 
     async def test_attach_existing_memory_to_investigation(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Memory is successfully attached when it exists."""
         # Setup services properly using real infrastructure
@@ -412,7 +410,7 @@ class TestMemoryContextAttachment:
         cleanup.track_memory(created_investigation.id)
 
     async def test_missing_memory_handled_gracefully(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Investigation context works normally when no memory exists."""
         # Setup services properly using real infrastructure
@@ -452,7 +450,7 @@ class TestMemoryContextAttachment:
         cleanup.track_investigation(created_investigation.id)
 
     async def test_memory_data_service_none_skips_attachment(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """When no memory exists for investigation, memory is None without error."""
         # Setup services properly using real infrastructure
@@ -489,7 +487,7 @@ class TestMemoryContextAttachment:
         cleanup.track_investigation(created_investigation.id)
 
     async def test_memory_data_integrity_preserved(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """All memory fields are preserved correctly during attachment."""
         # Setup services properly using real infrastructure
@@ -565,7 +563,7 @@ class TestOperatorEnrichment:
     """Test operator enrichment and context extraction for AI."""
 
     async def test_enrich_single_bound_operator(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Single bound operator is enriched and context extracted."""
         # Setup services properly using real infrastructure
@@ -625,7 +623,7 @@ class TestOperatorEnrichment:
         cleanup.track_investigation(created_investigation.id)
 
     async def test_enrich_multiple_bound_operators(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Multiple bound operators are all enriched."""
         # Setup services properly using real infrastructure
@@ -696,7 +694,7 @@ class TestOperatorEnrichment:
         cleanup.track_investigation(created_investigation.id)
 
     async def test_non_bound_operators_filtered_out(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Only BOUND status operators are enriched."""
         # Setup services properly using real infrastructure
@@ -769,7 +767,7 @@ class TestOperatorEnrichment:
 
     async def test_missing_operator_handled_gracefully(
         self,
-        cache_aside_service,
+        document_service,
         test_settings,
         all_services,
         cleanup,
@@ -821,7 +819,7 @@ class TestOperatorEnrichment:
         cleanup.track_investigation(created_investigation.id)
 
     async def test_remote_operator_context_extraction(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Remote operator context includes granted intents."""
         # Setup services properly using real infrastructure
@@ -891,7 +889,7 @@ class TestCompleteContextAssembly:
     """Test complete context assembly from G8eHttpContext to final context."""
 
     async def test_full_pipeline_with_all_components(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Complete pipeline: investigation + memory + operators + enrichment."""
         # Setup services properly using real infrastructure
@@ -998,7 +996,7 @@ class TestCompleteContextAssembly:
         cleanup.track_investigation(created_investigation.id)
 
     async def test_context_with_no_operators_or_memory(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, document_service, test_settings, all_services, cleanup
     ):
         """Context assembly works with minimal data (no operators, no memory)."""
         # Setup services properly using real infrastructure
@@ -1059,7 +1057,7 @@ class TestContextGatheringErrorHandling:
     """Test error handling and edge cases in context gathering."""
 
     async def test_context_with_null_investigation_id(
-        self, cache_aside_service, test_settings, all_services
+        self, document_service, test_settings, all_services
     ):
         """Context with null investigation_id handles gracefully."""
         service = all_services.investigation_service
@@ -1086,7 +1084,7 @@ class TestContextGatheringErrorHandling:
         assert result.memory is None  # No memory attached
 
     async def test_context_without_required_parameters(
-        self, cache_aside_service, test_settings, all_services
+        self, document_service, test_settings, all_services
     ):
         """get_investigation_context without required params raises error."""
         service = all_services.investigation_service
@@ -1108,7 +1106,7 @@ class TestContextGatheringErrorHandling:
 class TestAIContextExtraction:
     """Test context extraction functions used by AI agents."""
 
-    async def test_extract_system_context_single_operator(self, cache_aside_service):
+    async def test_extract_system_context_single_operator(self, document_service):
         """extract_system_context returns primary operator context."""
         # Create test operator with full system details and specific ID
         operator = build_production_operator_document(
@@ -1204,7 +1202,7 @@ class TestAIContextExtraction:
         assert context.memory_total_mb == 8192
         assert context.memory_available_mb == 4485
 
-    async def test_extract_system_context_no_operators(self, cache_aside_service):
+    async def test_extract_system_context_no_operators(self, document_service):
         """extract_system_context returns None with no operators."""
         investigation = EnrichedInvestigationContext(
             id="inv-no-ops",
@@ -1227,12 +1225,12 @@ class TestAIContextExtraction:
         # Verify
         assert context is None
 
-    async def test_extract_system_context_none_investigation(self, cache_aside_service):
+    async def test_extract_system_context_none_investigation(self, document_service):
         """extract_system_context returns None with None investigation."""
         context = extract_system_context(None)
         assert context is None
 
-    async def test_extract_all_operators_context_multiple(self, cache_aside_service):
+    async def test_extract_all_operators_context_multiple(self, document_service):
         """extract_all_operators_context returns all operator contexts."""
         # Create multiple operators with different characteristics and specific IDs
         linux_operator = build_production_operator_document(
@@ -1287,12 +1285,12 @@ class TestAIContextExtraction:
         assert intents_ctx.operator_type == OperatorType.REMOTE
         assert intents_ctx.granted_intents == ["ec2_discovery", "s3_read"]
 
-    async def test_extract_all_operators_context_none_investigation(self, cache_aside_service):
+    async def test_extract_all_operators_context_none_investigation(self, document_service):
         """extract_all_operators_context returns None with None investigation."""
         contexts = extract_all_operators_context(None)
         assert contexts is None
 
-    async def test_extract_all_operators_context_empty_operators(self, cache_aside_service):
+    async def test_extract_all_operators_context_empty_operators(self, document_service):
         """extract_all_operators_context returns None with no operators."""
         investigation = EnrichedInvestigationContext(
             id="inv-empty-ops",
@@ -1312,7 +1310,7 @@ class TestAIContextExtraction:
         contexts = extract_all_operators_context(investigation)
         assert contexts is None
 
-    async def test_context_extraction_with_missing_heartbeat_data(self, cache_aside_service):
+    async def test_context_extraction_with_missing_heartbeat_data(self, document_service):
         """Context extraction handles missing heartbeat data gracefully."""
         # Create operator with no heartbeat snapshot
         operator = build_production_operator_document(operator_id="op-no-hb")

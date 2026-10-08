@@ -40,7 +40,7 @@ class TestG8eeSettingsOverlayIntegration:
 
     @pytest.fixture
     def settings_service(self, cache_service):
-        return SettingsService(cache_aside_service=cache_service)
+        return SettingsService(document_service=cache_service)
 
     async def test_get_app_settings_loads_from_operator(self, settings_service, cache_service):
         """Verify platform settings are loaded from the correct operator collection/ID.
@@ -106,12 +106,12 @@ class TestG8eeSettingsOverlayIntegration:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        cache_service.get_document_with_cache.return_value = platform_data
+        cache_service.get_document_data.return_value = platform_data
 
         settings = await settings_service.get_app_settings()
 
         assert isinstance(settings, G8eeAppSettings)
-        cache_service.get_document_with_cache.assert_called_once_with(
+        cache_service.get_document_data.assert_called_once_with(
             collection=DB_COLLECTION_SETTINGS, document_id=PLATFORM_SETTINGS_DOC
         )
 
@@ -207,7 +207,7 @@ class TestG8eeSettingsOverlayIntegration:
                 return platform_data
             return None
 
-        cache_service.get_document_with_cache.side_effect = get_doc_mock
+        cache_service.get_document_data.side_effect = get_doc_mock
 
         # g8ee SettingsService.get_user_settings currently only returns the UserSettings part
         # overlaid on schema defaults, but we want to ensure it uses the user document if present.
@@ -289,7 +289,7 @@ class TestG8eeSettingsOverlayIntegration:
                 return platform_data
             return None
 
-        cache_service.get_document_with_cache.side_effect = get_doc_mock
+        cache_service.get_document_data.side_effect = get_doc_mock
 
         user_settings = await settings_service.get_user_settings(user_id)
 
@@ -326,14 +326,14 @@ class TestG8eeSettingsOverlayIntegration:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        cache_service.get_document_with_cache.return_value = platform_data
+        cache_service.get_document_data.return_value = platform_data
 
         # Stub bootstrap so no on-disk secrets exist; the platform DB doc is
         # the only source of auth values, exercising the overlay path.
         bootstrap = MagicMock()
         bootstrap.load_ca_cert_path.return_value = None
         settings_service = SettingsService(
-            cache_aside_service=cache_service,
+            document_service=cache_service,
         )
 
         settings = await settings_service.get_app_settings()
@@ -378,12 +378,12 @@ class TestG8eeSettingsOverlayIntegration:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        cache_service.get_document_with_cache.return_value = platform_data
+        cache_service.get_document_data.return_value = platform_data
 
         bootstrap = MagicMock()
         bootstrap.load_ca_cert_path.return_value = None
         settings_service = SettingsService(
-            cache_aside_service=cache_service,
+            document_service=cache_service,
         )
 
         settings = await settings_service.get_app_settings()
@@ -448,7 +448,7 @@ class TestG8eeSettingsOverlayIntegration:
                 return platform_data
             return None
 
-        cache_service.get_document_with_cache.side_effect = get_doc_mock
+        cache_service.get_document_data.side_effect = get_doc_mock
 
         user_settings = await settings_service.get_user_settings(user_id)
 
@@ -488,7 +488,7 @@ class TestG8eeSettingsOverlayIntegration:
                 return platform_data
             return None
 
-        cache_service.get_document_with_cache.side_effect = get_doc_mock
+        cache_service.get_document_data.side_effect = get_doc_mock
 
         user_settings = await settings_service.get_user_settings(user_id)
 

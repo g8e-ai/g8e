@@ -53,17 +53,10 @@ The reference implementation is the static `g8e` binary running in gateway mode.
 
 - **Go 1.26.6+** - Required for building the reference gateway. The root `go.mod` is authoritative; the Makefile may select a newer toolchain automatically unless `GOTOOLCHAIN=local` is set.
 - **Make** - Required to run the root build targets.
-- **Node.js and npm** - Required only to refresh the Evaluation Explorer and Console embeds. Both embeds are committed, so `make build` and `make up` on a fresh clone use them when the gitignored `evaluation-explorer/dist` and `console/dist` directories are absent.
+- **Node.js and npm** - Required by `make build`, which builds the Evaluation Explorer and Console and refreshes their committed embeds.
 - **Docker Engine and the Docker Compose plugin** - Required only for the container build and Compose deployment.
 
-A fresh clone needs no Node build before `make build`. To refresh the Evaluation Explorer embed after changing its source, build it and run the strict embed target from the repository root:
-
-```bash
-cd evaluation-explorer && npm install && npm run build && cd ..
-make explorer-embed
-```
-
-`make explorer-embed` fails when `evaluation-explorer/dist/index.html` is missing. Refresh the Console embed with `make console-embed`.
+`make build` installs frontend dependencies, builds both frontends, and refreshes their embeds. To refresh only one embed, run `make explorer-embed` or `make console-embed`.
 
 > **Don't have the local build toolchain installed?** Run the setup script for your platform to install prerequisites and compile `g8e`:
 > - **Linux:** `bash scripts/linux-setup.sh`

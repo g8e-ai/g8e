@@ -7,7 +7,7 @@
 
 """Smoke tests for the in-memory mock g8e gateway.
 
-Verifies that the real g8ee clients (DBClient, KVCacheClient, BlobClient)
+Verifies that the real g8ee clients (DBClient, BlobClient)
 can connect to and interact with MockGateway.
 """
 
@@ -15,24 +15,11 @@ import pytest
 
 from app.clients.blob_client import BlobClient
 from app.clients.db_client import DBClient
-from app.clients.kv_cache_client import KVCacheClient
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
 class TestMockGatewayHealth:
-    async def test_kv_connect(self, mock_gateway):
-        kv = KVCacheClient(
-            http_url=mock_gateway.gateway_settings.http_url,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            ok = await kv.connect()
-            assert ok
-            assert kv.is_healthy()
-        finally:
-            await kv.close()
-
     async def test_db_connect(self, mock_gateway):
         db = DBClient(
             gateway_settings=mock_gateway.gateway_settings,
@@ -54,64 +41,6 @@ class TestMockGatewayHealth:
             assert ok
         finally:
             await blob.close()
-
-
-class TestMockGatewayKV:
-    async def test_set_and_get(self, mock_gateway):
-        kv = KVCacheClient(
-            http_url=mock_gateway.gateway_settings.http_url,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            await kv.connect()
-            await kv.set("test_key", "test_value")
-            val = await kv.get("test_key")
-            assert val == "test_value"
-        finally:
-            await kv.close()
-
-    async def test_delete(self, mock_gateway):
-        kv = KVCacheClient(
-            http_url=mock_gateway.gateway_settings.http_url,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            await kv.connect()
-            await kv.set("del_key", "del_value")
-            count = await kv.delete("del_key")
-            assert count == 1
-            val = await kv.get("del_key")
-            assert val is None
-        finally:
-            await kv.close()
-
-    async def test_keys_pattern(self, mock_gateway):
-        kv = KVCacheClient(
-            http_url=mock_gateway.gateway_settings.http_url,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            await kv.connect()
-            await kv.set("prefix:1", "a")
-            await kv.set("prefix:2", "b")
-            await kv.set("other:1", "c")
-            keys = await kv.keys("prefix:*")
-            assert sorted(keys) == ["prefix:1", "prefix:2"]
-        finally:
-            await kv.close()
-
-    async def test_set_json_and_get_json(self, mock_gateway):
-        kv = KVCacheClient(
-            http_url=mock_gateway.gateway_settings.http_url,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            await kv.connect()
-            await kv.set_json("json_key", {"name": "test", "count": 42})
-            data = await kv.get_json("json_key")
-            assert data == {"name": "test", "count": 42}
-        finally:
-            await kv.close()
 
 
 class TestMockGatewayDB:

@@ -54,10 +54,10 @@ async def _persist_investigation(cache, investigation) -> None:
 
 
 @pytest.mark.asyncio
-async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
+async def test_full_chat_turn_produces_valid_chain(fake_document_service):
     """A full chat turn produces a valid hash chain."""
     investigation_data_service = InvestigationDataService(
-        fake_cache_aside_service, _make_gov_mock(fake_cache_aside_service)
+        fake_document_service, _make_gov_mock(fake_document_service)
     )
 
     # Create investigation
@@ -68,7 +68,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    await _persist_investigation(fake_cache_aside_service, investigation)
+    await _persist_investigation(fake_document_service, investigation)
 
     # Simulate a chat turn: user message + AI response + system notification
     user_metadata = ConversationMessageMetadata(
@@ -114,10 +114,10 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
 
 
 @pytest.mark.asyncio
-async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
+async def test_mixed_history_and_chat_chains(fake_document_service):
     """conversation_history maintains valid chain when history_trail is also updated."""
     investigation_data_service = InvestigationDataService(
-        fake_cache_aside_service, _make_gov_mock(fake_cache_aside_service)
+        fake_document_service, _make_gov_mock(fake_document_service)
     )
 
     # Create investigation
@@ -128,7 +128,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    await _persist_investigation(fake_cache_aside_service, investigation)
+    await _persist_investigation(fake_document_service, investigation)
 
     # Add chat message
     chat_metadata = ConversationMessageMetadata(
@@ -192,10 +192,10 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
 
 
 @pytest.mark.asyncio
-async def test_chain_persists_across_retrieval(fake_cache_aside_service):
+async def test_chain_persists_across_retrieval(fake_document_service):
     """Hash chain persists correctly across investigation retrieval."""
     investigation_data_service = InvestigationDataService(
-        fake_cache_aside_service, _make_gov_mock(fake_cache_aside_service)
+        fake_document_service, _make_gov_mock(fake_document_service)
     )
 
     # Create investigation
@@ -206,7 +206,7 @@ async def test_chain_persists_across_retrieval(fake_cache_aside_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    await _persist_investigation(fake_cache_aside_service, investigation)
+    await _persist_investigation(fake_document_service, investigation)
 
     for i in range(3):
         await investigation_data_service.add_chat_message(

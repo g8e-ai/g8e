@@ -20,11 +20,11 @@ from app.constants.platform import LogLevel
 from app.dependencies import (
     get_g8ee_app_settings,
     get_g8ee_attachment_service,
-    get_g8ee_document_service,
     get_g8ee_case_data_service,
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_current_active_user,
+    get_g8ee_document_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
     health_check_dependencies,

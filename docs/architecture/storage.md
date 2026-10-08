@@ -54,9 +54,8 @@ Documents g8e's storage architecture: local SQLite databases, persistence topolo
 | Surface | Owner | Verification |
 | --- | --- | --- |
 | Canonical schema and state-commitment dirty-mark triggers | `internal/services/gateway/db/schema.sql`, `CanonicalDBService.initSchema` | `TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen`, `TestStateRootService_LegacyDatabaseIsRebuiltOnOpen` |
-| HTTP KV authorization | `DataController.handleKV`, `authorizeKVNamespace` | `TestKVNamespace_RejectsAuthorityKeysAndUnscopedPatterns`, `TestKVNamespace_CacheWritesAreObserved` |
 | Internal KV state and TTL | `KVStoreService` | Gateway KV integration tests |
-| App cache transport and optional cache warming | `ensemble/app/clients/kv_cache_client.py`, `CacheAsideService` | Cache client and disabled-read regressions; Gateway owns invalidation |
+| g8ee document access (no app cache) | `ensemble/app/db/document_service.py`, `DocumentService` | `tests/unit/db/test_document_service.py`; every read goes to the Gateway document API |
 | Replay nonce reservation | `ReplayStoreService` and outbound `SQLReplayStore` | Replay and L4 verification tests |
 | Runtime paths | `RuntimeFileService`, `internal/constants/paths.go` | Isolated runtime fixture tests |
 

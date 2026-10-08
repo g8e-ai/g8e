@@ -566,44 +566,41 @@ INSTALL_EXECUTABLE = \
 EXPLORER_DIST := evaluation-explorer/dist
 EXPLORER_EMBED := internal/services/gateway/explorer/static
 
+# Frontend builds are incremental: each dist rebuilds only when its sources
+# change, and each embed refreshes only when its dist is newer. The explorer
+# bundle also compiles in VERSION and imports g8e-adapter/src.
+FRONTEND_PRUNE := -name node_modules -prune -o -name dist -prune -o
+
+EXPLORER_SOURCES := $(shell find evaluation-explorer $(FRONTEND_PRUNE) -type f ! -path '*/tests/*' ! -path '*/e2e/*' -print) $(shell find g8e-adapter/src -type f) VERSION
+
+evaluation-explorer/node_modules/.package-lock.json: evaluation-explorer/package-lock.json
+	@npm ci --prefix evaluation-explorer
+
+$(EXPLORER_DIST)/index.html: evaluation-explorer/node_modules/.package-lock.json $(EXPLORER_SOURCES)
+	@echo "Building the evaluation explorer..."
+	@npm run build --prefix evaluation-explorer
+	@touch $@
+
+$(EXPLORER_EMBED)/index.html: $(EXPLORER_DIST)/index.html
+	@rm -rf $(EXPLORER_EMBED) && cp -r $(EXPLORER_DIST) $(EXPLORER_EMBED)
+	@echo "Embedded explorer updated from fresh explorer build."
+
 .PHONY: explorer-embed
-explorer-embed:
-	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd evaluation-explorer && npm run build"; exit 1; }
-	@rm -rf $(EXPLORER_EMBED)
-	@cp -r $(EXPLORER_DIST) $(EXPLORER_EMBED)
+explorer-embed: $(EXPLORER_EMBED)/index.html
 
-# `make build` must work on a fresh clone. evaluation-explorer/dist is
-# gitignored, but the explorer embed is committed, so fall back to it (same
-# contract as _embed-console-if-built). `make explorer-embed` stays strict for
-# release preparation (INV-REL-VER-06).
-.PHONY: _embed-explorer-if-built
-_embed-explorer-if-built:
-	@if [ -f $(EXPLORER_DIST)/index.html ]; then \
-		rm -rf $(EXPLORER_EMBED) && cp -r $(EXPLORER_DIST) $(EXPLORER_EMBED); \
-	else \
-		echo "evaluation-explorer/dist not built; using the committed explorer embed (run 'cd evaluation-explorer && npm run build && make explorer-embed' to refresh)"; \
-	fi
-
-# The console embed is committed, like the explorer's. When console/dist has
-# not been built (Go-only checkouts), the committed embed is used as-is.
 CONSOLE_DIST := console/dist
 CONSOLE_EMBED := internal/services/gateway/console/static
+CONSOLE_SOURCES := $(shell find console $(FRONTEND_PRUNE) -type f ! -path '*/tests/*' -print)
 
-.PHONY: console-embed
-console-embed: console-build
+$(CONSOLE_EMBED)/index.html: $(CONSOLE_DIST)/index.html
 	@rm -rf $(CONSOLE_EMBED) && cp -r $(CONSOLE_DIST) $(CONSOLE_EMBED)
 	@echo "Embedded console updated from fresh console build."
 
-.PHONY: _embed-console-if-built
-_embed-console-if-built:
-	@if [ -f $(CONSOLE_DIST)/index.html ]; then \
-		rm -rf $(CONSOLE_EMBED) && cp -r $(CONSOLE_DIST) $(CONSOLE_EMBED); \
-	else \
-		echo "console/dist not built; using the committed console embed (run 'make console-embed' to refresh)"; \
-	fi
+.PHONY: console-embed
+console-embed: $(CONSOLE_EMBED)/index.html
 
 .PHONY: build
-build: _embed-explorer-if-built _embed-console-if-built
+build: explorer-embed console-embed
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(BIN_DIR)/g8e-binaries.json
@@ -887,10 +884,16 @@ ensemble-build:
 # Requires node_modules installed first:
 #   cd console && npm ci
 
-.PHONY: console-build
-console-build:
+console/node_modules/.package-lock.json: console/package-lock.json
+	@npm ci --prefix console
+
+$(CONSOLE_DIST)/index.html: console/node_modules/.package-lock.json $(CONSOLE_SOURCES)
 	@echo "Building the console SPA..."
-	@cd console && npm run build
+	@npm run build --prefix console
+	@touch $@
+
+.PHONY: console-build
+console-build: $(CONSOLE_DIST)/index.html
 
 .PHONY: console-lint
 console-lint:

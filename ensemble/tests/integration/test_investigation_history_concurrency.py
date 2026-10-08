@@ -20,7 +20,7 @@ from app.utils.hashing.ledger_hash import verify_chain
 
 
 @pytest.fixture
-def mock_cache_aside_service():
+def mock_document_service():
     return AsyncMock()
 
 
@@ -30,13 +30,13 @@ def mock_governance_client():
 
 
 @pytest.fixture
-def service(mock_cache_aside_service, mock_governance_client):
-    return InvestigationDataService(mock_cache_aside_service, mock_governance_client)
+def service(mock_document_service, mock_governance_client):
+    return InvestigationDataService(mock_document_service, mock_governance_client)
 
 
 @pytest.mark.asyncio
 async def test_concurrent_chat_appends_preserve_chain_under_load(
-    service, mock_cache_aside_service, mock_governance_client
+    service, mock_document_service, mock_governance_client
 ):
     """
     REPRODUCER: Spin 20 coroutines via asyncio.gather calling add_chat_message
@@ -70,7 +70,7 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(
             protocol_db_state[0] = new_state
         return AsyncMock(success=True)
 
-    mock_cache_aside_service.get_document_with_cache.side_effect = mock_get_document
+    mock_document_service.get_document_data.side_effect = mock_get_document
     mock_governance_client.update_governed_doc.side_effect = mock_update_governed_doc
 
     # Launch 20 concurrent appends

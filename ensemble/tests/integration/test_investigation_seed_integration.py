@@ -53,29 +53,27 @@ FACT = "PAYMENT_TIMEOUT seen at 08:02"
 
 
 @pytest.fixture
-def cache_aside_service(fake_cache_aside_service):
-    return fake_cache_aside_service
+def document_service(fake_document_service):
+    return fake_document_service
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def all_services(cache_aside_service, test_settings):
+async def all_services(document_service, test_settings):
 
     services = ServiceFactory.create_all_services(
         test_settings,
-        cache_aside_service,
-        db_service=MagicMock(),
-        kv_service=MagicMock(),
+        document_service,
         blob_service=MagicMock(),
-        governance_client=make_write_through_governance_client(cache_aside_service),
+        governance_client=make_write_through_governance_client(document_service),
     )
     yield services
     await ServiceFactory.stop_services(services)
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def cleanup(cache_aside_service):
+async def cleanup(document_service):
 
-    tracker = IntegrationCleanupTracker(cache_aside_service)
+    tracker = IntegrationCleanupTracker(document_service)
     yield tracker
     await tracker.cleanup()
 

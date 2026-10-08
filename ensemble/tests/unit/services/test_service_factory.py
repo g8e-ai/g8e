@@ -18,9 +18,9 @@ import pytest
 
 from app.constants import LogLevel
 from app.db.blob_service import BlobService
+from app.db.document_service import DocumentService
 from app.models.settings import G8eeAppSettings
 from app.services.auth.certificate_data_service import CertificateDataService
-from app.db.document_service import DocumentService
 from app.services.service_factory import ServiceFactory
 
 pytestmark = [pytest.mark.unit]

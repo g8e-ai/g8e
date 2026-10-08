@@ -61,29 +61,27 @@ pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.s
 
 
 @pytest.fixture
-def cache_aside_service(fake_cache_aside_service):
-    return fake_cache_aside_service
+def document_service(fake_document_service):
+    return fake_document_service
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def all_services(cache_aside_service, test_settings):
+async def all_services(document_service, test_settings):
 
     services = ServiceFactory.create_all_services(
         test_settings,
-        cache_aside_service,
-        db_service=MagicMock(),
-        kv_service=MagicMock(),
+        document_service,
         blob_service=MagicMock(),
-        governance_client=make_write_through_governance_client(cache_aside_service),
+        governance_client=make_write_through_governance_client(document_service),
     )
     yield services
     await ServiceFactory.stop_services(services)
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def cleanup(cache_aside_service):
+async def cleanup(document_service):
 
-    tracker = IntegrationCleanupTracker(cache_aside_service)
+    tracker = IntegrationCleanupTracker(document_service)
     yield tracker
     await tracker.cleanup()
 
@@ -99,7 +97,7 @@ class TestMemoryGenerationServiceIntegration:
     """Test AI-powered memory generation with real LLM calls."""
 
     async def test_memory_generation_from_conversation(
-        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
+        self, document_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService analyzes conversation and updates memory."""
         if not user_settings.llm.assistant_model:
@@ -199,7 +197,7 @@ class TestMemoryGenerationServiceIntegration:
         cleanup.track_memory(result_memory.investigation_id)
 
     async def test_memory_generation_with_existing_memory(
-        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
+        self, document_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService updates existing memory with new conversation data."""
         if not user_settings.llm.assistant_model:
@@ -347,7 +345,7 @@ class TestMemoryGenerationServiceIntegration:
         cleanup.track_memory(updated_memory.investigation_id)
 
     async def test_memory_generation_empty_conversation(
-        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
+        self, document_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService handles empty conversation gracefully."""
         if not user_settings.llm.assistant_model:
