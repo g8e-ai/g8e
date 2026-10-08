@@ -233,7 +233,7 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 		rows, err := env.svc.sseStore.SSEEventsListSince(SSERoute{UserID: env.ownerID, CLISessionID: "cli-burst-owner"}, 0, 4*n)
 		require.NoError(t, err)
 		assert.LessOrEqual(t, len(rows), 3*n, "durable fan-out must grow linearly with the cohort")
-		t.Logf("  deployment events: staged=%d ready=%d durable_owner_rows=%d worker_rows=0", len(staged), len(ready), len(rows))
+		t.Logf("  deployment events: staged=%d ready=%d live_events=%d durable_owner_rows=%d worker_rows=0", len(staged), len(ready), len(observed), len(rows))
 	}
 }
 
@@ -241,6 +241,7 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 type burstPhase struct {
 	name      string
 	wall      time.Duration
+	deadline  time.Duration
 	latencies []time.Duration
 	outcomes  map[string]int
 }
@@ -248,7 +249,7 @@ type burstPhase struct {
 // runBurstPhase starts one goroutine per worker, releases them together, and
 // runs op once per worker under the client deadline.
 func runBurstPhase(name string, workers []*burstWorker, deadline time.Duration, op func(context.Context, *burstWorker) error) burstPhase {
-	phase := burstPhase{name: name, latencies: make([]time.Duration, len(workers)), outcomes: map[string]int{}}
+	phase := burstPhase{name: name, deadline: deadline, latencies: make([]time.Duration, len(workers)), outcomes: map[string]int{}}
 	outcomes := make([]string, len(workers))
 	start := make(chan struct{})
 	var wg sync.WaitGroup
@@ -292,7 +293,7 @@ func requireBurstContract(t *testing.T, phase burstPhase) {
 	t.Helper()
 	require.Equal(t, map[string]int{burstOutcomeOK: len(phase.latencies)}, phase.outcomes,
 		"%s: every first attempt must succeed", phase.name)
-	require.Less(t, slices.Max(phase.latencies), platformEnrollmentBurstClientDeadline,
+	require.Less(t, slices.Max(phase.latencies), phase.deadline,
 		"%s: every call must finish before the client deadline", phase.name)
 }
 

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -340,13 +341,10 @@ func newBareMTLSRequest(ctx context.Context, reqURL string) (*http.Request, erro
 }
 
 // GetAuditReceipts fetches the authenticated audit receipts list and returns
-// the typed response. The optional txID parameter filters by transaction ID;
-// when empty, all receipts are listed up to the server default limit.
-func (c *E2EClient) GetAuditReceipts(ctx context.Context, txID string) (models.AuditReceiptsResponse, error) {
+// the typed response up to the server default limit. Use GetActionReceipt for
+// the canonical protobuf response selected by transaction ID.
+func (c *E2EClient) GetAuditReceipts(ctx context.Context) (models.AuditReceiptsResponse, error) {
 	path := constants.APIPaths.AuditReceipts
-	if txID != "" {
-		path += "?tx_id=" + txID
-	}
 	req, err := c.newAuthenticatedRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return models.AuditReceiptsResponse{}, err
@@ -356,6 +354,24 @@ func (c *E2EClient) GetAuditReceipts(ctx context.Context, txID string) (models.A
 		return models.AuditReceiptsResponse{}, fmt.Errorf("fetch audit receipts: %w", err)
 	}
 	return decodeJSON[models.AuditReceiptsResponse](body, "audit receipts")
+}
+
+// GetActionReceipt reads the bare canonical protobuf response selected by tx_id.
+// The list endpoint returns an AuditReceiptsResponse wrapper instead.
+func (c *E2EClient) GetActionReceipt(ctx context.Context, txID string) (*operatorv1.ActionReceipt, error) {
+	req, err := c.newAuthenticatedRequest(ctx, http.MethodGet, constants.APIPaths.AuditReceipts+"?tx_id="+txID, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, _, err := doRequest(c.mtlsClient, req, http.StatusOK)
+	if err != nil {
+		return nil, fmt.Errorf("fetch canonical receipt: %w", err)
+	}
+	receipt := &operatorv1.ActionReceipt{}
+	if err := protojson.Unmarshal(body, receipt); err != nil {
+		return nil, fmt.Errorf("decode canonical receipt: %w", err)
+	}
+	return receipt, nil
 }
 
 // GetAuditSummary fetches the authenticated audit summary and returns the

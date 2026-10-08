@@ -151,7 +151,7 @@ jobs:
 
       - name: Preserve Operator lifecycle evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: operator-deployment-lifecycle
           path: ${{ runner.temp }}/g8e-deployment-lifecycle/out/

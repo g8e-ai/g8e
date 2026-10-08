@@ -17,18 +17,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/proto"
 	_ "modernc.org/sqlite"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -167,13 +171,61 @@ func TestOperatorDeploy_LocalLifecycle(t *testing.T) {
 
 	// A CLI cancellation can leave a worker that has never reached the registry.
 	// Exercise teardown of that exact failure, alongside the healthy cohort.
-	canceledCtx, cancelDeploy := context.WithTimeout(ctx, 2*time.Second)
-	_, err = deploymentCLI(canceledCtx, bin, "operator", "deploy", "--local", "--dest-dir", root,
-		"--count", "1", "--start-index", strconv.Itoa(n+3), "--background", "--approve",
-		"--operator-endpoint", "127.0.0.1:1", "--endpoint", e2eCfg.cfg.Paths.Host)
+	bootstrapStarted := make(chan struct{}, 1)
+	releaseBootstrap := make(chan struct{})
+	stall := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case bootstrapStarted <- struct{}{}:
+		default:
+		}
+		select {
+		case <-r.Context().Done():
+		case <-releaseBootstrap:
+		}
+	}))
+	t.Cleanup(func() { close(releaseBootstrap); stall.Close() })
+	_, bootstrapPort, err := net.SplitHostPort(stall.Listener.Addr().String())
+	require.NoError(t, err)
+	canceledCtx, cancelDeploy := context.WithCancel(ctx)
+	defer cancelDeploy()
+	type canceledResult struct {
+		output string
+		err    error
+	}
+	canceled := make(chan canceledResult, 1)
+	canceledDone := make(chan struct{})
+	defer func() {
+		cancelDeploy()
+		select {
+		case <-canceledDone:
+		case <-time.After(5 * time.Second):
+			t.Error("canceled deployment subprocess did not finish")
+		}
+	}()
+	go func() {
+		defer close(canceledDone)
+		output, err := deploymentCLI(canceledCtx, bin, "operator", "deploy", "--local", "--dest-dir", root,
+			"--count", "1", "--start-index", strconv.Itoa(n+3), "--background", "--approve",
+			"--operator-endpoint", "127.0.0.1", "--gateway-http-port", bootstrapPort,
+			"--endpoint", e2eCfg.cfg.Paths.Host)
+		canceled <- canceledResult{output, err}
+	}()
+	select {
+	case <-bootstrapStarted:
+	case result := <-canceled:
+		t.Fatalf("deployment exited before bootstrap could be canceled: %v: %s", result.err, result.output)
+	case <-time.After(15 * time.Second):
+		t.Fatal("worker never reached the blocked bootstrap request")
+	}
+	require.Len(t, localDeploymentPIDs(t, root), n+1, "cancellation must exercise a live, unregistered worker")
 	cancelDeploy()
-	require.Error(t, err)
-	require.ErrorIs(t, canceledCtx.Err(), context.DeadlineExceeded, "cancel while the worker cannot stage")
+	select {
+	case result := <-canceled:
+		require.Error(t, result.err, "%s", result.output)
+	case <-time.After(5 * time.Second):
+		t.Fatal("deployment CLI did not exit after cancellation")
+	}
+	require.ErrorIs(t, canceledCtx.Err(), context.Canceled)
 	stopDeploymentProcesses(t, root)
 	require.Empty(t, localDeploymentPIDs(t, root), "canceled and denied workers must also be gone")
 
@@ -283,16 +335,8 @@ func verifyDeploymentFanOut(t *testing.T, bin, root string, sessions []string) {
 		require.NoError(t, governance.VerifyActionReceiptSignature(&receipt, key))
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		require.Eventually(t, func() bool {
-			projected, err := e2eClient.GetAuditReceipts(ctx, result.TransactionID)
-			if err != nil {
-				return false
-			}
-			for _, record := range projected.Receipts {
-				if record.TransactionID == result.TransactionID && record.OperatorSessionID == result.OperatorSessionID && record.ActionReceipt != nil {
-					return record.ActionReceipt.Signature == receipt.Signature
-				}
-			}
-			return false
+			projected, err := e2eClient.GetActionReceipt(ctx, result.TransactionID)
+			return err == nil && proto.Equal(projected, &receipt)
 		}, 10*time.Second, 50*time.Millisecond, "Gateway must project the same signed local receipt")
 		cancel()
 	}
@@ -310,34 +354,50 @@ func localDeploymentPIDs(t *testing.T, root string) []int {
 		if err != nil {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil {
-			continue
-		}
-		args := strings.Split(string(data), "\x00")
-		if len(args) < 3 || filepath.Base(args[0]) != "g8e" || args[1] != "operator" || args[2] != "start" {
-			continue
-		}
-		for i := 3; i+1 < len(args); i++ {
-			if args[i] == "--working-dir" {
-				rel, err := filepath.Rel(root, args[i+1])
-				if err == nil && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-					pids = append(pids, pid)
-				}
-				break
-			}
+		if deploymentProcessBelongsTo(pid, root) {
+			pids = append(pids, pid)
 		}
 	}
 	return pids
 }
 
+func deploymentProcessBelongsTo(pid int, root string) bool {
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	if err != nil {
+		return false
+	}
+	args := strings.Split(string(data), "\x00")
+	if len(args) < 3 || filepath.Base(args[0]) != "g8e" || args[1] != "operator" || args[2] != "start" {
+		return false
+	}
+	for i := 3; i+1 < len(args); i++ {
+		if args[i] == "--working-dir" {
+			rel, err := filepath.Rel(root, args[i+1])
+			return err == nil && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+		}
+	}
+	return false
+}
+
 func stopDeploymentProcesses(t *testing.T, root string) {
 	t.Helper()
-	for _, signal := range []syscall.Signal{syscall.SIGTERM, syscall.SIGKILL} {
+	for _, signal := range []unix.Signal{unix.SIGTERM, unix.SIGKILL} {
 		for _, pid := range localDeploymentPIDs(t, root) {
-			if err := syscall.Kill(pid, signal); err != nil && !errors.Is(err, syscall.ESRCH) {
-				t.Errorf("stop fleet PID %d: %v", pid, err)
+			fd, err := unix.PidfdOpen(pid, 0)
+			if errors.Is(err, unix.ESRCH) {
+				continue
 			}
+			if !assert.NoError(t, err, "open fleet PID %d", pid) {
+				continue
+			}
+			// Recheck ownership after obtaining a stable process handle, so PID
+			// reuse cannot redirect the signal to an unrelated process.
+			if deploymentProcessBelongsTo(pid, root) {
+				if err := unix.PidfdSendSignal(fd, signal, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
+					t.Errorf("stop fleet PID %d: %v", pid, err)
+				}
+			}
+			assert.NoError(t, unix.Close(fd))
 		}
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {

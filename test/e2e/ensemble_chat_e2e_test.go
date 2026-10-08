@@ -102,7 +102,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	var foundReceipt *models.ActionReceiptRecord
 
 	require.Eventually(t, func() bool {
-		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx)
 		if err != nil {
 			t.Logf("GetAuditReceipts poll error: %v", err)
 			return false
@@ -158,7 +158,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 		foundReceipt.TransactionID, len(foundReceipt.Signature), foundReceipt.RequestorUserID, foundReceipt.ActingAppID)
 
 	require.Eventually(t, func() bool {
-		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx)
 		if err != nil {
 			return false
 		}

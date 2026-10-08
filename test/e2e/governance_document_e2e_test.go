@@ -156,7 +156,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 		ActingAppID     string
 	}
 	require.Eventually(t, func() bool {
-		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx)
 		if err != nil {
 			return false
 		}
@@ -256,7 +256,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 		ActingAppID     string
 	}
 	require.Eventually(t, func() bool {
-		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx)
 		if err != nil {
 			return false
 		}
@@ -347,7 +347,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 		ActingAppID     string
 	}
 	require.Eventually(t, func() bool {
-		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx)
 		if err != nil {
 			return false
 		}

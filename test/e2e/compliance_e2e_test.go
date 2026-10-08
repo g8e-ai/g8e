@@ -36,7 +36,7 @@ func TestCompliance_AuditReceiptsRecorded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
 	defer cancel()
 
-	receipts, err := e2eClient.GetAuditReceipts(ctx, "")
+	receipts, err := e2eClient.GetAuditReceipts(ctx)
 	require.NoError(t, err, "audit receipts endpoint must succeed on an approved stack")
 	require.True(t, receipts.Success, "audit receipts response must report success")
 	require.NotEmpty(t, receipts.Receipts,
