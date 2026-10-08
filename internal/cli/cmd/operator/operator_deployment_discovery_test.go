@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -26,7 +25,7 @@ import (
 
 func TestDeploymentDiscoversPendingRequestWithoutLogs(t *testing.T) {
 	dir := testutil.TempDir(t)
-	fileSvc, err := fs.NewRuntimeFileService(dir, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	fileSvc, err := fs.NewRuntimeFileService(dir, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
 	data, err := json.Marshal(models.OperatorDeploymentState{
 		Phase: models.OperatorDeploymentPhasePendingApproval, RequestID: "resumed-request", UpdatedAt: time.Now().UTC(),

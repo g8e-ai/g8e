@@ -272,7 +272,7 @@ func (s *StateRootService) flush(conn *sql.Conn) error {
 			}
 			dirtyBuckets[stateTierBucket{oldTier, bucket}] = struct{}{}
 		}
-		if present && !(had && oldTier == tier && bytes.Equal(oldDigest, digest)) {
+		if present && (!had || oldTier != tier || !bytes.Equal(oldDigest, digest)) {
 			if _, err := conn.ExecContext(ctx,
 				`INSERT INTO state_leaves (leaf_id, tier, bucket, digest) VALUES (?, ?, ?, ?)
 				 ON CONFLICT(leaf_id) DO UPDATE SET tier = excluded.tier, bucket = excluded.bucket, digest = excluded.digest`,

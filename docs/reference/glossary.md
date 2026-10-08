@@ -347,7 +347,7 @@ Bidirectional TLS authentication enforced across all protected transport surface
 
 ## Observed-State Root
 
-A deterministic SHA-256 Merkle root computed by `StateRootService.calculateObservedStateRoot()` over active observed-tier `kv_store` and `blobs` rows (`state_tier = 'observed'`). It does not gate transaction admission freshness, allowing high-frequency telemetry and environmental observations to remain tamper-evident in audit records without invalidating in-flight envelopes.
+The root of the observed tree of the incremental state commitment, read through `StateRootService.GetObservedStateRoot()`. It covers observed-tier `kv_store` and `blobs` rows (`state_tier = 'observed'`); expired rows stay committed until maintenance deletes them. It does not gate transaction admission freshness, allowing high-frequency telemetry and environmental observations to remain tamper-evident in audit records without invalidating in-flight envelopes.
 
 ---
 

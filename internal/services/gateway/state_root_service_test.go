@@ -33,40 +33,53 @@ func newStateRootService(t *testing.T) *StateRootService {
 	return db.GetStateRootSvc()
 }
 
+// oracleLeaf is one committed row as the oracle sees it.
+type oracleLeaf struct {
+	tier       string
+	id, digest []byte
+}
+
 // oracleStateRoots recomputes both roots from a full scan of every committed
 // row, building the whole tree in memory. It shares only the leaf/node encoding
 // with the service, not its incremental path.
 func oracleStateRoots(t *testing.T, db *CanonicalDBService) (bound, observed string) {
 	t.Helper()
-	leaves := map[string]map[int][][2][]byte{stateTierBound: {}, stateTierObserved: {}}
+	leaves := oracleLeafSet(t, db)
+	return oracleRoot(leaves, stateTierBound), oracleRoot(leaves, stateTierObserved)
+}
+
+// oracleLeafSet scans every committed row into leaves keyed by leaf identity.
+func oracleLeafSet(t *testing.T, db *CanonicalDBService) map[string]oracleLeaf {
+	t.Helper()
+	leaves := make(map[string]oracleLeaf)
 	add := func(tier string, key stateDirtyKey, fields ...[]byte) {
 		id := stateLeafID(key.source, key.k1, key.k2)
-		b := stateBucketOf(id)
-		leaves[tier][b] = append(leaves[tier][b], [2][]byte{id, stateLeafDigest(key, fields...)})
+		leaves[string(id)] = oracleLeaf{tier: tier, id: id, digest: stateLeafDigest(key, fields...)}
 	}
 
 	rows, err := db.db.Query("SELECT collection, id, data FROM documents")
 	require.NoError(t, err)
+	defer rows.Close()
 	for rows.Next() {
 		var c, id, data string
 		require.NoError(t, rows.Scan(&c, &id, &data))
 		add(stateTierBound, stateDirtyKey{stateSourceDocuments, c, id}, []byte(data))
 	}
 	require.NoError(t, rows.Err())
-	rows.Close()
 
 	rows, err = db.db.Query("SELECT key, value, COALESCE(expires_at, ''), state_tier FROM kv_store")
 	require.NoError(t, err)
+	defer rows.Close()
 	for rows.Next() {
 		var k, v, exp, tier string
 		require.NoError(t, rows.Scan(&k, &v, &exp, &tier))
 		add(tier, stateDirtyKey{stateSourceKV, k, ""}, []byte(v), []byte(exp))
 	}
 	require.NoError(t, rows.Err())
-	rows.Close()
 
 	rows, err = db.db.Query("SELECT namespace, id, size, content_type, data, COALESCE(expires_at, ''), state_tier FROM blobs")
 	require.NoError(t, err)
+	defer rows.Close()
 	for rows.Next() {
 		var ns, id, ct, exp, tier string
 		var size int64
@@ -75,30 +88,39 @@ func oracleStateRoots(t *testing.T, db *CanonicalDBService) (bound, observed str
 		add(tier, stateDirtyKey{stateSourceBlobs, ns, id}, binary.BigEndian.AppendUint64(nil, uint64(size)), []byte(ct), data, []byte(exp))
 	}
 	require.NoError(t, rows.Err())
-	rows.Close()
+	return leaves
+}
 
-	treeRoot := func(tier string) []byte {
-		width := 1
-		for i := 0; i < stateTreeDepth; i++ {
-			width *= stateTreeFanout
+// oracleRoot builds the tier's whole tree in memory, hashing every bucket.
+func oracleRoot(leaves map[string]oracleLeaf, tier string) string {
+	buckets := make(map[int][][2][]byte)
+	for _, leaf := range leaves {
+		if leaf.tier == tier {
+			b := stateBucketOf(leaf.id)
+			buckets[b] = append(buckets[b], [2][]byte{leaf.id, leaf.digest})
 		}
-		level := make([][]byte, width)
-		for b := range level {
-			bucket := leaves[tier][b]
+	}
+	width := 1
+	for i := 0; i < stateTreeDepth; i++ {
+		width *= stateTreeFanout
+	}
+	emptyBucket := stateBucketDigest(nil)
+	level := make([][]byte, width)
+	for b := range level {
+		level[b] = emptyBucket
+		if bucket, ok := buckets[b]; ok {
 			sortLeaves(bucket)
 			level[b] = stateBucketDigest(bucket)
 		}
-		for l := stateTreeDepth - 1; l >= 0; l-- {
-			next := make([][]byte, len(level)/stateTreeFanout)
-			for i := range next {
-				next[i] = stateNodeDigest(l, level[i*stateTreeFanout:(i+1)*stateTreeFanout])
-			}
-			level = next
-		}
-		return level[0]
 	}
-	return stateRootDigest(stateTierBound, treeRoot(stateTierBound), ""),
-		stateRootDigest(stateTierObserved, treeRoot(stateTierObserved), "")
+	for l := stateTreeDepth - 1; l >= 0; l-- {
+		next := make([][]byte, len(level)/stateTreeFanout)
+		for i := range next {
+			next[i] = stateNodeDigest(l, level[i*stateTreeFanout:(i+1)*stateTreeFanout])
+		}
+		level = next
+	}
+	return stateRootDigest(tier, level[0], "")
 }
 
 func sortLeaves(leaves [][2][]byte) {
@@ -347,13 +369,13 @@ func TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen(t *testing.T) {
 	var keys []string
 	rows, err := reopened.db.Query("SELECT key FROM kv_store ORDER BY key")
 	require.NoError(t, err)
+	defer rows.Close()
 	for rows.Next() {
 		var k string
 		require.NoError(t, rows.Scan(&k))
 		keys = append(keys, k)
 	}
 	require.NoError(t, rows.Err())
-	rows.Close()
 	assert.Equal(t, []string{"authoritative:key"}, keys, "only committed KV rows survive")
 
 	require.NoError(t, reopened.GetDocStore().DocSet("test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))

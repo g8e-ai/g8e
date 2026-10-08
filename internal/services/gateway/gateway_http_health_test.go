@@ -300,8 +300,8 @@ func TestHandleState_StateRootFailureReturns503(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
 	h.healthController.isReady = func() bool { return true }
 
-	// Force state root calculation to fail by dropping a table it queries
-	_, err := infra.DB.db.Exec("DROP TABLE kv_store")
+	// Force state root calculation to fail by dropping the commitment table the root read queries
+	_, err := infra.DB.db.Exec("DROP TABLE state_nodes")
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.State, nil)

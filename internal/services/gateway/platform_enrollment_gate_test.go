@@ -33,6 +33,8 @@ func TestPlatformEnrollmentGate_GrantsUpToLimitWithoutQueueing(t *testing.T) {
 	releaseA()
 	releaseB()
 	assert.EqualValues(t, 0, gate.inFlight.Load())
+	assert.Equal(t, platformEnrollmentGateStats{Admitted: 2, PeakInFlight: 2}, gate.stats(),
+		"immediate admissions are not queued and record no wait")
 }
 
 func TestPlatformEnrollmentGate_WaiterTakesSlotWhenReleased(t *testing.T) {
@@ -62,6 +64,11 @@ func TestPlatformEnrollmentGate_WaiterTakesSlotWhenReleased(t *testing.T) {
 		t.Fatal("waiter was not admitted after the slot was released")
 	}
 	assert.EqualValues(t, 0, gate.waiting.Load())
+	stats := gate.stats()
+	assert.EqualValues(t, 2, stats.Admitted)
+	assert.EqualValues(t, 1, stats.Queued)
+	assert.EqualValues(t, 1, stats.PeakInFlight)
+	assert.Positive(t, stats.MaxWait)
 }
 
 func TestPlatformEnrollmentGate_CancelledWaiterLeavesNoSlotHeld(t *testing.T) {
@@ -87,6 +94,10 @@ func TestPlatformEnrollmentGate_CancelledWaiterLeavesNoSlotHeld(t *testing.T) {
 	releaseAgain, _, err := gate.acquire(t.Context())
 	require.NoError(t, err, "the cancelled waiter must not have consumed the slot")
 	releaseAgain()
+	stats := gate.stats()
+	assert.EqualValues(t, 1, stats.Cancelled)
+	assert.EqualValues(t, 2, stats.Admitted)
+	assert.Zero(t, stats.Queued)
 }
 
 func TestPlatformEnrollmentGate_QueueWaitIsBoundedAndTyped(t *testing.T) {
@@ -102,4 +113,7 @@ func TestPlatformEnrollmentGate_QueueWaitIsBoundedAndTyped(t *testing.T) {
 	assert.GreaterOrEqual(t, waited, 50*time.Millisecond)
 	assert.Less(t, time.Since(start), 2*time.Second)
 	assert.EqualValues(t, 1, gate.inFlight.Load())
+	stats := gate.stats()
+	assert.EqualValues(t, 1, stats.RateLimited)
+	assert.GreaterOrEqual(t, stats.MaxWait, 50*time.Millisecond)
 }

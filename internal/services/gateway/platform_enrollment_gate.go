@@ -32,6 +32,28 @@ type platformEnrollmentGate struct {
 
 	waiting  atomic.Int64
 	inFlight atomic.Int64
+
+	// Cumulative counters for phase reports; see stats.
+	admitted     atomic.Int64
+	queued       atomic.Int64
+	rateLimited  atomic.Int64
+	cancelled    atomic.Int64
+	totalWaitNs  atomic.Int64
+	maxWaitNs    atomic.Int64
+	peakInFlight atomic.Int64
+}
+
+// platformEnrollmentGateStats is a snapshot of a gate's cumulative counters.
+// Queued counts admissions that had to wait; RateLimited and Cancelled count
+// waiters that left without a slot. Waits cover every outcome.
+type platformEnrollmentGateStats struct {
+	Admitted     int64
+	Queued       int64
+	RateLimited  int64
+	Cancelled    int64
+	TotalWait    time.Duration
+	MaxWait      time.Duration
+	PeakInFlight int64
 }
 
 func newPlatformEnrollmentGate(limit int, maxWait time.Duration) *platformEnrollmentGate {
@@ -44,7 +66,7 @@ func (g *platformEnrollmentGate) acquire(ctx context.Context) (func(), time.Dura
 	start := time.Now()
 	select {
 	case g.slots <- struct{}{}:
-		g.inFlight.Add(1)
+		g.admit()
 		return g.release, time.Since(start), nil
 	default:
 	}
@@ -55,16 +77,46 @@ func (g *platformEnrollmentGate) acquire(ctx context.Context) (func(), time.Dura
 	defer timer.Stop()
 	select {
 	case g.slots <- struct{}{}:
-		g.inFlight.Add(1)
-		return g.release, time.Since(start), nil
+		g.admit()
+		g.queued.Add(1)
+		return g.release, g.recordWait(start), nil
 	case <-ctx.Done():
-		return nil, time.Since(start), fmt.Errorf("platform enrollment: wait for admission: %w", context.Cause(ctx))
+		g.cancelled.Add(1)
+		return nil, g.recordWait(start), fmt.Errorf("platform enrollment: wait for admission: %w", context.Cause(ctx))
 	case <-timer.C:
-		return nil, time.Since(start), constants.ErrPlatformEnrollmentRateLimited
+		g.rateLimited.Add(1)
+		return nil, g.recordWait(start), constants.ErrPlatformEnrollmentRateLimited
 	}
+}
+
+func (g *platformEnrollmentGate) admit() {
+	g.admitted.Add(1)
+	n := g.inFlight.Add(1)
+	for peak := g.peakInFlight.Load(); n > peak && !g.peakInFlight.CompareAndSwap(peak, n); peak = g.peakInFlight.Load() {
+	}
+}
+
+func (g *platformEnrollmentGate) recordWait(start time.Time) time.Duration {
+	waited := time.Since(start)
+	g.totalWaitNs.Add(int64(waited))
+	for peak := g.maxWaitNs.Load(); int64(waited) > peak && !g.maxWaitNs.CompareAndSwap(peak, int64(waited)); peak = g.maxWaitNs.Load() {
+	}
+	return waited
 }
 
 func (g *platformEnrollmentGate) release() {
 	g.inFlight.Add(-1)
 	<-g.slots
+}
+
+func (g *platformEnrollmentGate) stats() platformEnrollmentGateStats {
+	return platformEnrollmentGateStats{
+		Admitted:     g.admitted.Load(),
+		Queued:       g.queued.Load(),
+		RateLimited:  g.rateLimited.Load(),
+		Cancelled:    g.cancelled.Load(),
+		TotalWait:    time.Duration(g.totalWaitNs.Load()),
+		MaxWait:      time.Duration(g.maxWaitNs.Load()),
+		PeakInFlight: g.peakInFlight.Load(),
+	}
 }

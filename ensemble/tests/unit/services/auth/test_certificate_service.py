@@ -86,8 +86,7 @@ def mock_data_service():
 
     # Properly nest mocks
     service.cache = MagicMock()
-    service.cache.db = MagicMock()
-    service.cache.db.client = mock_db_client
+    service.cache.client = mock_db_client
 
     return service
 
@@ -170,8 +169,8 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     assert "-----BEGIN PRIVATE KEY-----" in res["key"]
 
     # Verify the signing request was made
-    mock_data_service.cache.db.client.request_json.assert_called_once()
-    call_args = mock_data_service.cache.db.client.request_json.call_args
+    mock_data_service.cache.client.request_json.assert_called_once()
+    call_args = mock_data_service.cache.client.request_json.call_args
     assert call_args[0][0] == "POST"
     assert call_args[0][1] == "/.well-known/g8e/pki/sign-csr"
     payload = call_args[1]["json"]
