@@ -136,8 +136,11 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	receipt := w.buildInitialReceipt(vt)
 
+	// The receipt and its commitment are persisted by one write, so both stages
+	// share its start.
 	receiptPersistenceStart := governanceMonotonicNow()
-	if err := w.signAndLogReceipt(vt, receipt); err != nil {
+	attestation, err := w.signAndLogReceipt(vt, receipt)
+	if err != nil {
 		return nil, err
 	}
 	receiptPersistenceStage := newDeterministicStageEvidence(
@@ -150,16 +153,11 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	receiptPersistenceStage.ReceiptSignatureDigest = SignatureDigest([]string{receipt.Signature})
 	receiptPersistenceStage.AuditRecordId = receipt.TransactionId
 	receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, receiptPersistenceStage)
-	if w.SQLAuditStore != nil {
-		commitmentStart := governanceMonotonicNow()
-		attestation, err := w.persistCommitment(vt, receipt)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCommitmentPersist, err)
-		}
+	if attestation != nil {
 		commitmentStage := newDeterministicStageEvidence(
 			vt.Envelope,
 			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
-			commitmentStart,
+			receiptPersistenceStart,
 			operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
 		)
 		commitmentStage.SignerKeyId = attestation.AuditorKeyId
@@ -322,20 +320,46 @@ func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.Ac
 	}
 }
 
-// signAndLogReceipt signs the initial receipt and logs it. Fail-closed: returns error if either step fails.
-func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
+// signAndLogReceipt signs the initial receipt and persists it. With an audit
+// store, the receipt and its commitment attestation commit in one transaction
+// and the attestation is returned. Fail-closed: returns error if any step fails.
+func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) (*operatorv1.CommitmentAttestation, error) {
 	sig, err := w.signReceipt(receipt)
 	if err != nil {
 		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
-		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, err)
 	}
 	receipt.Signature = sig
 
-	if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
-		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
-		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
+	if w.SQLAuditStore == nil {
+		if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
+			w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+			return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
+		}
+		return nil, nil
 	}
-	return nil
+
+	if err := w.verifyAuditorKey(); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCommitmentPersist, err)
+	}
+	if err := w.logReceiptDocument(vt.Envelope, receipt); err != nil {
+		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
+	}
+	var attestation *operatorv1.CommitmentAttestation
+	err = w.SQLAuditStore.RecordActionReceiptWithCommitment(BuildReceiptRecord(vt.Envelope, receipt), func(priorHash string) ([]byte, string, error) {
+		built, payload, err := w.buildCommitment(vt, receipt, priorHash)
+		if err != nil {
+			return nil, "", err
+		}
+		attestation = built
+		return payload, built.Hash, nil
+	})
+	if err != nil {
+		w.Logger.Error("Fail-closed: Failed to persist initial action receipt and commitment", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCommitmentPersist, err)
+	}
+	return attestation, nil
 }
 
 func CanonicalizeCommitmentAttestation(attestation *operatorv1.CommitmentAttestation) ([]byte, error) {
@@ -370,47 +394,45 @@ func writeCanonicalString(payload *bytes.Buffer, value string) {
 	payload.WriteString(value)
 }
 
-func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) (*operatorv1.CommitmentAttestation, error) {
+func (w *L5Actuator) verifyAuditorKey() error {
 	if len(w.AuditorSigningKey) != ed25519.PrivateKeySize {
-		return nil, constants.ErrL5ActuatorAuditorKeyMissing
+		return constants.ErrL5ActuatorAuditorKeyMissing
 	}
 	publicKey := w.AuditorSigningKey.Public().(ed25519.PublicKey)
 	if w.AuditorKeyID != hex.EncodeToString(publicKey) {
-		return nil, constants.ErrValidationFailed
+		return constants.ErrValidationFailed
 	}
-	var persisted *operatorv1.CommitmentAttestation
-	err := w.SQLAuditStore.CommitmentLedger().AppendCommitment(func(priorHash string) ([]byte, string, error) {
-		attestation := &operatorv1.CommitmentAttestation{
-			TransactionId:               vt.Envelope.Id,
-			TransactionHash:             vt.Envelope.TransactionHash,
-			PriorCommitmentHash:         priorHash,
-			StateRootAtCommit:           receipt.StateRootBefore,
-			L2SignatureDigest:           l2SignatureDigest(vt.Envelope),
-			WardenIntentSignatureDigest: SignatureDigest([]string{receipt.Signature}),
-			HumanSignatureDigest:        humanSignatureDigest(vt.Envelope),
-			ActionType:                  string(vt.ActionType),
-			TargetResource:              vt.Envelope.TargetResource,
-			CommittedAtUnixMs:           time.Now().UnixMilli(),
-			AuditorKeyId:                w.AuditorKeyID,
-		}
-		canonical, err := CanonicalizeCommitmentAttestation(attestation)
-		if err != nil {
-			return nil, "", err
-		}
-		hash := sha256.Sum256(canonical)
-		attestation.Hash = hex.EncodeToString(hash[:])
-		attestation.Signature = hex.EncodeToString(ed25519.Sign(w.AuditorSigningKey, canonical))
-		payload, err := compliancev1.MarshalCanonical(attestation)
-		if err != nil {
-			return nil, "", fmt.Errorf("commitment attestation: marshal: %w", err)
-		}
-		persisted = attestation
-		return payload, attestation.Hash, nil
-	})
+	return nil
+}
+
+// buildCommitment signs the receipt's commitment attestation over the given
+// chain head and returns it with its canonical encoding.
+func (w *L5Actuator) buildCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt, priorHash string) (*operatorv1.CommitmentAttestation, []byte, error) {
+	attestation := &operatorv1.CommitmentAttestation{
+		TransactionId:               vt.Envelope.Id,
+		TransactionHash:             vt.Envelope.TransactionHash,
+		PriorCommitmentHash:         priorHash,
+		StateRootAtCommit:           receipt.StateRootBefore,
+		L2SignatureDigest:           l2SignatureDigest(vt.Envelope),
+		WardenIntentSignatureDigest: SignatureDigest([]string{receipt.Signature}),
+		HumanSignatureDigest:        humanSignatureDigest(vt.Envelope),
+		ActionType:                  string(vt.ActionType),
+		TargetResource:              vt.Envelope.TargetResource,
+		CommittedAtUnixMs:           time.Now().UnixMilli(),
+		AuditorKeyId:                w.AuditorKeyID,
+	}
+	canonical, err := CanonicalizeCommitmentAttestation(attestation)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return persisted, nil
+	hash := sha256.Sum256(canonical)
+	attestation.Hash = hex.EncodeToString(hash[:])
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(w.AuditorSigningKey, canonical))
+	payload, err := compliancev1.MarshalCanonical(attestation)
+	if err != nil {
+		return nil, nil, fmt.Errorf("commitment attestation: marshal: %w", err)
+	}
+	return attestation, payload, nil
 }
 
 func l2SignatureDigest(env *govtypes.GovernanceEnvelope) string {
@@ -552,7 +574,11 @@ func classifyReceiptFailure(execErr error) operatorv1.ReceiptFailureCode {
 	}
 }
 
-// signAndLogFinalReceipt signs and logs the final receipt. Best-effort: returns error but receipt is still returned by caller.
+// signAndLogFinalReceipt signs the final receipt and its persistence
+// attestation, then persists both in one write. The attestation stays on the
+// returned receipt only when that write succeeds, so an attestation always
+// describes a stored receipt. Best-effort: returns error but receipt is still
+// returned by caller.
 func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
 	finalSig, err := w.signReceipt(receipt)
 	if err != nil {
@@ -561,17 +587,14 @@ func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *op
 	}
 	receipt.Signature = finalSig
 
-	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
-		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
-		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
-	}
 	attestation, err := w.signReceiptPersistenceAttestation(receipt)
 	if err != nil {
 		return err
 	}
 	receipt.FinalPersistenceAttestation = attestation
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
-		w.Logger.Error("Failed to log final receipt persistence attestation", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
+		receipt.FinalPersistenceAttestation = nil
+		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
 		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
 	}
 	return nil

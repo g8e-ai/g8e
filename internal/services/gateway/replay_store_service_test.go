@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +66,7 @@ func TestReplayStoreService_ReserveNonce_Concurrent(t *testing.T) {
 
 func TestReplayStoreService_FinalizeNonce(t *testing.T) {
 	svc := newTestReplayStoreService(t)
-	db := svc.db
+	db := svc.db.(*sqliteutil.DB)
 
 	// Create a nonce in the nonces table with expires_at
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -94,7 +95,7 @@ func TestReplayStoreService_FinalizeNonce_NonExistent(t *testing.T) {
 
 func TestReplayStoreService_ReleaseNonce(t *testing.T) {
 	svc := newTestReplayStoreService(t)
-	db := svc.db
+	db := svc.db.(*sqliteutil.DB)
 
 	// Create a nonce in the nonces table
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -123,7 +124,7 @@ func TestReplayStoreService_ReleaseNonce_NonExistent(t *testing.T) {
 
 func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
 	svc := newTestReplayStoreService(t)
-	db := svc.db
+	db := svc.db.(*sqliteutil.DB)
 
 	// Create an expired nonce
 	expiresAt := time.Now().Add(-1 * time.Hour)
@@ -155,7 +156,7 @@ func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
 
 func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
 	svc := newTestReplayStoreService(t)
-	db := svc.db
+	db := svc.db.(*sqliteutil.DB)
 
 	nonce := "used-nonce"
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -184,7 +185,7 @@ func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
 
 func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
 	svc := newTestReplayStoreService(t)
-	db := svc.db
+	db := svc.db.(*sqliteutil.DB)
 
 	nonce := "release-used-nonce"
 	expiresAt := time.Now().Add(1 * time.Hour)

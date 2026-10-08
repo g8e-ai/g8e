@@ -711,6 +711,20 @@ func (ass *SQLAuditStore) GetEventChainMetaByTransactionID(transactionID string)
 // RecordActionReceipt upserts the latest-stage receipt projection and appends a
 // chained operator.receipt.recorded fact for every stage write.
 func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
+	return ass.recordActionReceipt(record, nil)
+}
+
+// RecordActionReceiptWithCommitment records the receipt exactly as
+// RecordActionReceipt does and appends the commitment built over the ledger
+// head in the same write transaction: both commit or neither does.
+func (ass *SQLAuditStore) RecordActionReceiptWithCommitment(record *models.ActionReceiptRecord, build CommitmentBuilder) error {
+	if build == nil {
+		return constants.ErrAuditStoreRecordReceiptFailed
+	}
+	return ass.recordActionReceipt(record, build)
+}
+
+func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord, build CommitmentBuilder) error {
 	if ass == nil {
 		return nil
 	}
@@ -719,6 +733,14 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	}
 	if record == nil {
 		return constants.ErrAuditStoreRecordReceiptFailed
+	}
+	if build != nil {
+		if ass.commitmentLedger == nil {
+			return constants.ErrAuditStoreDBNotInitialized
+		}
+		// Ledger lock before the write lock, the same order AppendCommitment takes.
+		ass.commitmentLedger.mu.Lock()
+		defer ass.commitmentLedger.mu.Unlock()
 	}
 
 	ass.muWrites.Add(1)
@@ -768,8 +790,13 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		if err != nil {
 			return err
 		}
-		_, _, _, err = AppendPreparedAuditEvent(context.Background(), conn, prepared)
-		return err
+		if _, _, _, err = AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
+			return err
+		}
+		if build != nil {
+			return ass.commitmentLedger.appendBuiltCommitment(conn, build)
+		}
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)

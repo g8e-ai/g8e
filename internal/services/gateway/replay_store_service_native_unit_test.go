@@ -30,15 +30,7 @@ func newReplayStoreServiceWithDB(db replayStoreDB, logger *slog.Logger) *ReplayS
 
 // mockReplayStoreDB is a mock implementation of replayStoreDB for unit testing.
 type mockReplayStoreDB struct {
-	queryRowWithRetryFunc func(query string, args ...any) rowScanner
-	execWithRetryFunc     func(query string, args ...any) (sql.Result, error)
-}
-
-func (m *mockReplayStoreDB) QueryRowWithRetry(query string, args ...any) rowScanner {
-	if m.queryRowWithRetryFunc != nil {
-		return m.queryRowWithRetryFunc(query, args...)
-	}
-	return &mockRow{}
+	execWithRetryFunc func(query string, args ...any) (sql.Result, error)
 }
 
 func (m *mockReplayStoreDB) ExecWithRetry(query string, args ...any) (sql.Result, error) {
@@ -46,18 +38,6 @@ func (m *mockReplayStoreDB) ExecWithRetry(query string, args ...any) (sql.Result
 		return m.execWithRetryFunc(query, args...)
 	}
 	return nil, nil
-}
-
-// mockRow is a mock row scanner for testing.
-type mockRow struct {
-	scanFunc func(dest ...any) error
-}
-
-func (m *mockRow) Scan(dest ...any) error {
-	if m.scanFunc != nil {
-		return m.scanFunc(dest...)
-	}
-	return nil
 }
 
 // mockResult is a mock sql.Result for testing.
@@ -83,23 +63,9 @@ func (m *mockResult) LastInsertId() (int64, error) {
 func TestReplayStoreService_ReserveNonce_Success(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	calledQuery := false
 	calledExec := false
 
 	mockDB := &mockReplayStoreDB{
-		queryRowWithRetryFunc: func(query string, args ...any) rowScanner {
-			calledQuery = true
-			assert.Equal(t, "SELECT nonce FROM nonces WHERE nonce = ?", query)
-			assert.Equal(t, "test-nonce", args[0])
-
-			// Return sql.ErrNoRows to simulate nonce not found
-			row := &mockRow{
-				scanFunc: func(dest ...any) error {
-					return sql.ErrNoRows
-				},
-			}
-			return row
-		},
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
 			calledExec = true
 			assert.Equal(t, "INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", query)
@@ -116,75 +82,13 @@ func TestReplayStoreService_ReserveNonce_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, replayed, "first reservation should not detect replay")
-	assert.True(t, calledQuery, "QueryRowWithRetry should be called")
 	assert.True(t, calledExec, "ExecWithRetry should be called")
-}
-
-func TestReplayStoreService_ReserveNonce_ReplayDetected(t *testing.T) {
-	logger := testutil.NewTestLogger()
-
-	mockDB := &mockReplayStoreDB{
-		queryRowWithRetryFunc: func(query string, args ...any) rowScanner {
-			// Return a row that scans successfully to simulate existing nonce
-			row := &mockRow{
-				scanFunc: func(dest ...any) error {
-					if len(dest) > 0 {
-						if strPtr, ok := dest[0].(*string); ok {
-							*strPtr = "test-nonce"
-						}
-					}
-					return nil
-				},
-			}
-			return row
-		},
-	}
-
-	svc := newReplayStoreServiceWithDB(mockDB, logger)
-	expiresAt := time.Now().Add(1 * time.Hour)
-
-	replayed, err := svc.ReserveNonce("test-nonce", expiresAt)
-
-	require.NoError(t, err)
-	assert.True(t, replayed, "should detect replay for existing nonce")
-}
-
-func TestReplayStoreService_ReserveNonce_QueryError(t *testing.T) {
-	logger := testutil.NewTestLogger()
-
-	mockDB := &mockReplayStoreDB{
-		queryRowWithRetryFunc: func(query string, args ...any) rowScanner {
-			row := &mockRow{
-				scanFunc: func(dest ...any) error {
-					return fmt.Errorf("database connection failed")
-				},
-			}
-			return row
-		},
-	}
-
-	svc := newReplayStoreServiceWithDB(mockDB, logger)
-	expiresAt := time.Now().Add(1 * time.Hour)
-
-	replayed, err := svc.ReserveNonce("test-nonce", expiresAt)
-
-	require.Error(t, err)
-	assert.False(t, replayed)
-	assert.Contains(t, err.Error(), "database connection failed")
 }
 
 func TestReplayStoreService_ReserveNonce_InsertError(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	mockDB := &mockReplayStoreDB{
-		queryRowWithRetryFunc: func(query string, args ...any) rowScanner {
-			row := &mockRow{
-				scanFunc: func(dest ...any) error {
-					return sql.ErrNoRows
-				},
-			}
-			return row
-		},
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
 			return nil, fmt.Errorf("insert failed")
 		},
@@ -200,20 +104,12 @@ func TestReplayStoreService_ReserveNonce_InsertError(t *testing.T) {
 	assert.Contains(t, err.Error(), "insert failed")
 }
 
-func TestReplayStoreService_ReserveNonce_ConcurrentInsert(t *testing.T) {
+func TestReplayStoreService_ReserveNonce_ReplayDetected(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	mockDB := &mockReplayStoreDB{
-		queryRowWithRetryFunc: func(query string, args ...any) rowScanner {
-			row := &mockRow{
-				scanFunc: func(dest ...any) error {
-					return sql.ErrNoRows
-				},
-			}
-			return row
-		},
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
-			// Simulate unique constraint violation (concurrent insert)
+			// An existing nonce fails the primary-key insert.
 			return nil, fmt.Errorf("UNIQUE constraint failed: nonces.nonce")
 		},
 	}
@@ -224,7 +120,7 @@ func TestReplayStoreService_ReserveNonce_ConcurrentInsert(t *testing.T) {
 	replayed, err := svc.ReserveNonce("test-nonce", expiresAt)
 
 	require.NoError(t, err)
-	assert.True(t, replayed, "concurrent insert should be treated as replay")
+	assert.True(t, replayed, "an existing nonce must be reported as a replay")
 }
 
 func TestReplayStoreService_FinalizeNonce_Success(t *testing.T) {

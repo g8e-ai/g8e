@@ -495,9 +495,6 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentQuotaExceeded):
 		c.responder.Error(w, http.StatusTooManyRequests, err.Error())
-	case errors.Is(err, constants.ErrPlatformEnrollmentRateLimited):
-		w.Header().Set("Retry-After", "5")
-		c.responder.Error(w, http.StatusTooManyRequests, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentGovernanceRejected):
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentPersistenceFailed):

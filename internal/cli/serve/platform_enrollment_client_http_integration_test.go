@@ -605,25 +605,7 @@ func TestEnroll_ProofsVerifyAgainstTheKeysSubmittedInTheRequest(t *testing.T) {
 	assert.False(t, verify(proofs.CLI, operatorKey), "the CLI proof must not verify against the operator key")
 }
 
-func TestSubmitRequest_RetriesGatewayBackpressureWithoutFailing(t *testing.T) {
-	var hits atomic.Int32
-	stub := newEnrollStub(t, enrollRoutes{request: func(w http.ResponseWriter, r *http.Request) {
-		if hits.Add(1) == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
-		createdReply("req-after-429", "tok")(w, r)
-	}})
-	client, _ := newEnrollClient(t, stub.server.URL)
-
-	resp, err := client.submitRequest(shortContext(t, 10*time.Second), "op", "cli", "fp")
-
-	require.NoError(t, err)
-	assert.Equal(t, "req-after-429", resp.RequestID)
-	assert.EqualValues(t, 2, stub.requestHits.Load(), "a saturated gateway is retried, not treated as a rejection")
-}
-
-func TestSubmitCompletionWithBackpressure_RetriesUntilIssued(t *testing.T) {
+func TestSubmitCompletionUntilIssued_RetriesHeldLease(t *testing.T) {
 	var hits atomic.Int32
 	stub := newEnrollStub(t, enrollRoutes{complete: func(w http.ResponseWriter, _ *http.Request) {
 		if hits.Add(1) == 1 {
@@ -637,14 +619,14 @@ func TestSubmitCompletionWithBackpressure_RetriesUntilIssued(t *testing.T) {
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
 
-	resp, err := client.submitCompletionWithBackpressure(shortContext(t, 10*time.Second), "tok", "a", "b", time.Now().Add(time.Minute))
+	resp, err := client.submitCompletionUntilIssued(shortContext(t, 10*time.Second), "tok", "a", "b", time.Now().Add(time.Minute))
 
 	require.NoError(t, err)
 	assert.Equal(t, "op-9", resp.Operator.OperatorID)
 	assert.EqualValues(t, 2, hits.Load())
 }
 
-func TestSubmitCompletionWithBackpressure_StopsAtDeadlineAndOnCancellation(t *testing.T) {
+func TestSubmitCompletionUntilIssued_StopsAtDeadlineAndOnCancellation(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{complete: func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}})
@@ -652,15 +634,15 @@ func TestSubmitCompletionWithBackpressure_StopsAtDeadlineAndOnCancellation(t *te
 
 	t.Run("request lifetime exhausted", func(t *testing.T) {
 		before := stub.completeHit.Load()
-		_, err := client.submitCompletionWithBackpressure(t.Context(), "tok", "a", "b", time.Now().Add(-time.Second))
+		_, err := client.submitCompletionUntilIssued(t.Context(), "tok", "a", "b", time.Now().Add(-time.Second))
 
-		var backpressure *enrollmentBackpressureError
-		require.ErrorAs(t, err, &backpressure)
+		var held *enrollmentIssuanceHeldError
+		require.ErrorAs(t, err, &held)
 		assert.EqualValues(t, 1, stub.completeHit.Load()-before)
 	})
 
 	t.Run("caller cancelled while backing off", func(t *testing.T) {
-		_, err := client.submitCompletionWithBackpressure(shortContext(t, 200*time.Millisecond), "tok", "a", "b", time.Now().Add(time.Hour))
+		_, err := client.submitCompletionUntilIssued(shortContext(t, 200*time.Millisecond), "tok", "a", "b", time.Now().Add(time.Hour))
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})

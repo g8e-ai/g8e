@@ -167,9 +167,9 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ed25519.Verify(pubKey, tamperedCanonical, sigBytes))
 
-	// Verify audit store recorded the initial receipt, final receipt, and persistence attestation
+	// Verify audit store recorded the initial receipt and the final receipt with its persistence attestation
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.DocSetCalls, 3)
+	require.Len(t, consoleAuditStore.DocSetCalls, 2)
 
 	// Verify all calls were to console_audit collection
 	for _, call := range consoleAuditStore.DocSetCalls {
@@ -185,7 +185,7 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 
 	// Verify persisted final receipt has COMPLETED status and an attestation
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.DocSetCalls[2].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 	require.NotNil(t, receipt.FinalPersistenceAttestation)
@@ -237,11 +237,11 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 
 	// Verify console audit store recorded the final persistence attestation
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.DocSetCalls, 3)
+	require.Len(t, consoleAuditStore.DocSetCalls, 2)
 
 	// Verify final receipt has FAILED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.DocSetCalls[2].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
@@ -322,11 +322,11 @@ func TestL5ActuatorExecuteFinalPersistenceAttestationWriteFailure(t *testing.T) 
 	t.Parallel()
 	actuator, _ := newTestActuator(t)
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	writeErr := errors.New("final persistence attestation write failed")
+	writeErr := errors.New("final receipt write failed")
 	callCount := 0
 	consoleAuditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		callCount++
-		if callCount == 3 {
+		if callCount == 2 {
 			return writeErr
 		}
 		return nil
@@ -350,8 +350,8 @@ func TestL5ActuatorExecuteFinalPersistenceAttestationWriteFailure(t *testing.T) 
 	assert.ErrorIs(t, err, constants.ErrL5ActuatorLogReceipt)
 	assert.ErrorIs(t, err, writeErr)
 	require.NotNil(t, receipt)
-	assert.NotNil(t, receipt.FinalPersistenceAttestation)
-	assert.Equal(t, 3, callCount)
+	assert.Nil(t, receipt.FinalPersistenceAttestation, "an unpersisted final receipt must not carry a persistence attestation")
+	assert.Equal(t, 2, callCount)
 }
 
 func TestVerifyActionReceiptSignatureFailsClosedOnInvalidEvidence(t *testing.T) {

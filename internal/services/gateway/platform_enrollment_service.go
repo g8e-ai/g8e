@@ -103,9 +103,6 @@ type PlatformEnrollmentService struct {
 	approvals *ApprovalsChangePublisher
 	logger    *slog.Logger
 
-	intake   *platformEnrollmentGate
-	issuance *platformEnrollmentGate
-
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	running bool
@@ -134,25 +131,7 @@ func NewPlatformEnrollmentService(
 		posture:   posture,
 		approvals: approvals,
 		logger:    logger,
-		intake: newPlatformEnrollmentGate(
-			constants.PlatformEnrollmentMaxConcurrentIntake, constants.PlatformEnrollmentMaxAdmissionWait),
-		issuance: newPlatformEnrollmentGate(
-			constants.PlatformEnrollmentMaxConcurrentIssuance, constants.PlatformEnrollmentMaxAdmissionWait),
 	}
-}
-
-// admit takes a slot from gate and reports queue time that exceeds a second,
-// since that time counts against the client's HTTP deadline.
-func (s *PlatformEnrollmentService) admit(ctx context.Context, gate *platformEnrollmentGate, stage string) (func(), error) {
-	release, waited, err := gate.acquire(ctx)
-	if err != nil {
-		s.logger.Warn("platform enrollment: admission not granted", "stage", stage, "waited", waited, "error", err)
-		return nil, err
-	}
-	if waited >= time.Second {
-		s.logger.Warn("platform enrollment: admission queued", "stage", stage, "waited", waited)
-	}
-	return release, nil
 }
 
 // StartCleanup registers the managed cleanup goroutine with the gateway
@@ -272,12 +251,6 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 	// for mutations) does not apply to this initial write. The CSR PEM
 	// is public material; the token hash is a stored credential. Neither
 	// appears in the audited CREATE envelope payload.
-	release, err := s.admit(ctx, s.intake, "create")
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-
 	existing, err := s.createRequestRecord(ctx, persistedReq)
 	if err != nil {
 		return nil, err
@@ -662,11 +635,6 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 		if err := verifyPlatformEnrollmentProofs(req, proofs); err != nil {
 			return nil, err
 		}
-		release, err := s.admit(ctx, s.issuance, "resume")
-		if err != nil {
-			return nil, err
-		}
-		defer release()
 		if err := s.submitDownstreamEnvelopes(ctx, req); err != nil {
 			return nil, err
 		}
@@ -677,13 +645,6 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 		if err := verifyPlatformEnrollmentProofs(req, proofs); err != nil {
 			return nil, err
 		}
-		// Queue before the lease: a caller that gives up while waiting has changed
-		// nothing, so the approval stays intact for its retry.
-		release, err := s.admit(ctx, s.issuance, "issue")
-		if err != nil {
-			return nil, err
-		}
-		defer release()
 		// Once the lease is held, a disconnecting client must not abort a half-done
 		// issuance. Its retry reads the stored result; the lease TTL bounds the work.
 		sagaCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), constants.PlatformEnrollmentIssuanceLeaseTTL)

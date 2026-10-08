@@ -152,24 +152,19 @@ type commitmentFields struct {
 	Signature                   string `json:"signature"`
 }
 
+// CommitmentBuilder builds the canonical attestation JSON and its hash for the
+// given chain head.
+type CommitmentBuilder func(priorHash string) ([]byte, string, error)
+
 // AppendCommitment builds and appends an attestation while holding SQLite's write lock so every ledger instance selects a unique chain head.
-func (cl *CommitmentLedger) AppendCommitment(build func(string) ([]byte, string, error)) error {
+func (cl *CommitmentLedger) AppendCommitment(build CommitmentBuilder) error {
 	if cl == nil || cl.db == nil {
 		return fmt.Errorf("commitment ledger not initialized")
 	}
 	cl.mu.Lock()
 	defer cl.mu.Unlock()
 	return cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
-		var priorHash string
-		err := conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&priorHash)
-		if err != nil && err != sql.ErrNoRows {
-			return fmt.Errorf("commitment ledger: select head: %w", err)
-		}
-		attestationJSON, hash, err := build(priorHash)
-		if err != nil {
-			return fmt.Errorf("commitment ledger: build: %w", err)
-		}
-		return cl.appendCommitmentJSON(conn, attestationJSON, priorHash, hash)
+		return cl.appendBuiltCommitment(conn, build)
 	})
 }
 
@@ -181,11 +176,42 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 	cl.mu.Lock()
 	defer cl.mu.Unlock()
 	return cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
-		return cl.appendCommitmentJSON(conn, attestationJSON, priorHash, hash)
+		currentPriorHash, err := selectCommitmentHead(conn)
+		if err != nil {
+			return fmt.Errorf("failed to query current prior hash: %w", err)
+		}
+		if currentPriorHash != "" && currentPriorHash != priorHash {
+			return fmt.Errorf("prior_commitment_hash mismatch: expected %s, got %s", currentPriorHash, priorHash)
+		}
+		return cl.insertCommitment(conn, attestationJSON, priorHash, hash)
 	})
 }
 
-func (cl *CommitmentLedger) appendCommitmentJSON(conn *sql.Conn, attestationJSON []byte, priorHash, hash string) error {
+// appendBuiltCommitment selects the chain head, builds the attestation over
+// it and appends it. The caller holds cl.mu and the write transaction.
+func (cl *CommitmentLedger) appendBuiltCommitment(conn *sql.Conn, build CommitmentBuilder) error {
+	priorHash, err := selectCommitmentHead(conn)
+	if err != nil {
+		return fmt.Errorf("commitment ledger: select head: %w", err)
+	}
+	attestationJSON, hash, err := build(priorHash)
+	if err != nil {
+		return fmt.Errorf("commitment ledger: build: %w", err)
+	}
+	return cl.insertCommitment(conn, attestationJSON, priorHash, hash)
+}
+
+// selectCommitmentHead returns the latest commitment hash, or "" for an empty ledger.
+func selectCommitmentHead(conn *sql.Conn) (string, error) {
+	var head string
+	err := conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&head)
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+	return head, nil
+}
+
+func (cl *CommitmentLedger) insertCommitment(conn *sql.Conn, attestationJSON []byte, priorHash, hash string) error {
 	if len(attestationJSON) == 0 {
 		return fmt.Errorf("attestation JSON is empty")
 	}
@@ -196,14 +222,6 @@ func (cl *CommitmentLedger) appendCommitmentJSON(conn *sql.Conn, attestationJSON
 	canonicalAttestation, err := compliancev1.MarshalCanonical(attestation)
 	if err != nil {
 		return fmt.Errorf("failed to canonicalize attestation JSON: %w", err)
-	}
-	var currentPriorHash string
-	err = conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&currentPriorHash)
-	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("failed to query current prior hash: %w", err)
-	}
-	if err != sql.ErrNoRows && currentPriorHash != priorHash {
-		return fmt.Errorf("prior_commitment_hash mismatch: expected %s, got %s", currentPriorHash, priorHash)
 	}
 	_, err = conn.ExecContext(context.Background(), `
 		INSERT INTO commitment_ledger (

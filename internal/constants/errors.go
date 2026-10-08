@@ -574,7 +574,6 @@ var (
 	ErrPlatformEnrollmentCSRMismatch          = errors.New("platform enrollment CSR fingerprint mismatch")
 	ErrPlatformEnrollmentStoredRequestInvalid = errors.New("stored platform enrollment request is invalid")
 	ErrPlatformEnrollmentQuotaExceeded        = errors.New("platform enrollment request quota exceeded")
-	ErrPlatformEnrollmentRateLimited          = errors.New("platform enrollment request rate limited")
 	ErrPlatformEnrollmentGovernanceRejected   = errors.New("platform enrollment governance verification rejected")
 	ErrPlatformEnrollmentPersistenceFailed    = errors.New("platform enrollment persistence failed")
 	ErrPlatformEnrollmentIssuanceFailed       = errors.New("platform enrollment issuance failed")

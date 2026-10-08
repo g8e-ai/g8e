@@ -297,7 +297,7 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 	}
 
 	// Step 7: Submit completion and validate the response.
-	completionResp, err := c.submitCompletionWithBackpressure(ctx, token, operatorProof, cliProof, time.Now().Add(deadline))
+	completionResp, err := c.submitCompletionUntilIssued(ctx, token, operatorProof, cliProof, time.Now().Add(deadline))
 	if err != nil {
 		return nil, err
 	}
@@ -431,22 +431,6 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 				return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
 			}
 			return &createResp, nil
-		}
-
-		// 429: the gateway is saturated and answered before the client deadline.
-		// Nothing was reserved; back off for its Retry-After and submit again.
-		if resp.StatusCode == http.StatusTooManyRequests {
-			wait := parseRetryAfter(resp.Header.Get("Retry-After"))
-			if wait == 0 {
-				wait = delay
-			}
-			if waitErr := c.sleep(ctx, wait); waitErr != nil {
-				return nil, waitErr
-			}
-			if time.Now().After(deadline) {
-				return nil, fmt.Errorf("operator enrollment: gateway saturated for %s: HTTP %d: %s", operatorEnrollSubmitDeadline, resp.StatusCode, string(respBody))
-			}
-			continue
 		}
 
 		// 403 "requires a bootstrapped gateway": the gateway is not yet
@@ -591,7 +575,7 @@ func (c *OperatorPlatformEnrollmentClient) submitCompletion(ctx context.Context,
 		return nil, fmt.Errorf("operator enrollment: read completion response: %w", err)
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, &enrollmentBackpressureError{retryAfter: parseRetryAfter(resp.Header.Get("Retry-After")), body: string(respBody)}
+		return nil, &enrollmentIssuanceHeldError{retryAfter: parseRetryAfter(resp.Header.Get("Retry-After")), body: string(respBody)}
 	}
 	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("operator enrollment: completion rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
@@ -604,33 +588,34 @@ func (c *OperatorPlatformEnrollmentClient) submitCompletion(ctx context.Context,
 	return &completionResp, nil
 }
 
-// enrollmentBackpressureError is the Gateway's 429: it is saturated or the
-// issuance lease is held. The approval is intact, so the caller retries.
-type enrollmentBackpressureError struct {
+// enrollmentIssuanceHeldError is the Gateway's 429 for a held issuance lease:
+// an earlier attempt (for example one whose response was lost) is still
+// issuing. The approval is intact, so the caller retries into the stored result.
+type enrollmentIssuanceHeldError struct {
 	retryAfter time.Duration
 	body       string
 }
 
-func (e *enrollmentBackpressureError) Error() string {
-	return fmt.Sprintf("operator enrollment: completion deferred by gateway: HTTP 429: %s", e.body)
+func (e *enrollmentIssuanceHeldError) Error() string {
+	return fmt.Sprintf("operator enrollment: issuance in progress: HTTP 429: %s", e.body)
 }
 
-// submitCompletionWithBackpressure repeats submitCompletion while the Gateway
-// answers 429, waiting its Retry-After (or the poll backoff) between attempts.
-// Each attempt keeps the operatorEnrollHTTPTimeout; only the overall wait
-// until the request's own expiry is extended.
-func (c *OperatorPlatformEnrollmentClient) submitCompletionWithBackpressure(ctx context.Context, token, operatorProof, cliProof string, deadline time.Time) (*models.PlatformEnrollmentCompleteResponse, error) {
+// submitCompletionUntilIssued repeats submitCompletion while the issuance lease
+// is held, waiting its Retry-After (or the poll backoff) between attempts. Each
+// attempt keeps the operatorEnrollHTTPTimeout; only the overall wait until the
+// request's own expiry is extended.
+func (c *OperatorPlatformEnrollmentClient) submitCompletionUntilIssued(ctx context.Context, token, operatorProof, cliProof string, deadline time.Time) (*models.PlatformEnrollmentCompleteResponse, error) {
 	delay := operatorEnrollPollInitial
 	for {
 		resp, err := c.submitCompletion(ctx, token, operatorProof, cliProof)
-		var backpressure *enrollmentBackpressureError
-		if !errors.As(err, &backpressure) {
+		var held *enrollmentIssuanceHeldError
+		if !errors.As(err, &held) {
 			return resp, err
 		}
 		if time.Now().After(deadline) {
 			return nil, err
 		}
-		wait := backpressure.retryAfter
+		wait := held.retryAfter
 		if wait == 0 {
 			wait = delay
 		}

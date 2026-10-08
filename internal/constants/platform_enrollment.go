@@ -56,17 +56,6 @@ const (
 	// PlatformEnrollmentMaxDecisionBatch bounds a single owner-approved cohort.
 	PlatformEnrollmentMaxDecisionBatch = 2048
 
-	// PlatformEnrollmentMaxConcurrentIntake and PlatformEnrollmentMaxConcurrentIssuance
-	// bound concurrent governed work for request creation and for certificate/session
-	// issuance. They are independent of pending capacity and CLI staging parallelism.
-	PlatformEnrollmentMaxConcurrentIntake   = 64
-	PlatformEnrollmentMaxConcurrentIssuance = 64
-
-	// PlatformEnrollmentMaxAdmissionWait bounds queueing for either gate. It is below
-	// the client's 10s HTTP deadline so a saturated Gateway answers 429 + Retry-After
-	// instead of letting the client time out.
-	PlatformEnrollmentMaxAdmissionWait = 8 * time.Second
-
 	// PlatformEnrollmentCleanupInterval is how often the managed cleanup
 	// goroutine runs reconciliation of expired leases and removal of
 	// terminal requests past the retention window.
