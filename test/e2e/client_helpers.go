@@ -20,9 +20,12 @@ import (
 
 // maxResponseBytes limits response body reads to prevent unbounded memory
 // consumption from a misbehaving or malicious endpoint. 1 MiB is generous for
-// all expected E2E responses (health, pending lists, operator documents,
-// command results).
+// ordinary E2E responses (health, individual operator documents and results).
 const maxResponseBytes = 1 << 20
+
+// A full registry can contain 5000 Operator documents and certificate chains.
+// Keep that explicitly bounded without imposing the single-response limit.
+const maxListResponseBytes = 64 << 20
 
 // defaultClientTimeout is the per-request timeout for standard E2E client
 // operations. Long-running operations (command dispatch) override this.

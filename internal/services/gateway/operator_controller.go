@@ -472,6 +472,18 @@ func (c *OperatorController) handleGetOperatorBySession(w http.ResponseWriter, r
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Session validation reads the indexed authorization document. A registry
+	// response also needs the current observed telemetry, which GetOperator
+	// overlays without adding telemetry reads to the authentication path.
+	op, err = c.reg.GetOperator(op.Id)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if op == nil || op.OperatorSessionId != sessionID {
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrGatewayOperatorSessionInvalid.Error())
+		return
+	}
 	c.responder.JSON(w, http.StatusOK, models.OperatorResponse{
 		Success:  true,
 		Operator: op,

@@ -144,6 +144,19 @@ jobs:
           ldd bin/g8e-linux-amd64 2>&1 | grep -q "not a dynamic executable" || \
             { echo "ERROR: binary has dynamic dependencies"; ldd bin/g8e-linux-amd64; exit 1; }
 
+      - name: Operator enrollment scale and CLI lifecycle
+        run: |
+          GOFLAGS='-run=^TestPlatformEnrollmentBurstWithDeploymentEvents$ -v' make test-integration TEST_RACE= TEST_PKGS=./internal/services/gateway
+          bash scripts/ci/operator-deploy-lifecycle.sh --binary "$PWD/bin/g8e-linux-amd64" --count 3 --root "$RUNNER_TEMP/g8e-deployment-lifecycle"
+
+      - name: Preserve Operator lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: operator-deployment-lifecycle
+          path: ${{ runner.temp }}/g8e-deployment-lifecycle/out/
+          if-no-files-found: ignore
+
   python-tests:
     name: Python Package Tests
     runs-on: ubuntu-latest

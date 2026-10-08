@@ -217,6 +217,18 @@ Port-availability checks share `netutil.CheckTCPPortAvailable`. On Windows, the 
 
 The enrollment burst deadline contract (`TestPlatformEnrollmentBurst`) runs only on a normal build; use `GOFLAGS='-run=^TestPlatformEnrollmentBurst$ -v' make test-integration TEST_RACE= TEST_PKGS=./internal/services/gateway` to measure it.
 
+### Qualify Operator Deployment
+
+`TestHandleInternalSSEStream_FirstFlushCanDeliverDeploymentAnnouncements` publishes staging and readiness announcements synchronously at the first response flush. It proves the listener exists before HTTP 200, the write deadline is cleared, live-only announcements arrive exactly once, and cancellation unregisters the listener. `TestOperatorController_SessionLookupIncludesObservedHeartbeat` verifies that session lookup includes observed telemetry after authorization has already read the identity. Both run in the race-enabled integration suite.
+
+`TestPlatformEnrollmentBurstWithDeploymentEvents` adds a connected owner CLI consumer, 1,000 issued worker CLI sessions, launch-correlated staging/readiness, session validation, and initial heartbeat writes to the existing enrollment burst fixture. Every worker succeeds on its first attempt within the service deadline. Worker CLI sessions without a stream receive no event rows. Run the normal-build timing contract with `GOFLAGS='-run=^TestPlatformEnrollmentBurstWithDeploymentEvents$ -v' make test-integration TEST_RACE= TEST_PKGS=./internal/services/gateway`. It exercises real local SQLite, PKI and pub/sub without launching 1,000 Operator processes.
+
+On Linux, `bash scripts/ci/operator-deploy-lifecycle.sh --count 3` starts a fresh doctrine Gateway and invokes `TestOperatorDeploy_LocalLifecycle` through `g8e test e2e`. Build the binary with `make build` first. The runner refuses occupied default Gateway ports and an existing scratch directory. The scenario uses real `operator deploy`, verifies exactly one governed decision for a cold cohort, immediate governed command fan-out, each Operator's signed local receipt and its Gateway projection, heartbeat delivery, retained identity redeployment, appended cohorts, denial, targeted governed stop, and cancellation before enrollment. Teardown targets only processes in the scenario's runtime directories and includes workers absent from the registry. The runner always stops its Gateway and preserves evidence under its printed scratch root.
+
+The lifecycle runner defaults to three Operators. `--count 1000` selects a separate process-scale qualification after the smaller regression suites pass; it never runs implicitly as part of a local default E2E invocation. `--binary PATH` freezes the binary selection and `--root NEW_DIRECTORY` selects the evidence root. The JSON report records the binary SHA-256, cohort size, cold/retained/append deployment durations and final pass status. Shared-runner timings are reported rather than compared to an undocumented absolute baseline. CI runs the normal-build 1,000-member integration contract and the three-Operator lifecycle scenario.
+
+### Profile Integration Tests
+
 Measure uncached execution through the canonical entry point. Integration runs already use `-count=1` and the race detector on non-Windows. The package duration in an `ok` line includes test setup and cleanup, but excludes compilation.
 
 ```bash

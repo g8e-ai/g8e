@@ -78,7 +78,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-SSE-DEL-01 | `GET /api/v1/sse/events` returns rows with id > `since_id`, ordered ascending, with `limit` defaulting to 200 and clamped to [1, 1000]. Polling does not delete or acknowledge rows. |
 | INV-SSE-DEL-02 | `GET /api/v1/sse/stream` replays at most 1,000 rows per connection. When replay hits the limit, an unnumbered `truncated` sentinel carries the last emitted id and limit; the client may reconnect with a higher cursor. A `Last-Event-ID` header or positive `since_id` query parameter requests replay; `since_id=0` without `Last-Event-ID` requests live-only (skips replay). |
 | INV-SSE-DEL-03 | Each live stream maintains a 100-event in-memory queue. If a consumer falls behind, the Gateway drops the oldest queued event; the consumer can recover via cursor-based replay on reconnect. A dropped event is not automatically backfilled on the same connection. |
-| INV-SSE-DEL-04 | The stream heartbeats every 30 seconds with an SSE comment; response headers are flushed immediately so clients may signal readiness before the first event. The maintenance loop (every 30 seconds) removes events older than one hour; this history window supports short reconnect windows and is not a durable audit record. |
+| INV-SSE-DEL-04 | The stream installs its live listener and clears the server write deadline before flushing response headers. Receiving HTTP 200 permits the client to start producing events, including ephemeral deployment announcements. The listener remains installed during replay and unregisters on handler exit. The stream heartbeats every 30 seconds with an SSE comment. The maintenance loop (every 30 seconds) removes events older than one hour; this history window supports short reconnect windows and is not a durable audit record. |
 
 ### Approvals invalidation event
 
@@ -107,7 +107,7 @@ reason, and request cancellation releases the probe and receipt subscription.
 | --- | --- | --- |
 | SSE push handler | `internal/services/gateway/sse_controller.go:handleInternalSSEPush` | Validates producer auth, event registry, target ownership, persist-before-publish |
 | SSE poll handler | `internal/services/gateway/sse_controller.go:handleInternalSSEEvents` | Builds route from auth context, enforces user/session ownership, returns rows since ID |
-| SSE stream handler | `internal/services/gateway/sse_controller.go:handleInternalSSEStream` | Replay + live delivery, dedup by row ID, `id:`-less ephemeral frames, 30s heartbeat, 100-event backpressure queue (`./g8e test unit --pkg ./internal/services/gateway --run HandleInternalSSEStream`) |
+| SSE stream handler | `internal/services/gateway/sse_controller.go:handleInternalSSEStream` | Listener installed before HTTP 200, replay + live delivery, dedup by row ID, `id:`-less ephemeral frames, 30s heartbeat, 100-event backpressure queue (`./g8e test integration --pkg ./internal/services/gateway --run HandleInternalSSEStream`) |
 | SSE event storage | `internal/services/gateway/sse_event_service.go` | Append, list, cleanup (every 30s, remove >1h old), wipe, count |
 | Observe producers | `internal/services/gateway/observe_producer_controller.go` | Agent-state and run-state endpoints, persist-before-publish, auth from mTLS cert |
 | Event registry | `protocol/constants/events.json` | Authority for event registration, producer list, persistence mode |

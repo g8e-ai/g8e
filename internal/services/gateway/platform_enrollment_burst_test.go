@@ -12,6 +12,7 @@ package gateway
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -23,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -49,7 +51,7 @@ const (
 func TestPlatformEnrollmentBurst(t *testing.T) {
 	for _, n := range []int{100, 1000} {
 		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
-			runPlatformEnrollmentBurst(t, n, false)
+			runPlatformEnrollmentBurst(t, n, burstScenario{})
 		})
 	}
 }
@@ -57,7 +59,19 @@ func TestPlatformEnrollmentBurst(t *testing.T) {
 // A live Operator authenticates as soon as completion returns, while the rest
 // of the cohort is still issuing. Include that work in the release burst.
 func TestPlatformEnrollmentBurstWithSessionValidation(t *testing.T) {
-	runPlatformEnrollmentBurst(t, 1000, true)
+	runPlatformEnrollmentBurst(t, 1000, burstScenario{validateSession: true})
+}
+
+// Include the deploying owner's live stream, each issued worker CLI session,
+// command readiness announcements and initial heartbeat writes in the burst.
+// An enrollment-only fixture misses the fan-out work performed by a real deploy.
+func TestPlatformEnrollmentBurstWithDeploymentEvents(t *testing.T) {
+	runPlatformEnrollmentBurst(t, 1000, burstScenario{validateSession: true, deploymentEvents: true})
+}
+
+type burstScenario struct {
+	validateSession  bool
+	deploymentEvents bool
 }
 
 type burstWorker struct {
@@ -69,9 +83,25 @@ type burstWorker struct {
 	completed   *models.PlatformEnrollmentCompleteResponse
 }
 
-func runPlatformEnrollmentBurst(t *testing.T, n int, validateSession bool) {
+func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 	env := setupPlatformEnrollmentEnv(t, true)
 	svc := env.enrollSvc
+	deadline := platformEnrollmentBurstClientDeadline
+	if scenario.deploymentEvents {
+		// This scenario checks scale correctness on shared CI hosts and reports
+		// timing. The existing enrollment-only performance budget stays at 10s.
+		deadline = 90 * time.Second
+	}
+	var eventsMu sync.Mutex
+	var published [][]byte
+	if scenario.deploymentEvents {
+		putCLISession(t, env.docStore, "cli-burst-owner", env.ownerID)
+		t.Cleanup(env.svc.GetGatewayWebSocketHandler().RegisterHandler(sseCLIChannelPrefix+"cli-burst-owner", func(_ string, data []byte) {
+			eventsMu.Lock()
+			defer eventsMu.Unlock()
+			published = append(published, append([]byte(nil), data...))
+		}))
+	}
 
 	workers := make([]*burstWorker, n)
 	for i := range workers {
@@ -87,10 +117,13 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, validateSession bool) {
 			operatorKey: operatorKey,
 			cliKey:      cliKey,
 		}
+		if scenario.deploymentEvents {
+			workers[i].create.DeploymentID = fmt.Sprintf("10000000-0000-4000-8000-%012d", i)
+		}
 	}
 
 	// Phase 1: synchronized intake.
-	create := runBurstPhase("create", workers, func(ctx context.Context, w *burstWorker) error {
+	create := runBurstPhase("create", workers, deadline, func(ctx context.Context, w *burstWorker) error {
 		resp, err := svc.CreateRequest(ctx, w.create, "https://gateway.local/console")
 		if err == nil {
 			w.created = resp
@@ -124,12 +157,18 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, validateSession bool) {
 	t.Logf("  batch decision: %d members in %s", n, decideWall.Round(time.Millisecond))
 
 	// Phase 3: synchronized approval release.
-	complete := runBurstPhase("complete", workers, func(ctx context.Context, w *burstWorker) error {
+	complete := runBurstPhase("complete", workers, deadline, func(ctx context.Context, w *burstWorker) error {
 		resp, err := svc.Complete(ctx, w.created.Token, w.proofs)
 		if err == nil {
 			w.completed = resp
-			if validateSession {
+			if scenario.validateSession {
 				_, err = env.svc.auth.ValidateOperatorSession(resp.Operator.OperatorSessionID)
+			}
+			if err == nil && scenario.deploymentEvents {
+				err = env.docStore.OperatorCommandSubscribed(resp.Operator.OperatorID, resp.Operator.OperatorSessionID, w.create.DeploymentID)
+				if err == nil {
+					err = env.docStore.RecordOperatorHeartbeat(resp.Operator.OperatorID, heartbeatUpdate{LastHeartbeatAt: time.Now().UTC()})
+				}
 			}
 		}
 		return err
@@ -148,6 +187,54 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, validateSession bool) {
 	}
 	assert.Len(t, operatorIDs, n, "every worker must receive a distinct Operator identity")
 	assert.Len(t, sessionIDs, 2*n, "every worker must receive distinct Operator and CLI sessions")
+	if scenario.deploymentEvents {
+		eventsMu.Lock()
+		observed := append([][]byte(nil), published...)
+		eventsMu.Unlock()
+		staged, ready := map[string]string{}, map[string]models.OperatorStatusUpdatedPayload{}
+		for _, raw := range observed {
+			var event models.SSEPublishedEvent
+			require.NoError(t, json.Unmarshal(raw, &event))
+			var push models.SSEPushPayload
+			require.NoError(t, json.Unmarshal(event.Payload, &push))
+			var envelope sseEventEnvelope
+			require.NoError(t, json.Unmarshal(push.Event, &envelope))
+			switch envelope.Type {
+			case string(constants.EventPlatformApprovalsChanged):
+				var data models.ApprovalsChangedPayload
+				require.NoError(t, json.Unmarshal(envelope.Data, &data))
+				if data.DeploymentID != "" {
+					assert.Zero(t, event.ID, "staging is live-only")
+					assert.NotContains(t, staged, data.DeploymentID, "one staging announcement per launch")
+					staged[data.DeploymentID] = data.RequestID
+				}
+			case string(constants.EventOperatorStatusUpdatedActive):
+				var data models.OperatorStatusUpdatedPayload
+				require.NoError(t, json.Unmarshal(envelope.Data, &data))
+				if data.DeploymentID != "" {
+					assert.NotContains(t, ready, data.DeploymentID, "one command readiness announcement per launch")
+					ready[data.DeploymentID] = data
+				}
+			}
+		}
+		require.Len(t, staged, n)
+		require.Len(t, ready, n)
+		assert.LessOrEqual(t, len(observed), 4*n+4, "live fan-out must grow linearly with the cohort")
+		for _, w := range workers {
+			assert.Equal(t, w.created.RequestID, staged[w.create.DeploymentID])
+			ack := ready[w.create.DeploymentID]
+			assert.Equal(t, w.completed.Operator.OperatorID, ack.OperatorID)
+			assert.Equal(t, w.completed.Operator.OperatorSessionID, ack.OperatorSessionID)
+			assert.Equal(t, constants.OperatorStatusActive, ack.Status)
+			rows, err := env.svc.sseStore.SSEEventsListSince(SSERoute{UserID: env.ownerID, CLISessionID: w.completed.Operator.CLISessionID}, 0, 1)
+			require.NoError(t, err)
+			require.Empty(t, rows, "worker CLI sessions without a stream must receive zero event rows")
+		}
+		rows, err := env.svc.sseStore.SSEEventsListSince(SSERoute{UserID: env.ownerID, CLISessionID: "cli-burst-owner"}, 0, 4*n)
+		require.NoError(t, err)
+		assert.LessOrEqual(t, len(rows), 3*n, "durable fan-out must grow linearly with the cohort")
+		t.Logf("  deployment events: staged=%d ready=%d durable_owner_rows=%d worker_rows=0", len(staged), len(ready), len(rows))
+	}
 }
 
 // burstPhase records one synchronized phase: every worker's single attempt.
@@ -160,7 +247,7 @@ type burstPhase struct {
 
 // runBurstPhase starts one goroutine per worker, releases them together, and
 // runs op once per worker under the client deadline.
-func runBurstPhase(name string, workers []*burstWorker, op func(context.Context, *burstWorker) error) burstPhase {
+func runBurstPhase(name string, workers []*burstWorker, deadline time.Duration, op func(context.Context, *burstWorker) error) burstPhase {
 	phase := burstPhase{name: name, latencies: make([]time.Duration, len(workers)), outcomes: map[string]int{}}
 	outcomes := make([]string, len(workers))
 	start := make(chan struct{})
@@ -170,7 +257,7 @@ func runBurstPhase(name string, workers []*burstWorker, op func(context.Context,
 		go func(i int, w *burstWorker) {
 			defer wg.Done()
 			<-start
-			ctx, cancel := context.WithTimeout(context.Background(), platformEnrollmentBurstClientDeadline)
+			ctx, cancel := context.WithTimeout(context.Background(), deadline)
 			defer cancel()
 			began := time.Now()
 			err := op(ctx, w)

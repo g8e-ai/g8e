@@ -554,14 +554,6 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Flush the response headers immediately so the client receives the 200
-	// status and can signal readiness (onConnect) before the first event or
-	// heartbeat. Without this, the response is not sent until the first
-	// write (replay rows or the 30s heartbeat), causing clients with short
-	// connect timeouts (e.g., the passkey registrar's 10s sseReadyTimeout)
-	// to abort before the stream is established.
-	flusher.Flush()
-
 	// http.Server.WriteTimeout is an absolute deadline measured from the first
 	// response write, not an idle-between-writes timeout. Left in place, it
 	// closes the connection 30s into the stream regardless of heartbeats,
@@ -598,6 +590,12 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		unregister()
 		buf.Close()
 	}()
+
+	// HTTP 200 lets clients start producing events immediately. Register the
+	// listener and clear the write deadline before exposing that boundary:
+	// ephemeral deployment announcements cannot be recovered through replay.
+	// Flush now rather than waiting for the first event or 30s heartbeat.
+	flusher.Flush()
 
 	// lastEmittedID is the highest event ID the replay emitted on this
 	// connection. It is maintained inside the single HTTP-handler goroutine, so
