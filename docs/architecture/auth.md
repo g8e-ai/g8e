@@ -246,6 +246,8 @@ For ensemble and application identities, revocation invalidates the workload cer
 
 mTLS certificates carry SPIFFE identities in URI SANs. The gateway validates certificate revocation, extracts the principal type, and matches the certificate identity to the referenced CLI, operator, or application session before accepting a request. Disabled users, terminated operators, expired sessions, revoked certificates, duplicate bindings, and identity mismatches fail closed.
 
+Operator-session authentication performs an indexed identity lookup without reconciling fleet heartbeat liveness. It reads at most two matching records so duplicate bindings still fail closed; terminated identities and disabled users remain rejected. Stale or offline identities may authenticate for recovery. Registry reads and the liveness sweep continue to reconcile heartbeat status.
+
 A CLI command carries a chain from CLI certificate to CLI session to user to operator session to operator. Browser events bind to the user and browser session. Application certificates bind an application identity to the approving user via platform enrollment. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
 
 Direct envelope submission (`POST /api/v1/governance/envelopes`) applies transport-to-envelope identity binding in `verifyEnvelopeIdentityBinding`:

@@ -49,9 +49,15 @@ const (
 func TestPlatformEnrollmentBurst(t *testing.T) {
 	for _, n := range []int{100, 1000} {
 		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
-			runPlatformEnrollmentBurst(t, n)
+			runPlatformEnrollmentBurst(t, n, false)
 		})
 	}
+}
+
+// A live Operator authenticates as soon as completion returns, while the rest
+// of the cohort is still issuing. Include that work in the release burst.
+func TestPlatformEnrollmentBurstWithSessionValidation(t *testing.T) {
+	runPlatformEnrollmentBurst(t, 1000, true)
 }
 
 type burstWorker struct {
@@ -63,7 +69,7 @@ type burstWorker struct {
 	completed   *models.PlatformEnrollmentCompleteResponse
 }
 
-func runPlatformEnrollmentBurst(t *testing.T, n int) {
+func runPlatformEnrollmentBurst(t *testing.T, n int, validateSession bool) {
 	env := setupPlatformEnrollmentEnv(t, true)
 	svc := env.enrollSvc
 
@@ -122,6 +128,9 @@ func runPlatformEnrollmentBurst(t *testing.T, n int) {
 		resp, err := svc.Complete(ctx, w.created.Token, w.proofs)
 		if err == nil {
 			w.completed = resp
+			if validateSession {
+				_, err = env.svc.auth.ValidateOperatorSession(resp.Operator.OperatorSessionID)
+			}
 		}
 		return err
 	})

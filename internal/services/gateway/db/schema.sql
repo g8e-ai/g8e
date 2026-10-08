@@ -50,6 +50,10 @@ CREATE INDEX IF NOT EXISTS idx_operator_lease_identity ON documents(
     json_extract(data, '$.user_id'), json_extract(data, '$.system_fingerprint'))
     WHERE collection = 'operators';
 
+-- Authentication resolves one session and rejects duplicate identity bindings.
+CREATE INDEX IF NOT EXISTS idx_operator_session_identity ON documents(
+    json_extract(data, '$.operator_session_id')) WHERE collection = 'operators';
+
 -- KV store with TTL
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,

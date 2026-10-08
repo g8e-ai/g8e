@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
@@ -79,6 +80,28 @@ func NewDocumentStoreService(db *sqliteutil.DB, logger *slog.Logger) *DocumentSt
 		db:     db,
 		logger: logger,
 	}
+}
+
+const operatorSessionIdentityQuery = `SELECT id, data, created_at, updated_at FROM documents
+ WHERE collection = ? AND json_extract(data, '$.operator_session_id') = ? LIMIT 2`
+
+// FindOperatorsBySession reads identity bindings without reconciling heartbeat
+// liveness. Two matches are enough for the authentication owner to reject an
+// ambiguous binding; terminated identities remain visible for its checks.
+func (s *DocumentStoreService) FindOperatorsBySession(sessionID string) ([]*models.Document, error) {
+	collection := marshaler.CollectionName(constants.CollectionOperators)
+	docs, err := sqliteutil.MaterializeRows(s.db, operatorSessionIdentityQuery, []interface{}{collection, sessionID},
+		func(row *sql.Rows) (*models.Document, error) {
+			var id, data, createdAt, updatedAt string
+			if err := row.Scan(&id, &data, &createdAt, &updatedAt); err != nil {
+				return nil, fmt.Errorf("scan operator session binding: %w", err)
+			}
+			return scanDocument(collection, id, data, createdAt, updatedAt)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("find operator session bindings: %w", err)
+	}
+	return docs, nil
 }
 
 // DocGet retrieves a document by collection and id.

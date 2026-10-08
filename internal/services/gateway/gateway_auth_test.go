@@ -46,6 +46,39 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAuthService_ValidateOperatorSession_DoesNotReconcileFleet(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	collection := marshaler.CollectionName(constants.CollectionOperators)
+	old := timestamppb.New(time.Now().Add(-time.Hour))
+	for _, id := range []string{"target", "unrelated"} {
+		data, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
+			Id: id, UserId: env.ownerID, OperatorSessionId: id + "-session",
+			OperatorType: string(constants.OperatorTypeRemote), Status: string(constants.OperatorStatusActive), ClaimedAt: old,
+		})
+		require.NoError(t, err)
+		require.NoError(t, env.docStore.DocSet(collection, id, data))
+	}
+	before, err := env.svc.stateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	op, err := env.svc.auth.ValidateOperatorSession("target-session")
+	require.NoError(t, err)
+	require.Equal(t, "target", op.Id)
+	after, err := env.svc.stateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	require.Equal(t, before, after, "authentication must not mutate heartbeat liveness")
+	for _, id := range []string{"target", "unrelated"} {
+		doc, err := env.docStore.docGet(collection, id)
+		require.NoError(t, err)
+		stored, err := models.OperatorDocumentFromStore(doc)
+		require.NoError(t, err)
+		require.Equal(t, string(constants.OperatorStatusActive), stored.Status)
+	}
+	// An unrelated invalid runtime configuration cannot break a valid identity.
+	require.NoError(t, env.docStore.DocSet(collection, "malformed", json.RawMessage(`{"operator_type":"remote","status":"active","runtime_config":"invalid"}`)))
+	_, err = env.svc.auth.ValidateOperatorSession("target-session")
+	require.NoError(t, err)
+}
+
 func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()

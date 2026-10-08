@@ -148,7 +148,7 @@ func TestOperatorRunCmd_DefaultConcurrencyIsBoundedAndTextOutputHasNoSummary(t *
 	require.NoError(t, cmd.Execute())
 
 	require.Len(t, *seen, 1)
-	assert.Equal(t, defaultOperatorRunConcurrency, (*seen)[0].MaxIdleConnsPerHost)
+	assert.Equal(t, defaultOperatorCommandConcurrency, (*seen)[0].MaxIdleConnsPerHost)
 	assert.Contains(t, buf.String(), "Operator session session-a (operator op-a)")
 	assert.NotContains(t, buf.String(), "summary")
 }

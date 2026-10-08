@@ -12,7 +12,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -67,6 +69,83 @@ func TestOperatorStopLocalWithoutGateway(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	require.Equal(t, []bool{false, true}, signals)
 	require.True(t, closed)
+}
+
+func TestOperatorStopLocal_BoundedConcurrencyAndAccounting(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+	client := &cmdtest.MockAPIClient{GetErr: errors.New("gateway offline")}
+	synctest.Test(t, func(t *testing.T) {
+		const count = 70
+		started := make(chan int, count)
+		release := make(chan struct{})
+		locals := make([]localOperatorProcess, count)
+		for i := range locals {
+			locals[i] = localOperatorProcess{pid: i + 1, close: func() {}, wait: func(time.Duration) (bool, error) {
+				started <- i
+				<-release
+				return true, nil
+			}}
+		}
+		cmd := operatorStopCmdWithLocal(cmdtest.ConfigLoaderFor(cfg), authcmd.MockClientFactory(client), cmdtest.FileSvcFactoryFor(fileSvc), func() ([]localOperatorProcess, error) { return locals, nil })
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(nil)
+		done := make(chan error, 1)
+		go func() { done <- cmd.Execute() }()
+		synctest.Wait()
+		inFlight := len(started)
+		close(release)
+		require.NoError(t, <-done)
+		require.Equal(t, 64, inFlight, "bulk stop must overlap waits with a bounded worker count")
+		require.Len(t, started, count, "every discovered worker must be accounted for")
+		for i := range locals {
+			require.Contains(t, out.String(), fmt.Sprintf("Local operator PID %d: exited", i+1))
+		}
+	})
+}
+
+func TestOperatorStopLocal_CancellationAccountsForQueuedWorkers(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+	client := &cmdtest.MockAPIClient{GetErr: errors.New("gateway offline")}
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		started := make(chan int, 70)
+		release := make(chan struct{})
+		locals := make([]localOperatorProcess, 70)
+		for i := range locals {
+			locals[i] = localOperatorProcess{pid: i + 1, close: func() {}, wait: func(time.Duration) (bool, error) {
+				started <- i
+				<-release
+				return false, nil
+			}, signal: func(bool) error { panic("cancellation must prevent signals") }}
+		}
+		cmd := operatorStopCmdWithLocal(cmdtest.ConfigLoaderFor(cfg), authcmd.MockClientFactory(client), cmdtest.FileSvcFactoryFor(fileSvc), func() ([]localOperatorProcess, error) { return locals, nil })
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.PersistentFlags().Bool("json", true, "")
+		cmd.SetArgs(nil)
+		done := make(chan error, 1)
+		go func() { done <- cmd.ExecuteContext(ctx) }()
+		synctest.Wait()
+		cancel()
+		close(release)
+		require.Error(t, <-done)
+		require.Len(t, started, 64, "queued workers must not start after cancellation")
+		var results []operatorStopResult
+		require.NoError(t, json.Unmarshal(out.Bytes(), &results))
+		require.Len(t, results, len(locals))
+		for i, result := range results {
+			require.Equal(t, i+1, result.PID)
+			require.False(t, result.Success)
+			require.Equal(t, "failed", result.Method)
+			require.NotEmpty(t, result.Error)
+		}
+	})
 }
 
 func TestStopLocalOperatorSignalFailure(t *testing.T) {

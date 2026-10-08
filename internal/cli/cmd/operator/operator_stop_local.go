@@ -49,7 +49,6 @@ func stopLocalOperator(cmd *cobra.Command, p localOperatorProcess, response mode
 	result := operatorStopResult{StopOperatorResponse: response, PID: p.pid}
 	if governedErr != nil {
 		result.GovernedError = governedErr.Error()
-		cmd.PrintErrf("PID %d: governed shutdown unavailable (%v); terminating locally.\n", p.pid, governedErr)
 	}
 	fail := func(err error) operatorStopResult {
 		result.Success = false

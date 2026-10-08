@@ -137,6 +137,8 @@ func TestEnrollmentQueriesUseIndexes(t *testing.T) {
 			"idx_enrollment_pending", []any{platformEnrollmentCollectionName(), models.PlatformEnrollmentStatePending, time.Now().UTC().Format(time.RFC3339Nano)}},
 		{operatorLeaseIdentityQuery, "idx_operator_lease_identity", []any{
 			marshaler.CollectionName(constants.CollectionOperators), "owner", "fingerprint", constants.OperatorTypeRemote, constants.OperatorStatusTerminated}},
+		{operatorSessionIdentityQuery, "idx_operator_session_identity", []any{
+			marshaler.CollectionName(constants.CollectionOperators), "session"}},
 	} {
 		t.Run(tc.index, func(t *testing.T) {
 			rows, err := store.db.Query("EXPLAIN QUERY PLAN "+tc.query, tc.args...)

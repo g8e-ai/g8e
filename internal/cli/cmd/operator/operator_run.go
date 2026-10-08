@@ -33,9 +33,8 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// defaultOperatorRunConcurrency bounds in-flight dispatches when --concurrency
-// is not set.
-const defaultOperatorRunConcurrency = 64
+// defaultOperatorCommandConcurrency bounds bulk run dispatches and local stops.
+const defaultOperatorCommandConcurrency = 64
 
 type operatorRunJSON struct {
 	Results []operator.RunResult `json:"results"`
@@ -119,7 +118,7 @@ authenticated user and be active.`,
 
 			poolSize := concurrency
 			if poolSize < 1 {
-				poolSize = defaultOperatorRunConcurrency
+				poolSize = defaultOperatorCommandConcurrency
 			}
 			client, err := clientFactory(fileSvc, cfg, api.ClientOptions{
 				Timeout:             time.Duration(timeoutSeconds)*time.Second + 5*time.Second,
@@ -163,7 +162,7 @@ authenticated user and be active.`,
 
 	cmd.Flags().StringVar(&command, "cmd", "", "Shell command to execute on each target operator (required)")
 	cmd.Flags().IntVar(&timeoutSeconds, "timeout", constants.DefaultShellCommandTimeout, fmt.Sprintf("Per-operator dispatch timeout in seconds (max %d)", constants.MaxShellCommandTimeout))
-	cmd.Flags().IntVar(&concurrency, "concurrency", 0, fmt.Sprintf("Maximum in-flight dispatches (default: number of targets, capped at %d)", defaultOperatorRunConcurrency))
+	cmd.Flags().IntVar(&concurrency, "concurrency", 0, fmt.Sprintf("Maximum in-flight dispatches (default: number of targets, capped at %d)", defaultOperatorCommandConcurrency))
 	cmd.Flags().BoolVar(&allActive, "all-active", false, "Target every active operator session owned by the authenticated user (cannot be combined with session IDs)")
 	return cmd
 }
@@ -192,7 +191,8 @@ func operatorStopCmdWithLocal(
 		Use:   "stop [operator-session-id]",
 		Short: "Stop operators, terminating local workers if governed shutdown stalls",
 		Long: `Request governed shutdown, then wait briefly for local workers to exit.
-Local workers that remain running receive TERM, then KILL. With no session ID,
+Local workers that remain running receive TERM, then KILL. Bulk stops process at most
+64 workers concurrently and report each outcome. With no session ID,
 stop all local g8e operator workers owned by the current user, including workers
 missing from the gateway registry. Remote-only targets receive governed shutdown.`,
 		Args: cobra.MaximumNArgs(1),
@@ -286,6 +286,9 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 					return nil
 				}
 				result := stopLocalOperator(cmd, matched[0], response, err, grace)
+				if result.GovernedError != "" {
+					cmd.PrintErrf("PID %d: governed shutdown unavailable (%s).\n", result.PID, result.GovernedError)
+				}
 				if result.Error != "" {
 					return fmt.Errorf("operator stop: %s", result.Error)
 				}
@@ -295,31 +298,53 @@ missing from the gateway registry. Remote-only targets receive governed shutdown
 				cmd.Printf("Stopped local operator PID %d (%s).\n", result.PID, result.Method)
 				return nil
 			}
-			results := make([]operatorStopResult, 0, len(locals))
-			var failures []error
-			for _, p := range locals {
-				response := models.StopOperatorResponse{}
-				err := governedErr
-				if err == nil {
-					var targets []*operatorv1.OperatorDocument
-					for _, op := range operators {
-						if constants.OperatorType(op.OperatorType) == constants.OperatorTypeRemote && p.matches(op) {
-							targets = append(targets, op)
+			results := make([]operatorStopResult, len(locals))
+			jobs := make(chan int)
+			var wg sync.WaitGroup
+			for range min(defaultOperatorCommandConcurrency, len(locals)) {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for i := range jobs {
+						p := locals[i]
+						if err := cmd.Context().Err(); err != nil {
+							results[i] = operatorStopResult{PID: p.pid, Method: "failed", Error: err.Error()}
+							continue
 						}
+						response := models.StopOperatorResponse{}
+						err := governedErr
+						if err == nil {
+							var targets []*operatorv1.OperatorDocument
+							for _, op := range operators {
+								if constants.OperatorType(op.OperatorType) == constants.OperatorTypeRemote && p.matches(op) {
+									targets = append(targets, op)
+								}
+							}
+							if len(targets) == 1 {
+								response, err = requestOperatorStop(client, targets[0].OperatorSessionId, reason)
+							} else {
+								err = fmt.Errorf("no unique gateway session for local PID %d", p.pid)
+							}
+						}
+						results[i] = stopLocalOperator(cmd, p, response, err, grace)
 					}
-					if len(targets) == 1 {
-						response, err = requestOperatorStop(client, targets[0].OperatorSessionId, reason)
-					} else {
-						err = fmt.Errorf("no unique gateway session for local PID %d", p.pid)
-					}
+				}()
+			}
+			for i := range locals {
+				jobs <- i
+			}
+			close(jobs)
+			wg.Wait()
+			var failures []error
+			for _, result := range results {
+				if result.GovernedError != "" {
+					cmd.PrintErrf("PID %d: governed shutdown unavailable (%s).\n", result.PID, result.GovernedError)
 				}
-				result := stopLocalOperator(cmd, p, response, err, grace)
-				results = append(results, result)
 				if result.Error != "" {
-					failures = append(failures, fmt.Errorf("PID %d: %s", p.pid, result.Error))
+					failures = append(failures, fmt.Errorf("PID %d: %s", result.PID, result.Error))
 				}
 				if !output.JSONEnabled(cmd) {
-					cmd.Printf("Local operator PID %d: %s\n", p.pid, result.Method)
+					cmd.Printf("Local operator PID %d: %s\n", result.PID, result.Method)
 				}
 			}
 			if output.JSONEnabled(cmd) {

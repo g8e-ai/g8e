@@ -491,11 +491,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*operat
 		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionIDRequired.Error(), Status: http.StatusUnauthorized}
 	}
 
-	filters := []models.DocFilter{
-		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
-	}
-
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 2)
+	docs, err := s.db.FindOperatorsBySession(operatorSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: auth: query operator session: %w", err)
 	}
