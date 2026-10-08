@@ -28,7 +28,7 @@ func seedHistoryDocuments(t *testing.T, db *CanonicalDBService, n int) {
 	t.Helper()
 	body := strings.Repeat("x", 4096)
 	now := timesvc.FormatTimestamp(time.Now().UTC())
-	require.NoError(t, db.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	require.NoError(t, db.db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		stmt, err := tx.Prepare("INSERT INTO documents (collection, id, data, created_at, updated_at) VALUES ('history', ?, ?, ?, ?)")
 		if err != nil {
 			return err

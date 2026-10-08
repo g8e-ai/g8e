@@ -196,6 +196,11 @@ func (s *PlatformEnrollmentService) runCleanup(ctx context.Context) {
 // component name, fingerprints, approval URL, and expiry. The raw token
 // is returned once and never persisted; only its SHA-256 hash is stored.
 func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req models.PlatformEnrollmentCreateRequest, approvalURLBase string) (*models.PlatformEnrollmentCreateResponse, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	// Invariant 1: a gateway with no users never issues a platform
 	// certificate. Request creation requires a bootstrapped gateway.
 	hasUsers, err := s.userSvc.HasAnyUsers()
@@ -269,14 +274,22 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 	// Submit the CREATE envelope for audit. The handler is audit-only:
 	// it decodes the payload, returns a receipt summary, and writes
 	// nothing to the doc store.
-	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreate, &commonv1.PlatformEnrollmentGovernancePayload{
+	_, err = s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreate, &commonv1.PlatformEnrollmentGovernancePayload{
 		Action:        string(constants.PlatformEnrollmentActionCreate),
 		Intent:        string(constants.PlatformEnrollmentIntentRequest),
 		RequestId:     requestID,
 		ComponentKind: payloadComponentKind(req.ComponentKind),
 		InstanceId:    req.InstanceID,
 		Fingerprints:  payloadFingerprints(fingerprints),
-	}); err != nil {
+	})
+	if err == nil {
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+		default:
+		}
+	}
+	if err != nil {
 		// The raw token has not been returned. Remove only this still-pending
 		// reservation so a failed audit does not strand an unusable request.
 		_, cleanupErr := s.db.db.ExecContext(context.WithoutCancel(ctx),
@@ -820,7 +833,7 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 // Requests with a live lease are left in the issuing state.
 func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
 	now := timesvc.NowTimestamp()
-	result, err := s.db.db.ExecWithRetry(`UPDATE documents SET data = json_patch(data, json_object(
+	result, err := s.db.db.ExecWithRetry(context.Background(), `UPDATE documents SET data = json_patch(data, json_object(
   'state', CASE WHEN julianday(json_extract(data, '$.expires_at')) < julianday(?) THEN ? ELSE ? END,
   'issuance_lease_owner', '', 'issuance_lease_expires_at', NULL, 'last_transition_at', ?)), updated_at = ?
   WHERE collection = ? AND json_extract(data, '$.state') = ?
@@ -846,7 +859,7 @@ func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
 func (s *PlatformEnrollmentService) CleanupTerminalRequests() error {
 	now := time.Now().UTC()
 	stamp := timesvc.FormatTimestamp(now)
-	result, err := s.db.db.ExecWithRetry(`UPDATE documents SET data = json_patch(data, json_object('state', ?, 'last_transition_at', ?)), updated_at = ?
+	result, err := s.db.db.ExecWithRetry(context.Background(), `UPDATE documents SET data = json_patch(data, json_object('state', ?, 'last_transition_at', ?)), updated_at = ?
   WHERE collection = ? AND json_extract(data, '$.state') IN ('pending', 'approved', 'issuing')
   AND julianday(json_extract(data, '$.expires_at')) < julianday(?)`,
 		models.PlatformEnrollmentStateExpired, stamp, stamp, platformEnrollmentCollectionName(), stamp)
@@ -860,7 +873,7 @@ func (s *PlatformEnrollmentService) CleanupTerminalRequests() error {
 	if count > 0 {
 		s.approvals.EnrollmentsChanged()
 	}
-	_, err = s.db.db.ExecWithRetry(`DELETE FROM documents WHERE collection = ? AND json_extract(data, '$.state') IN ('denied', 'expired')
+	_, err = s.db.db.ExecWithRetry(context.Background(), `DELETE FROM documents WHERE collection = ? AND json_extract(data, '$.state') IN ('denied', 'expired')
   AND julianday(json_extract(data, '$.last_transition_at')) < julianday(?)`,
 		platformEnrollmentCollectionName(), timesvc.FormatTimestamp(now.Add(-constants.PlatformEnrollmentCleanupRetention)))
 	if err != nil {
@@ -1016,7 +1029,7 @@ func (s *PlatformEnrollmentService) expireRequest(req *models.PlatformEnrollment
 // loadByToken resolves the opaque token through the indexed token hash.
 func (s *PlatformEnrollmentService) loadByToken(token string) (*models.PlatformEnrollmentRequest, error) {
 	var data []byte
-	err := s.db.db.QueryRowWithRetry(`SELECT json_set(data, '$.id', id, '$.created_at', created_at)
+	err := s.db.db.QueryRowWithRetry(context.Background(), `SELECT json_set(data, '$.id', id, '$.created_at', created_at)
 		FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ? LIMIT 1`,
 		platformEnrollmentCollectionName(), platformEnrollmentTokenHash(token)).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {

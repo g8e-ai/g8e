@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -37,7 +38,7 @@ func (s *KVStoreService) KVGet(key string) (string, bool) {
 	// for a separate lazy-delete goroutine (which risked deadlocks).
 	// Expired entries are cleaned up by RunMaintenance instead.
 	var value string
-	err := s.db.QueryRowWithRetry(
+	err := s.db.QueryRowWithRetry(context.Background(),
 		"SELECT value FROM kv_store WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)",
 		key, timesvc.NowTimestamp(),
 	).Scan(&value)
@@ -60,7 +61,7 @@ func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &exp
 	}
 
-	_, err := s.db.ExecWithRetry(
+	_, err := s.db.ExecWithRetry(context.Background(),
 		`INSERT INTO kv_store (key, value, created_at, expires_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
@@ -84,7 +85,7 @@ func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error 
 		expiresAt = &exp
 	}
 
-	_, err := s.db.ExecWithRetry(
+	_, err := s.db.ExecWithRetry(context.Background(),
 		`INSERT INTO kv_store (key, value, created_at, expires_at, state_tier)
 		 VALUES (?, ?, ?, ?, 'observed')
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, state_tier = 'observed'`,
@@ -95,13 +96,13 @@ func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error 
 
 // KVDelete removes a key.
 func (s *KVStoreService) KVDelete(key string) error {
-	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key = ?", key)
+	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM kv_store WHERE key = ?", key)
 	return err
 }
 
 // KVKeys returns all keys matching a glob pattern.
 func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
-	keys, err := sqliteutil.MaterializeRows(s.db,
+	keys, err := sqliteutil.MaterializeRows(context.Background(), s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
 		[]interface{}{pattern, timesvc.NowTimestamp()},
 		func(r *sql.Rows) (string, error) {
@@ -120,7 +121,7 @@ func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
 // RunMaintenance removes expired KV entries from the database.
 func (s *KVStoreService) RunMaintenance() error {
 	now := timesvc.NowTimestamp()
-	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup expired kv entries: %w", err)
 	}

@@ -335,7 +335,7 @@ func (avs *TestSQLAuditStore) initDatabase() error {
 // migrateReceiptsColumns adds requestor_user_id, acting_app_id, and receipt_json
 // columns to the receipts table for databases created before these columns existed.
 func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
-	cols, err := db.QueryWithRetry("PRAGMA table_info(receipts)")
+	cols, err := db.QueryWithRetry(context.Background(), "PRAGMA table_info(receipts)")
 	if err != nil {
 		return fmt.Errorf("audit_vault: migrate receipts: pragma: %w", err)
 	}
@@ -497,7 +497,7 @@ func (avs *TestSQLAuditStore) CreateSession(id string, sessionType constants.Ses
 	}
 
 	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`
-	_, err := avs.db.ExecWithRetry(query, id, string(sessionType), title, userIdentity)
+	_, err := avs.db.ExecWithRetry(context.Background(), query, id, string(sessionType), title, userIdentity)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateSessionFailed, err)
 	}
@@ -513,7 +513,7 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 	}
 
 	query := `SELECT id, session_type, title, created_at, user_identity FROM sessions WHERE id = ?`
-	row := avs.db.QueryRowWithRetry(query, id)
+	row := avs.db.QueryRowWithRetry(context.Background(), query, id)
 
 	var session storage.OperatorSession
 	var sessionType, title, userIdentity sql.NullString
@@ -642,7 +642,7 @@ func (avs *TestSQLAuditStore) RecordChaosEvent(event *ChaosEvent) (int64, error)
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := avs.db.ExecWithRetry(query,
+	result, err := avs.db.ExecWithRetry(context.Background(), query,
 		event.OperatorSessionID,
 		timesvc.FormatTimestamp(event.Timestamp),
 		event.ChaosID,
@@ -674,7 +674,7 @@ func (avs *TestSQLAuditStore) RecordChaosEvents(events []*ChaosEvent) error {
 		return nil
 	}
 
-	return avs.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	return avs.db.ExecInTxWithRetry(context.Background(), func(tx *sql.Tx) error {
 		query := `
 		INSERT INTO chaos_events (
 			operator_session_id, timestamp, chaos_id, category, outcome,
@@ -908,7 +908,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	var investigationID sql.NullString
 	var sessionID sql.NullString
 	var receiptJSON sql.NullString
-	err := avs.db.QueryRowWithRetry(query, transactionID).Scan(
+	err := avs.db.QueryRowWithRetry(context.Background(), query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
 		&r.RequestorUserID, &r.ActingAppID, &r.EventType,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
@@ -942,7 +942,7 @@ func (avs *TestSQLAuditStore) GetActionReceiptByInvestigationID(
 		return nil, constants.ErrAuditStoreDisabled
 	}
 
-	rows, err := sqliteutil.MaterializeRows(
+	rows, err := sqliteutil.MaterializeRows(context.Background(),
 		avs.db,
 		"SELECT transaction_id FROM receipts WHERE investigation_id = ? AND action_type = ? ORDER BY timestamp DESC LIMIT 2",
 		[]interface{}{investigationID, actionType},
@@ -1004,7 +1004,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 		receiptJSON     sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), avs.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
@@ -1066,7 +1066,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		receiptJSON     sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), avs.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
@@ -1153,7 +1153,7 @@ func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset 
 		encryptedFlag      int
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{operatorSessionID, limit, offset}, func(r *sql.Rows) (eventRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), avs.db, query, []interface{}{operatorSessionID, limit, offset}, func(r *sql.Rows) (eventRow, error) {
 		var row eventRow
 		err := r.Scan(
 			&row.event.ID,
@@ -1248,7 +1248,7 @@ func (avs *TestSQLAuditStore) RecordFileMutation(mutation *storage.FileMutationL
 	) VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := avs.db.ExecWithRetry(query,
+	_, err := avs.db.ExecWithRetry(context.Background(), query,
 		mutation.EventID,
 		mutation.Filepath,
 		string(mutation.Operation),
@@ -1287,7 +1287,7 @@ func (avs *TestSQLAuditStore) GetFileMutations(eventID int64) ([]*storage.FileMu
 		diffStat   sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{eventID}, func(r *sql.Rows) (mutationRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), avs.db, query, []interface{}{eventID}, func(r *sql.Rows) (mutationRow, error) {
 		var row mutationRow
 		err := r.Scan(
 			&row.mutation.ID,
@@ -1365,7 +1365,7 @@ func (avs *TestSQLAuditStore) ListEvents(sessionID string, limit, offset int) ([
 		encryptedFlag      int
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), avs.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
 		var row eventRow
 		err := r.Scan(
 			&row.event.ID, &row.event.OperatorSessionID, &row.timestampStr, &row.event.Type,
@@ -1453,7 +1453,7 @@ func (avs *TestSQLAuditStore) ListFileMutations(limit, offset int) ([]*storage.F
 		diffStat   sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (mutationRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), avs.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (mutationRow, error) {
 		var row mutationRow
 		err := r.Scan(
 			&row.mutation.ID, &row.mutation.EventID, &row.mutation.Filepath, &row.mutation.Operation,
@@ -1507,7 +1507,7 @@ func auditVaultPrune(config *TestSQLAuditStoreConfig) sqliteutil.PruneFunc {
 		cutoff := timesvc.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		// 1. Delete file mutations for old events first (satisfy FK constraints)
-		_, err := db.ExecWithRetry(`
+		_, err := db.ExecWithRetry(ctx, `
 			DELETE FROM file_mutation_log
 			WHERE event_id IN (SELECT id FROM events WHERE timestamp < ?)
 		`, cutoff)
@@ -1523,7 +1523,7 @@ func auditVaultPrune(config *TestSQLAuditStoreConfig) sqliteutil.PruneFunc {
 		}
 
 		// 3. Delete receipts older than retention period
-		result, err := db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
+		result, err := db.ExecWithRetry(ctx, "DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 			return err
@@ -1534,7 +1534,7 @@ func auditVaultPrune(config *TestSQLAuditStoreConfig) sqliteutil.PruneFunc {
 		}
 
 		// 4. Delete sessions that no longer have any events or receipts
-		_, err = db.ExecWithRetry(`
+		_, err = db.ExecWithRetry(ctx, `
 			DELETE FROM sessions
 			WHERE id NOT IN (SELECT DISTINCT operator_session_id FROM events WHERE operator_session_id IS NOT NULL)
 			AND id NOT IN (SELECT DISTINCT operator_session_id FROM receipts WHERE operator_session_id IS NOT NULL)

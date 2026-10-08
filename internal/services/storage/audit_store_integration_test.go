@@ -236,7 +236,7 @@ func TestSQLAuditStore_RecordActionReceiptWithoutSessionAutoCreatesRow(t *testin
 	record.ActionReceipt = nil
 	require.NoError(t, ass.RecordActionReceipt(record))
 
-	_, err = ass.db.ExecWithRetry(`UPDATE receipts SET receipt_json = ? WHERE transaction_id = ?`, body, record.TransactionID)
+	_, err = ass.db.ExecWithRetry(t.Context(), `UPDATE receipts SET receipt_json = ? WHERE transaction_id = ?`, body, record.TransactionID)
 	require.NoError(t, err)
 
 	persisted, err := ass.GetActionReceipt(record.TransactionID)
@@ -273,7 +273,7 @@ func TestSQLAuditStore_VerifyChain_AppendAndTamper(t *testing.T) {
 
 	require.NoError(t, ass.VerifyChain(context.Background(), 0))
 
-	_, err := ass.db.ExecWithRetry(`UPDATE events SET content_digest = ? WHERE seq = 1`, "tampered")
+	_, err := ass.db.ExecWithRetry(t.Context(), `UPDATE events SET content_digest = ? WHERE seq = 1`, "tampered")
 	require.NoError(t, err)
 	err = ass.VerifyChain(context.Background(), 0)
 	require.Error(t, err)
@@ -294,7 +294,7 @@ func TestSQLAuditStore_VerifyChain_BackfillLegacyRows(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, ass.Close()) })
 
 	require.NoError(t, ass.CreateSession("legacy-session", constants.SessionTypeOperator, "Legacy", "user-legacy"))
-	_, err = ass.db.ExecWithRetry(`
+	_, err = ass.db.ExecWithRetry(t.Context(), `
 		INSERT INTO events (operator_session_id, timestamp, type, content_text, command_exit_code, stored_locally)
 		VALUES (?, ?, ?, ?, ?, 1)
 	`, "legacy-session", "2026-01-01T00:00:00.000000Z", string(constants.Event.Operator.Audit.UserMsg), "legacy payload", constants.ExitCodeNone)
@@ -322,11 +322,11 @@ func TestPruneChainedAuditEvents_WritesCheckpoint(t *testing.T) {
 	require.NoError(t, PruneChainedAuditEvents(context.Background(), ass.db, ass.logger, cutoff))
 
 	var checkpointCount int
-	require.NoError(t, ass.db.QueryRowWithRetry(`SELECT COUNT(*) FROM audit_chain_checkpoints`).Scan(&checkpointCount))
+	require.NoError(t, ass.db.QueryRowWithRetry(t.Context(), `SELECT COUNT(*) FROM audit_chain_checkpoints`).Scan(&checkpointCount))
 	assert.Positive(t, checkpointCount)
 
 	var remaining int
-	require.NoError(t, ass.db.QueryRowWithRetry(`SELECT COUNT(*) FROM events WHERE type != ?`, string(constants.EventPlatformAuditChainCheckpointed)).Scan(&remaining))
+	require.NoError(t, ass.db.QueryRowWithRetry(t.Context(), `SELECT COUNT(*) FROM events WHERE type != ?`, string(constants.EventPlatformAuditChainCheckpointed)).Scan(&remaining))
 	assert.Zero(t, remaining)
 
 	require.NoError(t, ass.VerifyChain(context.Background(), 0))
@@ -348,7 +348,7 @@ func TestSQLAuditStore_VerifyChain_PrevHashTamper(t *testing.T) {
 	}
 	require.NoError(t, ass.VerifyChain(context.Background(), 0))
 
-	_, err := ass.db.ExecWithRetry(`UPDATE events SET prev_hash = ? WHERE seq = 2`, auditChainGenesisPrevHash)
+	_, err := ass.db.ExecWithRetry(t.Context(), `UPDATE events SET prev_hash = ? WHERE seq = 2`, auditChainGenesisPrevHash)
 	require.NoError(t, err)
 	err = ass.VerifyChain(context.Background(), 0)
 	require.Error(t, err)
@@ -372,11 +372,11 @@ func TestSQLAuditStore_VerifyChain_SeqReorderTamper(t *testing.T) {
 	require.NoError(t, ass.VerifyChain(context.Background(), 0))
 
 	// Swap seq 1 and 2 while leaving stale prev_hash/hash columns — breaks linkage.
-	_, err := ass.db.ExecWithRetry(`UPDATE events SET seq = 999 WHERE seq = 1`)
+	_, err := ass.db.ExecWithRetry(t.Context(), `UPDATE events SET seq = 999 WHERE seq = 1`)
 	require.NoError(t, err)
-	_, err = ass.db.ExecWithRetry(`UPDATE events SET seq = 1 WHERE seq = 2`)
+	_, err = ass.db.ExecWithRetry(t.Context(), `UPDATE events SET seq = 1 WHERE seq = 2`)
 	require.NoError(t, err)
-	_, err = ass.db.ExecWithRetry(`UPDATE events SET seq = 2 WHERE seq = 999`)
+	_, err = ass.db.ExecWithRetry(t.Context(), `UPDATE events SET seq = 2 WHERE seq = 999`)
 	require.NoError(t, err)
 
 	err = ass.VerifyChain(context.Background(), 0)
@@ -411,7 +411,7 @@ func TestSQLAuditStore_VerifyChain_ConcurrentAppends(t *testing.T) {
 	}
 
 	var count int
-	require.NoError(t, ass.db.QueryRowWithRetry(`SELECT COUNT(*) FROM events WHERE seq IS NOT NULL`).Scan(&count))
+	require.NoError(t, ass.db.QueryRowWithRetry(t.Context(), `SELECT COUNT(*) FROM events WHERE seq IS NOT NULL`).Scan(&count))
 	assert.Equal(t, workers, count)
 	require.NoError(t, ass.VerifyChain(context.Background(), 0))
 }

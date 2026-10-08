@@ -97,7 +97,7 @@ func TestStateRootService_CrashChild(t *testing.T) {
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
 	require.NoError(t, err)
 
-	require.NoError(t, db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	require.NoError(t, db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		for _, stmt := range []string{
 			`INSERT INTO documents (collection, id, data, created_at, updated_at) VALUES ('crash', 'c', '{"v":1}', 'now', 'now')`,
 			`UPDATE documents SET data = '{"v":2}' WHERE collection = 'crash' AND id = 'a'`,
@@ -184,7 +184,7 @@ func TestStateRootService_ConcurrentWritersAndReaders(t *testing.T) {
 				if rng.Intn(4) != 0 {
 					data = sql.NullString{String: fmt.Sprintf(`{"w":%d,"i":%d}`, w, i), Valid: true}
 				}
-				err := db.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+				err := db.db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 					var err error
 					if data.Valid {
 						_, err = tx.Exec(`INSERT INTO documents (collection, id, data, created_at, updated_at)

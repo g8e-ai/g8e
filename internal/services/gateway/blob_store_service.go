@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -54,7 +55,7 @@ func (s *BlobStoreService) BlobPut(namespace, id string, data []byte, contentTyp
 		expiresAt = &exp
 	}
 
-	_, err := s.db.ExecWithRetry(
+	_, err := s.db.ExecWithRetry(context.Background(),
 		`INSERT INTO blobs (namespace, id, size, content_type, data, created_at, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(namespace, id) DO UPDATE SET
@@ -84,7 +85,7 @@ func (s *BlobStoreService) BlobPutObserved(namespace, id string, data []byte, co
 		expiresAt = &exp
 	}
 
-	_, err := s.db.ExecWithRetry(
+	_, err := s.db.ExecWithRetry(context.Background(),
 		`INSERT INTO blobs (namespace, id, size, content_type, data, created_at, expires_at, state_tier)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, 'observed')
 		 ON CONFLICT(namespace, id) DO UPDATE SET
@@ -106,7 +107,7 @@ func (s *BlobStoreService) BlobPutObserved(namespace, id string, data []byte, co
 func (s *BlobStoreService) BlobGet(namespace, id string) ([]byte, string, bool) {
 	var data []byte
 	var contentType string
-	err := s.db.QueryRowWithRetry(
+	err := s.db.QueryRowWithRetry(context.Background(),
 		"SELECT data, content_type FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
 		namespace, id, timesvc.NowTimestamp(),
 	).Scan(&data, &contentType)
@@ -121,7 +122,7 @@ func (s *BlobStoreService) BlobGet(namespace, id string) ([]byte, string, bool) 
 func (s *BlobStoreService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 	var rec BlobRecord
 	var createdAtStr string
-	err := s.db.QueryRowWithRetry(
+	err := s.db.QueryRowWithRetry(context.Background(),
 		"SELECT id, namespace, size, content_type, created_at FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
 		namespace, id, timesvc.NowTimestamp(),
 	).Scan(&rec.ID, &rec.Namespace, &rec.Size, &rec.ContentType, &createdAtStr)
@@ -139,7 +140,7 @@ func (s *BlobStoreService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 
 // BlobDelete removes a single blob. Returns (true, nil) if deleted, (false, nil) if not found.
 func (s *BlobStoreService) BlobDelete(namespace, id string) (bool, error) {
-	result, err := s.db.ExecWithRetry(
+	result, err := s.db.ExecWithRetry(context.Background(),
 		"DELETE FROM blobs WHERE namespace = ? AND id = ?",
 		namespace, id,
 	)
@@ -156,7 +157,7 @@ func (s *BlobStoreService) BlobDelete(namespace, id string) (bool, error) {
 // BlobDeleteNamespace removes all blobs under a namespace.
 // Returns the count of deleted blobs.
 func (s *BlobStoreService) BlobDeleteNamespace(namespace string) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE namespace = ?", namespace)
+	result, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM blobs WHERE namespace = ?", namespace)
 	if err != nil {
 		return 0, fmt.Errorf("blob_store: delete namespace %s: %w", namespace, constants.ErrBlobStoreDeleteFailed)
 	}
@@ -170,7 +171,7 @@ func (s *BlobStoreService) BlobDeleteNamespace(namespace string) (int64, error) 
 // RunMaintenance removes expired blobs from the database.
 func (s *BlobStoreService) RunMaintenance() error {
 	now := timesvc.NowTimestamp()
-	_, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("blob_store: cleanup: %w", constants.ErrBlobStoreCleanupFailed)
 	}

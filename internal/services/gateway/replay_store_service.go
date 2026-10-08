@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -20,7 +21,7 @@ import (
 // replayStoreDB defines the database operations required by ReplayStoreService.
 // This interface enables dependency injection for Tier 1 unit testing.
 type replayStoreDB interface {
-	ExecWithRetry(query string, args ...any) (sql.Result, error)
+	ExecWithRetry(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 // ReplayStoreService provides nonce replay protection for gateway mode.
@@ -43,7 +44,7 @@ func NewReplayStoreService(db *sqliteutil.DB, logger *slog.Logger) *ReplayStoreS
 // replay check: a nonce already present fails the insert.
 func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	expStr := timesvc.FormatTimestamp(expiresAt)
-	_, err := s.db.ExecWithRetry("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
+	_, err := s.db.ExecWithRetry(context.Background(), "INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
 	if err != nil {
 		if sqliteutil.IsUniqueConstraintError(err) {
 			return true, nil
@@ -55,7 +56,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 
 // FinalizeNonce marks a reserved nonce as fully consumed.
 func (s *ReplayStoreService) FinalizeNonce(nonce string) error {
-	_, err := s.db.ExecWithRetry("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
+	_, err := s.db.ExecWithRetry(context.Background(), "UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
 		return fmt.Errorf("finalize nonce: %w", err)
 	}
@@ -64,7 +65,7 @@ func (s *ReplayStoreService) FinalizeNonce(nonce string) error {
 
 // ReleaseNonce removes a reservation for a failed transaction.
 func (s *ReplayStoreService) ReleaseNonce(nonce string) error {
-	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
+	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
 		return fmt.Errorf("release nonce: %w", err)
 	}
@@ -79,7 +80,7 @@ func (s *ReplayStoreService) Close() error {
 // CleanupExpiredNonces removes expired nonces from the database.
 func (s *ReplayStoreService) CleanupExpiredNonces() error {
 	now := timesvc.NowTimestamp()
-	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
+	_, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM nonces WHERE expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("cleanup expired nonces: %w", err)
 	}

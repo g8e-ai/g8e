@@ -38,7 +38,7 @@ const operatorLeaseIdentityQuery = `SELECT id, data, created_at, updated_at FROM
 // only matching rows are decoded. Liveness reads keep their existing owner.
 func (s *DocumentStoreService) FindOperatorLeases(ownerID, systemFingerprint string) ([]*models.Document, error) {
 	collection := marshaler.CollectionName(constants.CollectionOperators)
-	docs, err := sqliteutil.MaterializeRows(s.db, operatorLeaseIdentityQuery,
+	docs, err := sqliteutil.MaterializeRows(context.Background(), s.db, operatorLeaseIdentityQuery,
 		[]interface{}{collection, ownerID, systemFingerprint, constants.OperatorTypeRemote, constants.OperatorStatusTerminated},
 		func(row *sql.Rows) (*models.Document, error) {
 			var id, data, createdAt, updatedAt string

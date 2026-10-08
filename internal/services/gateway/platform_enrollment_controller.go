@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 )
 
 // PlatformEnrollmentController handles the owner-approved platform
@@ -440,6 +442,8 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 		return
 	}
 	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded), sqliteutil.IsBusyError(err):
+		c.responder.Error(w, http.StatusServiceUnavailable, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentRequiresBootstrap):
 		c.responder.Error(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidComponent):

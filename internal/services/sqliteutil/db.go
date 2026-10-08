@@ -16,7 +16,8 @@ import (
 	"net/url"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
@@ -183,21 +184,28 @@ func (db *DB) HealthCheck(ctx context.Context) error {
 
 // ExecWithRetry executes a SQL statement with automatic retry on SQLITE_BUSY.
 // This is useful for high-concurrency scenarios where WAL mode may still encounter transient locks.
-func (db *DB) ExecWithRetry(query string, args ...interface{}) (sql.Result, error) {
+func (db *DB) ExecWithRetry(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	var result sql.Result
 	var err error
 
 	maxRetries := db.config.MaxRetries
 	for i := 0; i < maxRetries; i++ {
-		result, err = db.Exec(query, args...)
+		result, err = db.ExecContext(ctx, query, args...)
 		if err == nil {
 			return result, nil
 		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 
 		// Check if it's a busy error
-		if isBusyError(err) {
+		if IsBusyError(err) {
 			db.logger.Debug("Database busy, retrying", "attempt", i+1, "max_retries", maxRetries)
-			db.backoff(i)
+			if i+1 < maxRetries {
+				if err := db.backoff(ctx, i); err != nil {
+					return nil, err
+				}
+			}
 			continue
 		}
 
@@ -205,50 +213,62 @@ func (db *DB) ExecWithRetry(query string, args ...interface{}) (sql.Result, erro
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("sqliteutil: exec failed after %d retries: %w", maxRetries, err)
+	return nil, fmt.Errorf("sqliteutil: exec failed after %d attempts: %w", maxRetries, errors.Join(constants.ErrSQLiteBusy, err))
 }
 
 // QueryWithRetry executes a query with automatic retry on SQLITE_BUSY.
-func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, error) {
+func (db *DB) QueryWithRetry(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	var rows *sql.Rows
 	var err error
 
 	maxRetries := db.config.MaxRetries
 	for i := 0; i < maxRetries; i++ {
-		rows, err = db.Query(query, args...)
+		rows, err = db.QueryContext(ctx, query, args...)
 		if err == nil {
 			return rows, nil
 		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 
-		if isBusyError(err) {
+		if IsBusyError(err) {
 			db.logger.Debug("Database busy, retrying query", "attempt", i+1, "max_retries", maxRetries)
-			db.backoff(i)
+			if i+1 < maxRetries {
+				if err := db.backoff(ctx, i); err != nil {
+					return nil, err
+				}
+			}
 			continue
 		}
 
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("sqliteutil: query failed after %d retries: %w", maxRetries, err)
+	return nil, fmt.Errorf("sqliteutil: query failed after %d attempts: %w", maxRetries, errors.Join(constants.ErrSQLiteBusy, err))
 }
 
 // QueryRowWithRetry executes a query that returns a single row with automatic retry on SQLITE_BUSY.
 // Returns the row, which will yield the error on .Scan() or .Err() if all retries fail.
-func (db *DB) QueryRowWithRetry(query string, args ...interface{}) *sql.Row {
+func (db *DB) QueryRowWithRetry(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	maxRetries := db.config.MaxRetries
 	var lastRow *sql.Row
 
 	for i := 0; i < maxRetries; i++ {
-		row := db.QueryRow(query, args...)
+		row := db.QueryRowContext(ctx, query, args...)
 		err := row.Err()
 		if err == nil {
 			return row
 		}
 
 		lastRow = row
-		if isBusyError(err) {
+		if IsBusyError(err) {
 			db.logger.Debug("Database busy, retrying query row", "attempt", i+1, "max_retries", maxRetries)
-			db.backoff(i)
+			if i+1 < maxRetries {
+				if err := db.backoff(ctx, i); err != nil {
+					// QueryRowContext carries the canceled context's error to Scan.
+					return db.QueryRowContext(ctx, query, args...)
+				}
+			}
 			continue
 		}
 
@@ -260,13 +280,13 @@ func (db *DB) QueryRowWithRetry(query string, args ...interface{}) *sql.Row {
 	return lastRow
 }
 
-// isBusyError checks if an error is a SQLITE_BUSY error.
-func isBusyError(err error) bool {
-	if err == nil {
-		return false
+// IsBusyError checks if an error is a SQLITE_BUSY error.
+func IsBusyError(err error) bool {
+	if errors.Is(err, constants.ErrSQLiteBusy) {
+		return true
 	}
-	errStr := err.Error()
-	return contains(errStr, "database is locked") || contains(errStr, "SQLITE_BUSY")
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqlite3.SQLITE_BUSY
 }
 
 // IsUniqueConstraintError checks if an error is a UNIQUE constraint violation.
@@ -282,7 +302,7 @@ func IsUniqueConstraintError(err error) bool {
 
 // backoff implements exponential backoff with jitter to avoid thundering herd.
 // Delay = baseDelay * 2^attempt + random jitter (0-25% of delay)
-func (db *DB) backoff(attempt int) {
+func (db *DB) backoff(ctx context.Context, attempt int) error {
 	baseDelay := time.Duration(db.config.RetryBaseDelayMs) * time.Millisecond
 	// #nosec G115 -- attempt is bounded by retry logic (max 10 attempts)
 	exponentialDelay := baseDelay * (1 << uint(attempt))
@@ -290,7 +310,14 @@ func (db *DB) backoff(attempt int) {
 	// Add jitter: 0-25% of the delay to spread out retry attempts
 	jitter := time.Duration(float64(exponentialDelay) * 0.25 * (float64(time.Now().UnixNano()%1000) / 1000.0))
 
-	time.Sleep(exponentialDelay + jitter)
+	timer := time.NewTimer(exponentialDelay + jitter)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // contains is a simple string contains helper to avoid importing strings.
@@ -312,16 +339,20 @@ func findSubstring(s, substr string) bool {
 // The function receives the transaction and should return an error if the transaction should be rolled back.
 // If the function returns nil, the transaction is committed.
 // This handles SQLITE_BUSY errors at both the Begin() and Commit() stages.
-func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
+func (db *DB) ExecInTxWithRetry(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	maxRetries := db.config.MaxRetries
 	var lastErr error
 
 	for i := 0; i < maxRetries; i++ {
-		tx, err := db.Begin()
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
-			if isBusyError(err) {
+			if IsBusyError(err) {
 				db.logger.Debug("Database busy, retrying transaction begin", "attempt", i+1, "max_retries", maxRetries)
-				db.backoff(i)
+				if i+1 < maxRetries {
+					if err := db.backoff(ctx, i); err != nil {
+						return err
+					}
+				}
 				lastErr = err
 				continue
 			}
@@ -330,12 +361,19 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 
 		err = fn(tx)
 		if err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
 				err = errors.Join(err, fmt.Errorf("sqliteutil: rollback transaction: %w", rollbackErr))
 			}
-			if isBusyError(err) {
+			if ctx.Err() != nil {
+				return errors.Join(ctx.Err(), err)
+			}
+			if IsBusyError(err) {
 				db.logger.Debug("Database busy during transaction, retrying", "attempt", i+1, "max_retries", maxRetries)
-				db.backoff(i)
+				if i+1 < maxRetries {
+					if err := db.backoff(ctx, i); err != nil {
+						return err
+					}
+				}
 				lastErr = err
 				continue
 			}
@@ -343,9 +381,16 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 		}
 
 		if err := tx.Commit(); err != nil {
-			if isBusyError(err) {
+			if ctx.Err() != nil {
+				return errors.Join(ctx.Err(), err)
+			}
+			if IsBusyError(err) {
 				db.logger.Debug("Database busy during commit, retrying", "attempt", i+1, "max_retries", maxRetries)
-				db.backoff(i)
+				if i+1 < maxRetries {
+					if err := db.backoff(ctx, i); err != nil {
+						return err
+					}
+				}
 				lastErr = err
 				continue
 			}
@@ -355,15 +400,30 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 		return nil
 	}
 
-	return fmt.Errorf("sqliteutil: transaction failed after %d retries: %w", maxRetries, lastErr)
+	return fmt.Errorf("sqliteutil: transaction failed after %d attempts: %w", maxRetries, errors.Join(constants.ErrSQLiteBusy, lastErr))
 }
 
 // ExecInImmediateTxWithRetry executes a SQLite BEGIN IMMEDIATE transaction on one connection and retries SQLITE_BUSY failures.
 func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn) error) error {
 	var lastErr error
 	for i := 0; i < db.config.MaxRetries; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		conn, err := db.Conn(ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				return errors.Join(ctx.Err(), err)
+			}
+			if IsBusyError(err) {
+				lastErr = err
+				if i+1 < db.config.MaxRetries {
+					if err := db.backoff(ctx, i); err != nil {
+						return err
+					}
+				}
+				continue
+			}
 			return fmt.Errorf("sqliteutil: acquire transaction connection: %w", err)
 		}
 		if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
@@ -371,8 +431,15 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			if closeErr != nil {
 				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
 			}
-			if isBusyError(err) {
-				db.backoff(i)
+			if ctx.Err() != nil {
+				return errors.Join(ctx.Err(), err)
+			}
+			if IsBusyError(err) {
+				if i+1 < db.config.MaxRetries {
+					if err := db.backoff(ctx, i); err != nil {
+						return err
+					}
+				}
 				lastErr = err
 				continue
 			}
@@ -391,8 +458,15 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			if closeErr != nil {
 				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
 			}
-			if isBusyError(err) {
-				db.backoff(i)
+			if ctx.Err() != nil {
+				return errors.Join(ctx.Err(), err)
+			}
+			if IsBusyError(err) {
+				if i+1 < db.config.MaxRetries {
+					if err := db.backoff(ctx, i); err != nil {
+						return err
+					}
+				}
 				lastErr = err
 				continue
 			}
@@ -417,21 +491,28 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 		if err == nil {
 			return nil
 		}
-		if isBusyError(err) {
-			db.backoff(i)
+		if ctx.Err() != nil {
+			return errors.Join(ctx.Err(), err)
+		}
+		if IsBusyError(err) {
+			if i+1 < db.config.MaxRetries {
+				if err := db.backoff(ctx, i); err != nil {
+					return err
+				}
+			}
 			lastErr = err
 			continue
 		}
 		return fmt.Errorf("sqliteutil: commit immediate transaction: %w", err)
 	}
-	return fmt.Errorf("sqliteutil: immediate transaction failed after %d retries: %w", db.config.MaxRetries, lastErr)
+	return fmt.Errorf("sqliteutil: immediate transaction failed after %d attempts: %w", db.config.MaxRetries, errors.Join(constants.ErrSQLiteBusy, lastErr))
 }
 
 // MaterializeRows executes a query and immediately materializes all rows into memory,
 // closing the cursor before returning. This prevents long-held cursor locks that can
 // block WAL checkpoints and write transactions. The scan function is called for each row.
-func MaterializeRows[T any](db *DB, query string, args []interface{}, scan func(*sql.Rows) (T, error)) ([]T, error) {
-	rows, err := db.QueryWithRetry(query, args...)
+func MaterializeRows[T any](ctx context.Context, db *DB, query string, args []interface{}, scan func(*sql.Rows) (T, error)) ([]T, error) {
+	rows, err := db.QueryWithRetry(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

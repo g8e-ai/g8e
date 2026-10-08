@@ -73,7 +73,7 @@ func (m *SecretManager) GetKeystore() *keystore.Keystore {
 // InitAppSettings creates secrets on first boot and validates them on later boots.
 func (m *SecretManager) InitAppSettings() error {
 	var exists bool
-	err := m.db.QueryRowWithRetry(
+	err := m.db.QueryRowWithRetry(context.Background(),
 		"SELECT EXISTS(SELECT 1 FROM documents WHERE collection = 'settings' AND id = 'platform_settings')",
 	).Scan(&exists)
 	if err != nil {
@@ -101,7 +101,7 @@ func (m *SecretManager) InitAppSettings() error {
 
 func (m *SecretManager) cleanupStaleAppSettings() error {
 	var dataJSON string
-	err := m.db.QueryRowWithRetry(
+	err := m.db.QueryRowWithRetry(context.Background(),
 		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
 	).Scan(&dataJSON)
 	if err != nil {
@@ -138,7 +138,7 @@ func (m *SecretManager) cleanupStaleAppSettings() error {
 		return fmt.Errorf("secret_manager: cleanup stale app settings: marshal: %w", err)
 	}
 
-	_, err = m.db.ExecWithRetry(
+	_, err = m.db.ExecWithRetry(context.Background(),
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = 'settings' AND id = 'platform_settings'",
 		string(newData), timesvc.NowTimestamp(),
 	)
@@ -152,7 +152,7 @@ func (m *SecretManager) recreateAppSettings() error {
 	m.logger.Info("[SecretManager] Recreating app settings due to corrupted state")
 
 	// Delete existing platform_settings document from database
-	_, err := m.db.ExecWithRetry(
+	_, err := m.db.ExecWithRetry(context.Background(),
 		"DELETE FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
 	)
 	if err != nil {
@@ -290,7 +290,7 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	}
 
 	nowStr := timesvc.FormatTimestamp(now)
-	_, err = m.db.ExecWithRetry(
+	_, err = m.db.ExecWithRetry(context.Background(),
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		"settings", "platform_settings", string(dataJSON), nowStr, nowStr,
@@ -496,7 +496,7 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 	priv := ed25519.NewKeyFromSeed(seed)
 
 	var dataJSON string
-	if err := m.db.QueryRowWithRetry(
+	if err := m.db.QueryRowWithRetry(context.Background(),
 		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
 	).Scan(&dataJSON); err != nil {
 		return nil, "", fmt.Errorf("secret_manager: get actuator key: query: %w", err)

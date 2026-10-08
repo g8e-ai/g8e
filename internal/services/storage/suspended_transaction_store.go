@@ -133,7 +133,7 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 }
 
 func migrateSubmitterCLISessionColumn(db *sqliteutil.DB) error {
-	columns, err := sqliteutil.MaterializeRows(db, "PRAGMA table_info(suspended_transactions)", nil, func(rows *sql.Rows) (string, error) {
+	columns, err := sqliteutil.MaterializeRows(context.Background(), db, "PRAGMA table_info(suspended_transactions)", nil, func(rows *sql.Rows) (string, error) {
 		var cid int
 		var name, columnType string
 		var notNull, primaryKey int
@@ -151,7 +151,7 @@ func migrateSubmitterCLISessionColumn(db *sqliteutil.DB) error {
 			return nil
 		}
 	}
-	if _, err := db.ExecWithRetry("ALTER TABLE suspended_transactions ADD COLUMN submitter_cli_session_id TEXT"); err != nil {
+	if _, err := db.ExecWithRetry(context.Background(), "ALTER TABLE suspended_transactions ADD COLUMN submitter_cli_session_id TEXT"); err != nil {
 		return fmt.Errorf("add submitter CLI session column: %w", err)
 	}
 	return nil
@@ -217,7 +217,7 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 		approvedAtStr = &ts
 	}
 
-	_, err := sts.db.ExecWithRetry(
+	_, err := sts.db.ExecWithRetry(ctx,
 		query,
 		tx.TransactionHash,
 		string(tx.Envelope),
@@ -254,7 +254,7 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, submitterCLISessionID, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey, passkeyCredentialID, passkeyClientDataJSON, passkeyAuthenticatorData, passkeySignature sql.NullString
 	var approved int
 	var approvedAtStr sql.NullString
-	err := sts.db.QueryRowWithRetry(
+	err := sts.db.QueryRowWithRetry(ctx,
 		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, submitter_cli_session_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, timesvc.NowTimestamp(),
 	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &submitterCLISessionID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint, &approvalPublicKey, &passkeyCredentialID, &passkeyClientDataJSON, &passkeyAuthenticatorData, &passkeySignature)
@@ -343,7 +343,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 		passkeySignature         sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(sts.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ctx, sts.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
 		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.submitterCLISessionID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
 		return row, err
@@ -406,7 +406,7 @@ func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.
 	now := time.Now().UTC()
 	nowStr := timesvc.FormatTimestamp(now)
 
-	result, err := sts.db.ExecWithRetry(
+	result, err := sts.db.ExecWithRetry(ctx,
 		`UPDATE suspended_transactions 
 		 SET approved = 1, approved_at = ?, approved_by = ?, approval_signature = ?, expected_cert_fingerprint = ?, approval_public_key = ?,
 		     passkey_credential_id = ?, passkey_client_data_json = ?, passkey_authenticator_data = ?, passkey_signature = ?
@@ -436,7 +436,7 @@ func (sts *SuspendedTransactionService) DeleteSuspendedTransaction(ctx context.C
 	if sts == nil || sts.db == nil {
 		return fmt.Errorf("suspended_transaction_store: delete transaction: store not initialized")
 	}
-	_, err := sts.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
+	_, err := sts.db.ExecWithRetry(ctx, "DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
 	if err != nil {
 		return fmt.Errorf("suspended_transaction_store: delete transaction: %w", err)
 	}
@@ -449,7 +449,7 @@ func (sts *SuspendedTransactionService) CleanupExpiredSuspendedTransactions(ctx 
 	if sts == nil || sts.db == nil {
 		return 0, fmt.Errorf("suspended_transaction_store: cleanup expired: store not initialized")
 	}
-	result, err := sts.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", timesvc.NowTimestamp())
+	result, err := sts.db.ExecWithRetry(ctx, "DELETE FROM suspended_transactions WHERE expires_at < ?", timesvc.NowTimestamp())
 	if err != nil {
 		return 0, fmt.Errorf("suspended_transaction_store: cleanup expired: %w", err)
 	}
@@ -487,7 +487,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		passkeySignature         sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{timesvc.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ctx, sts.db, query, []interface{}{timesvc.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
 		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.submitterCLISessionID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
 		return row, err
@@ -541,7 +541,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 // suspendedTransactionPrune returns a PruneFunc for retention and size-based pruning.
 func suspendedTransactionPrune(config *SuspendedTransactionConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
-		result, err := db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", timesvc.NowTimestamp())
+		result, err := db.ExecWithRetry(ctx, "DELETE FROM suspended_transactions WHERE expires_at < ?", timesvc.NowTimestamp())
 		if err != nil {
 			logger.Error("Failed to prune expired suspended transactions", "error", err)
 			return err
@@ -558,7 +558,7 @@ func suspendedTransactionPrune(config *SuspendedTransactionConfig) sqliteutil.Pr
 		maxSizeBytes := config.MaxDBSizeMB * 1024 * 1024
 
 		if err == nil && dbSizeBytes > maxSizeBytes {
-			_, err := db.ExecWithRetry(`
+			_, err := db.ExecWithRetry(ctx, `
 				DELETE FROM suspended_transactions
 				WHERE transaction_hash IN (
 					SELECT transaction_hash FROM suspended_transactions

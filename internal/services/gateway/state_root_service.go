@@ -156,7 +156,7 @@ func (s *StateRootService) GetObservedStateRoot() (string, error) {
 func (s *StateRootService) committedTreeRoot(tier string) ([]byte, error) {
 	var dirty bool
 	var digest []byte
-	err := s.db.QueryRowWithRetry(
+	err := s.db.QueryRowWithRetry(context.Background(),
 		`SELECT EXISTS(SELECT 1 FROM state_commitment_dirty),
 		        (SELECT digest FROM state_nodes WHERE tier = ? AND level = 0 AND idx = 0)`,
 		tier,
@@ -221,7 +221,7 @@ func (s *StateRootService) RebuildCommitment(ctx context.Context) error {
 // zero when none has been built.
 func (s *StateRootService) CommitmentAlgorithm() (int, error) {
 	var algorithm int
-	err := s.db.QueryRowWithRetry("SELECT algorithm FROM state_commitment WHERE id = 1").Scan(&algorithm)
+	err := s.db.QueryRowWithRetry(context.Background(), "SELECT algorithm FROM state_commitment WHERE id = 1").Scan(&algorithm)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}

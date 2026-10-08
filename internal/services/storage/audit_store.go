@@ -257,7 +257,7 @@ func (ass *SQLAuditStore) initDatabase() error {
 // existing databases need an ALTER TABLE. SQLite does not support ADD COLUMN
 // IF NOT EXISTS, so we check pragma table_info first.
 func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
-	cols, err := db.QueryWithRetry("PRAGMA table_info(receipts)")
+	cols, err := db.QueryWithRetry(context.Background(), "PRAGMA table_info(receipts)")
 	if err != nil {
 		return fmt.Errorf("audit_store: migrate receipts: pragma: %w", err)
 	}
@@ -294,7 +294,7 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 }
 
 func migrateCommitmentColumns(db *sqliteutil.DB, logger *slog.Logger) error {
-	cols, err := db.QueryWithRetry("PRAGMA table_info(commitment_ledger)")
+	cols, err := db.QueryWithRetry(context.Background(), "PRAGMA table_info(commitment_ledger)")
 	if err != nil {
 		return fmt.Errorf("audit_store: migrate commitments: pragma: %w", err)
 	}
@@ -437,7 +437,7 @@ func (ass *SQLAuditStore) CreateSession(id string, sessionType constants.Session
 	}
 
 	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`
-	_, err := ass.db.ExecWithRetry(query, id, string(sessionType), title, userIdentity)
+	_, err := ass.db.ExecWithRetry(context.Background(), query, id, string(sessionType), title, userIdentity)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateSessionFailed, err)
 	}
@@ -453,7 +453,7 @@ func (ass *SQLAuditStore) GetOperatorSession(id string) (*OperatorSession, error
 	}
 
 	query := `SELECT id, session_type, title, created_at, user_identity FROM sessions WHERE id = ?`
-	row := ass.db.QueryRowWithRetry(query, id)
+	row := ass.db.QueryRowWithRetry(context.Background(), query, id)
 
 	var session OperatorSession
 	var sessionType, title, userIdentity sql.NullString
@@ -862,14 +862,14 @@ func (ass *SQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models
 }
 
 // GetAuditChainHead returns the latest chained audit event sequence and hash.
-func (ass *SQLAuditStore) GetAuditChainHead(_ context.Context) (int64, string, error) {
+func (ass *SQLAuditStore) GetAuditChainHead(ctx context.Context) (int64, string, error) {
 	if ass == nil || ass.db == nil {
 		return 0, "", constants.ErrAuditStoreDisabled
 	}
 
 	var headSeq int64
 	var headHash string
-	err := ass.db.QueryRowWithRetry(`
+	err := ass.db.QueryRowWithRetry(ctx, `
 		SELECT seq, hash FROM events WHERE seq IS NOT NULL ORDER BY seq DESC LIMIT 1
 	`).Scan(&headSeq, &headHash)
 	if err == sql.ErrNoRows {
@@ -938,7 +938,7 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	var investigationID sql.NullString
 	var sessionID sql.NullString
 	var receiptJSON sql.NullString
-	err := ass.db.QueryRowWithRetry(query, transactionID).Scan(
+	err := ass.db.QueryRowWithRetry(context.Background(), query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
 		&r.RequestorUserID, &r.ActingAppID, &r.EventType,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
@@ -972,7 +972,7 @@ func (ass *SQLAuditStore) GetActionReceiptByInvestigationID(
 		return nil, constants.ErrAuditStoreDisabled
 	}
 
-	rows, err := sqliteutil.MaterializeRows(
+	rows, err := sqliteutil.MaterializeRows(context.Background(),
 		ass.db,
 		"SELECT transaction_id FROM receipts WHERE investigation_id = ? AND action_type = ? ORDER BY timestamp DESC LIMIT 2",
 		[]interface{}{investigationID, actionType},
@@ -1042,7 +1042,7 @@ func (ass *SQLAuditStore) ListActionReceipts(scope models.AuditScope, limit, off
 		receiptJSON     sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
@@ -1104,7 +1104,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 		receiptJSON     sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
@@ -1206,7 +1206,7 @@ func (ass *SQLAuditStore) GetEvents(scope models.AuditScope, limit, offset int) 
 		encryptedFlag      int
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query, args, func(r *sql.Rows) (eventRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query, args, func(r *sql.Rows) (eventRow, error) {
 		var row eventRow
 		err := r.Scan(
 			&row.event.ID,
@@ -1303,7 +1303,7 @@ func (ass *SQLAuditStore) RecordFileMutation(mutation *FileMutationLog) error {
 	) VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := ass.db.ExecWithRetry(query,
+	_, err := ass.db.ExecWithRetry(context.Background(), query,
 		mutation.EventID,
 		mutation.Filepath,
 		string(mutation.Operation),
@@ -1342,7 +1342,7 @@ func (ass *SQLAuditStore) GetFileMutations(eventID int64) ([]*FileMutationLog, e
 		diffStat   sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{eventID}, func(r *sql.Rows) (mutationRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query, []interface{}{eventID}, func(r *sql.Rows) (mutationRow, error) {
 		var row mutationRow
 		err := r.Scan(
 			&row.mutation.ID,
@@ -1402,7 +1402,7 @@ func (ass *SQLAuditStore) ListSessions(limit, offset int) ([]*OperatorSession, e
 		createdAtStr string
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (sessionRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (sessionRow, error) {
 		var row sessionRow
 		err := r.Scan(&row.session.ID, &row.title, &row.sessionType, &row.createdAtStr, &row.userIdentity)
 		return row, err
@@ -1472,7 +1472,7 @@ func (ass *SQLAuditStore) ListEvents(sessionID string, limit, offset int) ([]*Ev
 		encryptedFlag      int
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
 		var row eventRow
 		err := r.Scan(
 			&row.event.ID, &row.sessionID, &row.timestampStr, &row.event.Type,
@@ -1561,7 +1561,7 @@ func (ass *SQLAuditStore) ListFileMutations(limit, offset int) ([]*FileMutationL
 		diffStat   sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (mutationRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), ass.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (mutationRow, error) {
 		var row mutationRow
 		err := r.Scan(
 			&row.mutation.ID, &row.mutation.EventID, &row.mutation.Filepath, &row.mutation.Operation,
@@ -1597,7 +1597,7 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 		cutoff := timesvc.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		// 1. Delete file mutations for old events first (satisfy FK constraints)
-		_, err := db.ExecWithRetry(`
+		_, err := db.ExecWithRetry(ctx, `
 			DELETE FROM file_mutation_log
 			WHERE event_id IN (SELECT id FROM events WHERE timestamp < ?)
 		`, cutoff)
@@ -1613,7 +1613,7 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 		}
 
 		// 3. Delete receipts older than retention period
-		result, err := db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
+		result, err := db.ExecWithRetry(ctx, "DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 			return err
@@ -1624,7 +1624,7 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 		}
 
 		// 4. Delete sessions that no longer have any events or receipts
-		_, err = db.ExecWithRetry(`
+		_, err = db.ExecWithRetry(ctx, `
 			DELETE FROM sessions
 			WHERE id NOT IN (SELECT DISTINCT operator_session_id FROM events WHERE operator_session_id IS NOT NULL)
 			AND id NOT IN (SELECT DISTINCT operator_session_id FROM receipts WHERE operator_session_id IS NOT NULL)

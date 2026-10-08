@@ -512,6 +512,7 @@ var (
 	ErrSQLiteValidateInvalidPattern  = errors.New("invalid identifier pattern")
 
 	// SQLite utility errors
+	ErrSQLiteBusy        = errors.New("SQLite database is busy")
 	ErrSQLitePruneFailed = errors.New("prune function failed")
 
 	// SQLite compression errors

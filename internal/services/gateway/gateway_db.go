@@ -295,7 +295,7 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 }
 
 func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) error {
-	_, err := s.db.ExecWithRetry(gatewaySchema)
+	_, err := s.db.ExecWithRetry(context.Background(), gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init schema: %w", err)
 	}

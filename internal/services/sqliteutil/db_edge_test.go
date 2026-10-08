@@ -54,7 +54,7 @@ func TestDB_Backoff_DoesNotPanic(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	start := time.Now()
-	db.backoff(0)
+	require.NoError(t, db.backoff(t.Context(), 0))
 	elapsed := time.Since(start)
 	assert.Less(t, elapsed, 100*time.Millisecond, "backoff(0) with 1ms base should be fast")
 }
@@ -71,7 +71,7 @@ func TestDB_Backoff_HighAttempt(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	start := time.Now()
-	db.backoff(3)
+	require.NoError(t, db.backoff(t.Context(), 3))
 	elapsed := time.Since(start)
 	assert.Less(t, elapsed, 500*time.Millisecond, "backoff(3) with 1ms base should complete quickly")
 }
@@ -89,7 +89,7 @@ func TestExecInTxWithRetry_Success(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test_tx (id INTEGER PRIMARY KEY, val TEXT)")
 	require.NoError(t, err)
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO test_tx (val) VALUES (?)", "hello")
 		return err
 	})
@@ -114,7 +114,7 @@ func TestExecInTxWithRetry_FnErrorRollsBack(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test_tx2 (id INTEGER PRIMARY KEY, val TEXT)")
 	require.NoError(t, err)
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		_, _ = tx.Exec("INSERT INTO test_tx2 (val) VALUES (?)", "will-rollback")
 		return fmt.Errorf("intentional error")
 	})
@@ -137,7 +137,7 @@ func TestExecInTxWithRetry_ClosedDB(t *testing.T) {
 	require.NoError(t, err)
 	db.Close()
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		return nil
 	})
 	require.Error(t, err)

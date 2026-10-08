@@ -8,6 +8,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -93,7 +94,7 @@ func (rs *SQLReplayStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_nonce_status ON nonce_usage(status);
 	`
 
-	_, err := rs.db.ExecWithRetry(query)
+	_, err := rs.db.ExecWithRetry(context.Background(), query)
 	if err != nil {
 		return fmt.Errorf("failed to create nonce_usage table: %w", err)
 	}
@@ -126,7 +127,7 @@ func (rs *SQLReplayStore) ListNonces(limit, offset int) ([]*NonceRow, error) {
 		status        string
 	}
 
-	rows, err := sqliteutil.MaterializeRows(rs.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (nonceRowRaw, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), rs.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (nonceRowRaw, error) {
 		var row nonceRowRaw
 		err := r.Scan(&row.nonce, &row.reservedAtStr, &row.usedAtStr, &row.expiresAtStr, &row.status)
 		return row, err
@@ -170,7 +171,7 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 	reservedAt := timesvc.FormatTimestamp(time.Now().UTC())
 	expiresAtStr := timesvc.FormatTimestamp(expiresAt.UTC())
 
-	_, err := rs.db.ExecWithRetry(
+	_, err := rs.db.ExecWithRetry(context.Background(),
 		"INSERT INTO nonce_usage (nonce, reserved_at, expires_at, status) VALUES (?, ?, ?, 'reserved')",
 		nonce, reservedAt, expiresAtStr,
 	)
@@ -182,7 +183,7 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 			containsString(errStr, "constraint failed") {
 			// Replay detected - fetch existing status for logging
 			var existingStatus string
-			_ = rs.db.QueryRowWithRetry("SELECT status FROM nonce_usage WHERE nonce = ?", nonce).Scan(&existingStatus)
+			_ = rs.db.QueryRowWithRetry(context.Background(), "SELECT status FROM nonce_usage WHERE nonce = ?", nonce).Scan(&existingStatus)
 			rs.logger.Warn("Nonce replay detected (atomic constraint)", "nonce", nonce, "status", existingStatus)
 			return true, nil
 		}
@@ -200,7 +201,7 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 func (rs *SQLReplayStore) FinalizeNonce(nonce string) error {
 	usedAt := timesvc.FormatTimestamp(time.Now().UTC())
 
-	result, err := rs.db.ExecWithRetry(
+	result, err := rs.db.ExecWithRetry(context.Background(),
 		"UPDATE nonce_usage SET used_at = ?, status = 'used' WHERE nonce = ? AND status = 'reserved'",
 		usedAt, nonce,
 	)
@@ -222,7 +223,7 @@ func (rs *SQLReplayStore) FinalizeNonce(nonce string) error {
 
 // ReleaseNonce removes a reservation for a failed transaction.
 func (rs *SQLReplayStore) ReleaseNonce(nonce string) error {
-	result, err := rs.db.ExecWithRetry(
+	result, err := rs.db.ExecWithRetry(context.Background(),
 		"DELETE FROM nonce_usage WHERE nonce = ? AND status = 'reserved'",
 		nonce,
 	)
@@ -247,7 +248,7 @@ func (rs *SQLReplayStore) ReleaseNonce(nonce string) error {
 // cleanupExpiredNonces removes nonces that have expired.
 func (rs *SQLReplayStore) cleanupExpiredNonces() error {
 	now := timesvc.FormatTimestamp(time.Now().UTC())
-	_, err := rs.db.ExecWithRetry("DELETE FROM nonce_usage WHERE expires_at < ?", now)
+	_, err := rs.db.ExecWithRetry(context.Background(), "DELETE FROM nonce_usage WHERE expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("failed to delete expired nonces: %w", err)
 	}
@@ -260,7 +261,7 @@ func (rs *SQLReplayStore) CleanupStaleReserved(maxReservedDuration time.Duration
 	cutoff := time.Now().UTC().Add(-maxReservedDuration)
 	cutoffStr := timesvc.FormatTimestamp(cutoff)
 
-	_, err := rs.db.ExecWithRetry(
+	_, err := rs.db.ExecWithRetry(context.Background(),
 		"DELETE FROM nonce_usage WHERE status = 'reserved' AND reserved_at < ?",
 		cutoffStr,
 	)
@@ -275,7 +276,7 @@ func (rs *SQLReplayStore) Prune(retentionDays int) error {
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 	cutoffStr := timesvc.FormatTimestamp(cutoff)
 
-	_, err := rs.db.ExecWithRetry("DELETE FROM nonce_usage WHERE used_at < ?", cutoffStr)
+	_, err := rs.db.ExecWithRetry(context.Background(), "DELETE FROM nonce_usage WHERE used_at < ?", cutoffStr)
 	if err != nil {
 		return fmt.Errorf("failed to prune nonce_usage: %w", err)
 	}

@@ -233,7 +233,8 @@ func (ev *ExecutionVaultService) StoreExecution(ctx context.Context, record *mod
 		stderr_size = excluded.stderr_size
 	`
 
-	_, err := ev.db.ExecWithRetry(query,
+	// Execution evidence persists even when the execution context has ended.
+	_, err := ev.db.ExecWithRetry(context.Background(), query,
 		record.ID,
 		timesvc.FormatTimestamp(record.TimestampUTC),
 		record.Command,
@@ -278,7 +279,7 @@ func (ev *ExecutionVaultService) GetExecution(ctx context.Context, executionID s
 	FROM execution_log WHERE id = ?
 	`
 
-	row := ev.db.QueryRowWithRetry(query, executionID)
+	row := ev.db.QueryRowWithRetry(context.Background(), query, executionID)
 
 	var record models.ExecutionRecord
 	var stdoutCompressed, stderrCompressed []byte
@@ -395,7 +396,8 @@ func (ev *ExecutionVaultService) StoreFileDiff(ctx context.Context, record *mode
 		diff_size = excluded.diff_size
 	`
 
-	_, err := ev.db.ExecWithRetry(query,
+	// File-diff evidence persists even when the execution context has ended.
+	_, err := ev.db.ExecWithRetry(context.Background(), query,
 		record.ID,
 		timesvc.FormatTimestamp(record.TimestampUTC),
 		record.FilePath,
@@ -438,7 +440,7 @@ func (ev *ExecutionVaultService) GetFileDiff(ctx context.Context, diffID string)
 	FROM file_diff_log WHERE id = ?
 	`
 
-	row := ev.db.QueryRowWithRetry(query, diffID)
+	row := ev.db.QueryRowWithRetry(context.Background(), query, diffID)
 
 	var record models.FileDiffRecord
 	var diffCompressed []byte
@@ -542,7 +544,7 @@ func (ev *ExecutionVaultService) GetFileDiffsBySession(ctx context.Context, oper
 		timestampStr string
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ev.db, query, []interface{}{operatorSessionID, limit}, func(r *sql.Rows) (fileDiffRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ctx, ev.db, query, []interface{}{operatorSessionID, limit}, func(r *sql.Rows) (fileDiffRow, error) {
 		var row fileDiffRow
 		err := r.Scan(
 			&row.record.ID,
@@ -629,7 +631,7 @@ func (ev *ExecutionVaultService) ListExecutions(ctx context.Context, limit, offs
 		stderrHash      sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ev.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (execRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ctx, ev.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (execRow, error) {
 		var row execRow
 		err := r.Scan(
 			&row.record.ID, &row.timestampStr, &row.record.Command, &row.record.ExitCode, &row.record.DurationMs,
@@ -703,7 +705,7 @@ func (ev *ExecutionVaultService) ListFileDiffs(ctx context.Context, limit, offse
 		diffHash     sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(ev.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (diffRow, error) {
+	rows, err := sqliteutil.MaterializeRows(ctx, ev.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (diffRow, error) {
 		var row diffRow
 		err := r.Scan(
 			&row.record.ID, &row.timestampStr, &row.record.FilePath, &row.record.Operation,
@@ -752,7 +754,7 @@ func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
 		cutoff := timesvc.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
-		result, err := db.ExecWithRetry("DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
+		result, err := db.ExecWithRetry(ctx, "DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old records", string(constants.ConnectionStateError), err)
 			return err
@@ -762,7 +764,7 @@ func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 			logger.Info("Pruned old execution records", "rows_deleted", rowsDeleted)
 		}
 
-		diffResult, err := db.ExecWithRetry("DELETE FROM file_diff_log WHERE timestamp_utc < ?", cutoff)
+		diffResult, err := db.ExecWithRetry(ctx, "DELETE FROM file_diff_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old file diff records", string(constants.ConnectionStateError), err)
 			return err
@@ -779,7 +781,7 @@ func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 		maxSizeBytes := config.MaxDBSizeMB * 1024 * 1024
 
 		if err == nil && dbSizeBytes > maxSizeBytes {
-			_, err := db.ExecWithRetry(`
+			_, err := db.ExecWithRetry(ctx, `
 				DELETE FROM execution_log
 				WHERE id IN (
 					SELECT id FROM execution_log
@@ -791,7 +793,7 @@ func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 				logger.Error("Failed to prune execution_log for size limit", string(constants.ConnectionStateError), err)
 			}
 
-			_, err = db.ExecWithRetry(`
+			_, err = db.ExecWithRetry(ctx, `
 				DELETE FROM file_diff_log
 				WHERE id IN (
 					SELECT id FROM file_diff_log

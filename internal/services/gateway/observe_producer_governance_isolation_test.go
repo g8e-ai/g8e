@@ -125,7 +125,7 @@ func newAuditReceiptsDB(t *testing.T) *sqliteutil.DB {
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(":memory:"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.ExecWithRetry(auditReceiptsSchema)
+	_, err = db.ExecWithRetry(t.Context(), auditReceiptsSchema)
 	require.NoError(t, err)
 	return db
 }
@@ -167,7 +167,7 @@ func seedAgentAndRunProjections(t *testing.T, producer *ObserveProducerService, 
 // through the DocumentStoreService since the test lives in the same package.
 func distinctDocumentCollections(t *testing.T, docStore *DocumentStoreService) []string {
 	t.Helper()
-	rows, err := docStore.db.QueryWithRetry("SELECT DISTINCT collection FROM documents")
+	rows, err := docStore.db.QueryWithRetry(t.Context(), "SELECT DISTINCT collection FROM documents")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rows.Close() })
 
@@ -202,7 +202,7 @@ func TestObserveProducer_DoesNotCreateGovernanceEnvelopes(t *testing.T) {
 
 	// No suspended transactions (governance approval path) may be created.
 	var suspendedCount int
-	require.NoError(t, docStore.db.QueryRowWithRetry("SELECT COUNT(*) FROM suspended_transactions").Scan(&suspendedCount))
+	require.NoError(t, docStore.db.QueryRowWithRetry(t.Context(), "SELECT COUNT(*) FROM suspended_transactions").Scan(&suspendedCount))
 	assert.Zero(t, suspendedCount, "observe producer must not create suspended transaction rows")
 }
 
@@ -220,7 +220,7 @@ func TestObserveProducer_DoesNotProduceActionReceipts(t *testing.T) {
 
 	// The separate audit receipts database must remain empty.
 	var receiptCount int
-	require.NoError(t, receiptsDB.QueryRowWithRetry("SELECT COUNT(*) FROM receipts").Scan(&receiptCount))
+	require.NoError(t, receiptsDB.QueryRowWithRetry(t.Context(), "SELECT COUNT(*) FROM receipts").Scan(&receiptCount))
 	assert.Zero(t, receiptCount, "observe producer must not produce action receipts")
 
 	// The SSE event payloads must not carry receipt fields. Receipts are
@@ -240,7 +240,7 @@ func TestObserveProducer_DoesNotProduceActionReceipts(t *testing.T) {
 
 	// No receipt-shaped document may appear in the documents table either.
 	var docCount int
-	require.NoError(t, docStore.db.QueryRowWithRetry(
+	require.NoError(t, docStore.db.QueryRowWithRetry(t.Context(),
 		"SELECT COUNT(*) FROM documents WHERE data LIKE '%transaction_hash%' OR data LIKE '%signer_key_id%' OR data LIKE '%state_root_before%'",
 	).Scan(&docCount))
 	assert.Zero(t, docCount, "observe projection documents must not carry receipt fields")
@@ -289,7 +289,7 @@ func TestObserveProducer_SSEEventsAreTelemetryNotReceipts(t *testing.T) {
 
 	// Query sse_events directly for producer_id and payload. The SSEEventRow
 	// model does not expose producer_id, so the raw table query is required.
-	rows, err := docStore.db.QueryWithRetry(
+	rows, err := docStore.db.QueryWithRetry(t.Context(),
 		"SELECT producer_id, payload FROM sse_events WHERE user_id = ? ORDER BY id",
 		"user-gov-sse",
 	)

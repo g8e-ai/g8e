@@ -80,7 +80,7 @@ func TestReplayStoreService_FinalizeNonce(t *testing.T) {
 
 	// Verify nonce was updated
 	var status string
-	err = db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", "test123").Scan(&status)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT status FROM nonces WHERE nonce = ?", "test123").Scan(&status)
 	require.NoError(t, err)
 	assert.Equal(t, "used", status)
 }
@@ -109,7 +109,7 @@ func TestReplayStoreService_ReleaseNonce(t *testing.T) {
 
 	// Verify nonce was deleted
 	var count int
-	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "test456").Scan(&count)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT COUNT(*) FROM nonces WHERE nonce = ?", "test456").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
@@ -144,12 +144,12 @@ func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
 
 	// Verify expired nonce was deleted
 	var count int
-	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "expired-nonce").Scan(&count)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT COUNT(*) FROM nonces WHERE nonce = ?", "expired-nonce").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 
 	// Verify valid nonce still exists
-	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "valid-nonce").Scan(&count)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT COUNT(*) FROM nonces WHERE nonce = ?", "valid-nonce").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 }
@@ -170,7 +170,7 @@ func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
 
 	// Verify status is 'used'
 	var status string
-	err = db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
 	require.NoError(t, err)
 	assert.Equal(t, "used", status)
 
@@ -178,7 +178,7 @@ func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
 	err = svc.FinalizeNonce(nonce)
 	require.NoError(t, err)
 
-	err = db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
 	require.NoError(t, err)
 	assert.Equal(t, "used", status)
 }
@@ -202,7 +202,7 @@ func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", nonce).Scan(&count)
+	err = db.QueryRowWithRetry(t.Context(), "SELECT COUNT(*) FROM nonces WHERE nonce = ?", nonce).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "nonce should still exist if it was already used")
 }

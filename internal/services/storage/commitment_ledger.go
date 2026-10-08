@@ -89,7 +89,7 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 		committedAtMs  int64
 	}
 
-	rows, err := sqliteutil.MaterializeRows(cl.db, query, nil, func(r *sql.Rows) (commitRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), cl.db, query, nil, func(r *sql.Rows) (commitRow, error) {
 		var row commitRow
 		err := r.Scan(
 			&row.row.Seq, &row.row.TransactionID, &row.row.TransactionHash,

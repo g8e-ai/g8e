@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -90,7 +91,7 @@ const operatorSessionIdentityQuery = `SELECT id, data, created_at, updated_at FR
 // ambiguous binding; terminated identities remain visible for its checks.
 func (s *DocumentStoreService) FindOperatorsBySession(sessionID string) ([]*models.Document, error) {
 	collection := marshaler.CollectionName(constants.CollectionOperators)
-	docs, err := sqliteutil.MaterializeRows(s.db, operatorSessionIdentityQuery, []interface{}{collection, sessionID},
+	docs, err := sqliteutil.MaterializeRows(context.Background(), s.db, operatorSessionIdentityQuery, []interface{}{collection, sessionID},
 		func(row *sql.Rows) (*models.Document, error) {
 			var id, data, createdAt, updatedAt string
 			if err := row.Scan(&id, &data, &createdAt, &updatedAt); err != nil {
@@ -118,7 +119,7 @@ func (s *DocumentStoreService) DocGet(collection, id string) (*models.Document, 
 func (s *DocumentStoreService) docGet(collection, id string) (*models.Document, error) {
 	var dataJSON string
 	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRowWithRetry(
+	err := s.db.QueryRowWithRetry(context.Background(),
 		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&dataJSON, &createdAtStr, &updatedAtStr)
@@ -153,7 +154,7 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 	now := time.Now().UTC()
 	nowStr := timesvc.FormatTimestamp(now)
 
-	_, err = s.db.ExecWithRetry(
+	_, err = s.db.ExecWithRetry(context.Background(),
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		collection, id, string(dataJSON), nowStr, nowStr,
@@ -206,7 +207,7 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 		updatedAtStr = timesvc.FormatTimestamp(updatedAt)
 	}
 
-	_, err = s.db.ExecWithRetry(
+	_, err = s.db.ExecWithRetry(context.Background(),
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(collection, id) DO UPDATE SET
@@ -225,7 +226,7 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
 	var existingJSON string
 	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRowWithRetry(
+	err := s.db.QueryRowWithRetry(context.Background(),
 		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
@@ -266,7 +267,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 	now := time.Now().UTC()
 	nowStr := timesvc.FormatTimestamp(now)
 
-	_, err = s.db.ExecWithRetry(
+	_, err = s.db.ExecWithRetry(context.Background(),
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
 		string(dataJSON), nowStr, collection, id,
 	)
@@ -341,7 +342,7 @@ func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFi
 	query := "UPDATE documents SET data = " + dataExpr + ", updated_at = ? WHERE collection = ? AND id = ? AND json_extract(data, ?) = ?"
 	args = append(args, nowStr, collection, id, "$."+conditionField, conditionValue)
 
-	result, err := s.db.ExecWithRetry(query, args...)
+	result, err := s.db.ExecWithRetry(context.Background(), query, args...)
 	if err != nil {
 		return false, fmt.Errorf("gateway: document store: conditional update: %w", err)
 	}
@@ -381,7 +382,7 @@ func (s *DocumentStoreService) DocList(collection string) ([]*models.Document, e
 		createdAtStr string
 		updatedAtStr string
 	}
-	rows, err := sqliteutil.MaterializeRows(s.db,
+	rows, err := sqliteutil.MaterializeRows(context.Background(), s.db,
 		"SELECT id, data, created_at, updated_at FROM documents WHERE collection = ? ORDER BY id ASC",
 		[]interface{}{collection},
 		func(r *sql.Rows) (docRow, error) {
@@ -419,7 +420,7 @@ func (s *DocumentStoreService) DocDelete(collection, id string) error {
 // DocDeleteWithResult removes a document. Returns (true, nil) if deleted,
 // (false, nil) if not found.
 func (s *DocumentStoreService) DocDeleteWithResult(collection, id string) (bool, error) {
-	result, err := s.db.ExecWithRetry(
+	result, err := s.db.ExecWithRetry(context.Background(),
 		"DELETE FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	)
@@ -436,7 +437,7 @@ func (s *DocumentStoreService) DocDeleteWithResult(collection, id string) (bool,
 // DocDeleteNamespace removes all documents in a collection.
 // Returns the count of deleted documents.
 func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM documents WHERE collection = ?", collection)
+	result, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM documents WHERE collection = ?", collection)
 	if err != nil {
 		return 0, fmt.Errorf("gateway: document store: delete namespace: %w", err)
 	}
@@ -462,7 +463,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.F
 	jsonPath := "$." + fieldPath
 
 	var encoded *string
-	err := s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&encoded)
+	err := s.db.QueryRowWithRetry(context.Background(), query, jsonPath, collection, id).Scan(&encoded)
 	if err == sql.ErrNoRows {
 		return mcp.FieldValue{}, constants.ErrNotFound
 	}
@@ -586,7 +587,7 @@ func (s *DocumentStoreService) docQuery(collection string, filters []models.DocF
 		updatedAtStr string
 	}
 
-	rows, err := sqliteutil.MaterializeRows(s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
+	rows, err := sqliteutil.MaterializeRows(context.Background(), s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
 		var row docRow
 		if err := r.Scan(&row.docID, &row.dataJSON, &row.createdAtStr, &row.updatedAtStr); err != nil {
 			return docRow{}, fmt.Errorf("gateway: document store: query: scan: %w", err)

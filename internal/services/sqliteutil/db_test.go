@@ -271,7 +271,7 @@ func TestExecWithRetry_Success(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	result, err := db.ExecWithRetry("CREATE TABLE test (id INTEGER PRIMARY KEY)")
+	result, err := db.ExecWithRetry(t.Context(), "CREATE TABLE test (id INTEGER PRIMARY KEY)")
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -286,7 +286,7 @@ func TestExecWithRetry_InvalidSQL(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = db.ExecWithRetry("INVALID SQL STATEMENT")
+	_, err = db.ExecWithRetry(t.Context(), "INVALID SQL STATEMENT")
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "retry", "non-busy errors should not retry")
 }
@@ -301,10 +301,10 @@ func TestExecWithRetry_WithParameters(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = db.ExecWithRetry("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+	_, err = db.ExecWithRetry(t.Context(), "CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	require.NoError(t, err)
 
-	result, err := db.ExecWithRetry("INSERT INTO test (value) VALUES (?)", "test-value")
+	result, err := db.ExecWithRetry(t.Context(), "INSERT INTO test (value) VALUES (?)", "test-value")
 	require.NoError(t, err)
 
 	rowsAffected, err := result.RowsAffected()
@@ -328,7 +328,7 @@ func TestQueryWithRetry_Success(t *testing.T) {
 	_, err = db.Exec("INSERT INTO test (value) VALUES ('a'), ('b'), ('c')")
 	require.NoError(t, err)
 
-	rows, err := db.QueryWithRetry("SELECT value FROM test ORDER BY value")
+	rows, err := db.QueryWithRetry(t.Context(), "SELECT value FROM test ORDER BY value")
 	require.NoError(t, err)
 	t.Cleanup(func() { rows.Close() })
 
@@ -353,7 +353,7 @@ func TestQueryWithRetry_InvalidSQL(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	rows, err := db.QueryWithRetry("INVALID QUERY")
+	rows, err := db.QueryWithRetry(t.Context(), "INVALID QUERY")
 	if rows != nil {
 		defer rows.Close()
 		require.NoError(t, rows.Err())
@@ -378,7 +378,7 @@ func TestQueryRowWithRetry_Success(t *testing.T) {
 	_, err = db.Exec("INSERT INTO test (value) VALUES ('single-row')")
 	require.NoError(t, err)
 
-	row := db.QueryRowWithRetry("SELECT value FROM test WHERE id = 1")
+	row := db.QueryRowWithRetry(t.Context(), "SELECT value FROM test WHERE id = 1")
 	var value string
 	err = row.Scan(&value)
 	require.NoError(t, err)
@@ -398,7 +398,7 @@ func TestQueryRowWithRetry_NoRows(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY)")
 	require.NoError(t, err)
 
-	row := db.QueryRowWithRetry("SELECT id FROM test WHERE id = 999")
+	row := db.QueryRowWithRetry(t.Context(), "SELECT id FROM test WHERE id = 999")
 	var id int
 	err = row.Scan(&id)
 	require.Error(t, err)
@@ -415,7 +415,7 @@ func TestQueryRowWithRetry_InvalidSQL(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	row := db.QueryRowWithRetry("INVALID QUERY")
+	row := db.QueryRowWithRetry(t.Context(), "INVALID QUERY")
 	err = row.Err()
 	require.Error(t, err)
 }
@@ -433,7 +433,7 @@ func TestExecInTxWithRetry_Commit(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	require.NoError(t, err)
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO test (value) VALUES (?)", "committed")
 		return err
 	})
@@ -458,7 +458,7 @@ func TestExecInTxWithRetry_RollbackOnError(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	require.NoError(t, err)
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO test (value) VALUES (?)", "rolled-back")
 		if err != nil {
 			return err
@@ -486,7 +486,7 @@ func TestExecInTxWithRetry_MultipleStatements(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 	require.NoError(t, err)
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		for i := 0; i < 5; i++ {
 			_, err := tx.Exec("INSERT INTO test (value) VALUES (?)", i)
 			if err != nil {
@@ -513,7 +513,7 @@ func TestExecInTxWithRetry_InvalidSQL(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	err = db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		_, err := tx.Exec("INVALID SQL")
 		return err
 	})
@@ -536,7 +536,7 @@ func TestMaterializeRows_Success(t *testing.T) {
 	_, err = db.Exec("INSERT INTO test (value) VALUES ('a'), ('b'), ('c')")
 	require.NoError(t, err)
 
-	results, err := MaterializeRows(db, "SELECT value FROM test ORDER BY value", nil, func(rows *sql.Rows) (string, error) {
+	results, err := MaterializeRows(t.Context(), db, "SELECT value FROM test ORDER BY value", nil, func(rows *sql.Rows) (string, error) {
 		var v string
 		err := rows.Scan(&v)
 		return v, err
@@ -558,7 +558,7 @@ func TestMaterializeRows_EmptyResult(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY)")
 	require.NoError(t, err)
 
-	results, err := MaterializeRows(db, "SELECT id FROM test", nil, func(rows *sql.Rows) (int, error) {
+	results, err := MaterializeRows(t.Context(), db, "SELECT id FROM test", nil, func(rows *sql.Rows) (int, error) {
 		var id int
 		err := rows.Scan(&id)
 		return id, err
@@ -583,7 +583,7 @@ func TestMaterializeRows_WithParameters(t *testing.T) {
 	_, err = db.Exec("INSERT INTO test (value) VALUES ('a'), ('b'), ('c')")
 	require.NoError(t, err)
 
-	results, err := MaterializeRows(db, "SELECT value FROM test WHERE value > ? ORDER BY value", []interface{}{"a"}, func(rows *sql.Rows) (string, error) {
+	results, err := MaterializeRows(t.Context(), db, "SELECT value FROM test WHERE value > ? ORDER BY value", []interface{}{"a"}, func(rows *sql.Rows) (string, error) {
 		var v string
 		err := rows.Scan(&v)
 		return v, err
@@ -608,7 +608,7 @@ func TestMaterializeRows_ScanError(t *testing.T) {
 	_, err = db.Exec("INSERT INTO test (value) VALUES ('a')")
 	require.NoError(t, err)
 
-	_, err = MaterializeRows(db, "SELECT value FROM test", nil, func(rows *sql.Rows) (int, error) {
+	_, err = MaterializeRows(t.Context(), db, "SELECT value FROM test", nil, func(rows *sql.Rows) (int, error) {
 		var v string
 		err := rows.Scan(&v)
 		if err != nil {
@@ -629,7 +629,7 @@ func TestMaterializeRows_QueryError(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = MaterializeRows(db, "INVALID QUERY", nil, func(rows *sql.Rows) (int, error) {
+	_, err = MaterializeRows(t.Context(), db, "INVALID QUERY", nil, func(rows *sql.Rows) (int, error) {
 		return 0, nil
 	})
 	require.Error(t, err)
@@ -783,40 +783,40 @@ func TestIsUniqueConstraintError_Tier1_CaseSensitive(t *testing.T) {
 
 func TestIsBusyError_Tier1_NilError(t *testing.T) {
 	t.Parallel()
-	assert.False(t, isBusyError(nil))
+	assert.False(t, IsBusyError(nil))
 }
 
 func TestIsBusyError_Tier1_DatabaseIsLocked(t *testing.T) {
 	t.Parallel()
 	err := fmt.Errorf("database is locked")
-	assert.True(t, isBusyError(err))
+	assert.False(t, IsBusyError(err))
 }
 
 func TestIsBusyError_Tier1_SQLITE_BUSY(t *testing.T) {
 	t.Parallel()
 	err := fmt.Errorf("SQLITE_BUSY")
-	assert.True(t, isBusyError(err))
+	assert.False(t, IsBusyError(err))
 }
 
 func TestIsBusyError_Tier1_GenericError(t *testing.T) {
 	t.Parallel()
 	err := assert.AnError
-	assert.False(t, isBusyError(err))
+	assert.False(t, IsBusyError(err))
 }
 
 func TestIsBusyError_Tier1_CaseSensitive(t *testing.T) {
 	t.Parallel()
 	lowercaseErr := fmt.Errorf("database is locked")
-	assert.True(t, isBusyError(lowercaseErr))
+	assert.False(t, IsBusyError(lowercaseErr))
 
 	lowercaseBusy := fmt.Errorf("sqlite_busy")
-	assert.False(t, isBusyError(lowercaseBusy), "SQLITE_BUSY should be case-sensitive")
+	assert.False(t, IsBusyError(lowercaseBusy))
 }
 
 func TestIsBusyError_Tier1_ContainsInMessage(t *testing.T) {
 	t.Parallel()
 	err := fmt.Errorf("some error: database is locked: more context")
-	assert.True(t, isBusyError(err))
+	assert.False(t, IsBusyError(err))
 }
 
 func TestContains_Tier1_EmptyString(t *testing.T) {
@@ -998,7 +998,7 @@ func TestExecInImmediateTxWithRetry_RejectsCancelledContext(t *testing.T) {
 	cancel()
 	err = db.ExecInImmediateTxWithRetry(ctx, func(*sql.Conn) error { return nil })
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "acquire transaction connection")
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestExecInImmediateTxWithRetry_CommitsCallback(t *testing.T) {

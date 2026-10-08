@@ -116,7 +116,7 @@ func MigrateEventChainColumns(db *sqliteutil.DB, logger *slog.Logger, encryption
 }
 
 func tableColumns(db *sqliteutil.DB, table string) (map[string]bool, error) {
-	rows, err := db.QueryWithRetry(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	rows, err := db.QueryWithRetry(context.Background(), fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func tableColumns(db *sqliteutil.DB, table string) (map[string]bool, error) {
 
 func backfillEventChain(db *sqliteutil.DB, logger *slog.Logger, encryptionVault *vault.Vault) error {
 	var pending int
-	if err := db.QueryRowWithRetry(`SELECT COUNT(*) FROM events WHERE seq IS NULL`).Scan(&pending); err != nil {
+	if err := db.QueryRowWithRetry(context.Background(), `SELECT COUNT(*) FROM events WHERE seq IS NULL`).Scan(&pending); err != nil {
 		return fmt.Errorf("audit chain backfill: count pending: %w", err)
 	}
 	if pending == 0 {
@@ -498,10 +498,10 @@ func (ass *SQLAuditStore) VerifyChain(ctx context.Context, fromSeq int64) error 
 		startSeq = fromSeq
 		expectedPrevHash = auditChainGenesisPrevHash
 		if startSeq > 1 {
-			err := ass.db.QueryRowWithRetry(`SELECT hash FROM events WHERE seq = ?`, startSeq-1).Scan(&expectedPrevHash)
+			err := ass.db.QueryRowWithRetry(ctx, `SELECT hash FROM events WHERE seq = ?`, startSeq-1).Scan(&expectedPrevHash)
 			if err == sql.ErrNoRows {
 				var checkpoint AuditChainCheckpoint
-				err = ass.db.QueryRowWithRetry(`
+				err = ass.db.QueryRowWithRetry(ctx, `
 					SELECT pruned_through_seq, pruned_through_hash
 					FROM audit_chain_checkpoints
 					WHERE pruned_through_seq < ?
@@ -523,7 +523,7 @@ func (ass *SQLAuditStore) VerifyChain(ctx context.Context, fromSeq int64) error 
 	} else {
 		var checkpointSeq int64
 		var checkpointHash string
-		err := ass.db.QueryRowWithRetry(`
+		err := ass.db.QueryRowWithRetry(ctx, `
 			SELECT pruned_through_seq, pruned_through_hash
 			FROM audit_chain_checkpoints
 			ORDER BY pruned_through_seq DESC
@@ -540,7 +540,7 @@ func (ass *SQLAuditStore) VerifyChain(ctx context.Context, fromSeq int64) error 
 		}
 	}
 
-	rows, err := ass.db.QueryWithRetry(`
+	rows, err := ass.db.QueryWithRetry(ctx, `
 		SELECT seq, prev_hash, hash, type, operator_session_id, timestamp, content_digest, transaction_id
 		FROM events
 		WHERE seq IS NOT NULL AND seq >= ?

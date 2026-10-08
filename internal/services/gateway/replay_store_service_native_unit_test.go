@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -33,7 +34,7 @@ type mockReplayStoreDB struct {
 	execWithRetryFunc func(query string, args ...any) (sql.Result, error)
 }
 
-func (m *mockReplayStoreDB) ExecWithRetry(query string, args ...any) (sql.Result, error) {
+func (m *mockReplayStoreDB) ExecWithRetry(_ context.Context, query string, args ...any) (sql.Result, error) {
 	if m.execWithRetryFunc != nil {
 		return m.execWithRetryFunc(query, args...)
 	}

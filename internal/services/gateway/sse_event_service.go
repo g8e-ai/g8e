@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -79,7 +80,7 @@ func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, pr
 		return 0, err
 	}
 	now := timesvc.NowTimestamp()
-	result, err := s.db.ExecWithRetry(
+	result, err := s.db.ExecWithRetry(context.Background(),
 		"INSERT INTO sse_events (user_id, web_session_id, cli_session_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		route.UserID, nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), eventType, payload, nullIfEmpty(producerID), now,
 	)
@@ -106,7 +107,7 @@ func nullIfEmpty(s string) sql.NullString {
 // the ring buffer from growing unboundedly between reconnections.
 func (s *SSEEventService) SSEEventsCleanup(maxAge time.Duration) (int64, error) {
 	cutoff := timesvc.FormatTimestamp(time.Now().UTC().Add(-maxAge))
-	result, err := s.db.ExecWithRetry("DELETE FROM sse_events WHERE created_at < ?", cutoff)
+	result, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM sse_events WHERE created_at < ?", cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("sse_event_service: cleanup: %w", err)
 	}
@@ -119,7 +120,7 @@ func (s *SSEEventService) SSEEventsCleanup(maxAge time.Duration) (int64, error) 
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
 func (s *SSEEventService) SSEEventsWipe() (int64, error) {
-	result, err := s.db.ExecWithRetry("DELETE FROM sse_events")
+	result, err := s.db.ExecWithRetry(context.Background(), "DELETE FROM sse_events")
 	if err != nil {
 		return 0, fmt.Errorf("sse_event_service: wipe: %w", err)
 	}
@@ -133,7 +134,7 @@ func (s *SSEEventService) SSEEventsWipe() (int64, error) {
 // SSEEventsCount returns the total number of rows in the sse_events table.
 func (s *SSEEventService) SSEEventsCount() (int64, error) {
 	var count int64
-	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM sse_events").Scan(&count)
+	err := s.db.QueryRowWithRetry(context.Background(), "SELECT COUNT(*) FROM sse_events").Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("sse_event_service: count: %w", err)
 	}
@@ -163,7 +164,7 @@ func (s *SSEEventService) SSEEventsListSince(route SSERoute, sinceID int64, limi
 		return nil, constants.ErrGatewaySSERouteSessionRequired
 	}
 
-	return sqliteutil.MaterializeRows(s.db, query, args, func(r *sql.Rows) (models.SSEEventRow, error) {
+	return sqliteutil.MaterializeRows(context.Background(), s.db, query, args, func(r *sql.Rows) (models.SSEEventRow, error) {
 		var row models.SSEEventRow
 		var web, cli sql.NullString
 		if err := r.Scan(&row.ID, &row.UserID, &web, &cli, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
@@ -182,7 +183,7 @@ func (s *SSEEventService) SSEEventsListAllSince(sinceID int64, limit int) ([]mod
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	return sqliteutil.MaterializeRows(s.db,
+	return sqliteutil.MaterializeRows(context.Background(), s.db,
 		"SELECT id, user_id, web_session_id, cli_session_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
 		[]any{sinceID, limit},
 		func(r *sql.Rows) (models.SSEEventRow, error) {

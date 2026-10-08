@@ -233,7 +233,7 @@ func TestStateRootService_RolledBackWriteChangesNothing(t *testing.T) {
 	flushed := svc.flushedLeaves.Load()
 
 	rollback := errors.New("rollback")
-	err = db.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err = db.db.ExecInTxWithRetry(t.Context(), func(tx *sql.Tx) error {
 		if _, err := tx.Exec("INSERT INTO documents (collection, id, data, created_at, updated_at) VALUES ('t', 'x', '{}', 'now', 'now')"); err != nil {
 			return err
 		}
