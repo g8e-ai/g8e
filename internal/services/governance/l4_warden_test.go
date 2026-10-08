@@ -266,6 +266,40 @@ func TestL4Warden_EventActionMismatchRejected(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrTxEventActionMismatch)
 }
 
+// TestL4Warden_EmptyPayload verifies that a zero-byte payload is accepted only
+// for actions whose typed message has no required fields. An all-default
+// ShutdownRequested (no reason) marshals to zero bytes, and the Gateway stop
+// routes send exactly that; rejecting it as missing made governed stop fail
+// closed on the Operator with TX_PAYLOAD_MISSING.
+func TestL4Warden_EmptyPayload(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		actionType constants.ActionType
+		wantErr    error
+	}{
+		{name: "shutdown without reason", actionType: constants.ActionTypeShutdown},
+		{name: "heartbeat", actionType: constants.ActionTypeHeartbeat},
+		{name: "execute bash", actionType: constants.ActionTypeExecuteBash, wantErr: constants.ErrTxPayloadMissing},
+		{name: "fs list", actionType: constants.ActionTypeFsList, wantErr: constants.ErrTxPayloadMissing},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+			env := signedEnvelope(t, tc.actionType, nil, privKey, constants.PostureDoctrine)
+
+			_, err := verifier.VerifyEnvelope(context.Background(), env)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 // TestNewGovernancePosture_ErrorsOnInvalidPosture verifies that invalid posture
 // strings return an error wrapping constants.ErrInvalidPosture rather than
 // panicking or silently defaulting (INV-CODE-06, INV-ERR-01).

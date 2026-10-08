@@ -251,3 +251,9 @@ g8e_configure_path_unix
 echo -e "\n[STEP 6/${TOTAL_STEPS}] Verifying the toolchain (make dev-check)..."
 make dev-check
 g8e_print_next_steps_unix
+
+# Keep the checkout's g8e binary on PATH for the remainder of this shell.
+case ":$PATH:" in
+    *":$PWD:"*) ;;
+    *) export PATH="$PATH:$PWD" ;;
+esac

@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 
 $Script:RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path
 $Script:ExplorerDir = Join-Path $Script:RepoRoot "evaluation-explorer"
-$Script:ExplorerDist = Join-Path $Script:ExplorerDir "dist\runtime.json"
+$Script:ExplorerDist = Join-Path $Script:ExplorerDir "dist\index.html"
 $Script:NodeMinMajor = 22
 $Script:AutoYes = $false
 $Script:BuildOnly = $false
@@ -330,6 +330,23 @@ function Ensure-WritableGoPath {
     }
 }
 
+function Test-NodeDependencies {
+    param([string]$Directory)
+    $marker = Join-Path $Directory "node_modules\.package-lock.json"
+    if (-not (Test-Path $marker) -or -not (Test-Path (Join-Path $Directory "package.json"))) {
+        return $false
+    }
+    $installedAt = (Get-Item $marker).LastWriteTimeUtc
+    foreach ($manifest in @("package.json", "package-lock.json")) {
+        $path = Join-Path $Directory $manifest
+        if ((Test-Path $path) -and (Get-Item $path).LastWriteTimeUtc -gt $installedAt) {
+            return $false
+        }
+    }
+    npm.cmd ls --prefix $Directory --depth=0 --offline *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Build-EvaluationExplorer {
     if (Test-Path $Script:ExplorerDist) {
         Write-Host "  evaluation-explorer dist already present — skipping frontend build" -ForegroundColor Green
@@ -339,8 +356,11 @@ function Build-EvaluationExplorer {
     Write-Host "  building evaluation-explorer assets (required by make build)..." -ForegroundColor Cyan
     Push-Location $Script:ExplorerDir
     try {
-        $installed = $false
-        if (Test-Path "package-lock.json") {
+        $installed = Test-NodeDependencies -Directory $Script:ExplorerDir
+        if ($installed) {
+            Write-Host "  evaluation-explorer dependencies are current — skipping npm install" -ForegroundColor Green
+        }
+        if (-not $installed -and (Test-Path "package-lock.json")) {
             npm.cmd ci
             $installed = ($LASTEXITCODE -eq 0)
             if (-not $installed) {
@@ -538,4 +558,9 @@ Configure-Path -IncludeDevTools $true
 Write-Host "`n[STEP 6/$totalSteps] Verifying the toolchain (make dev-check)..." -ForegroundColor Yellow
 Invoke-Step "make dev-check" { make dev-check }
 Show-NextSteps -BuildOnly $false
+
+# Keep the checkout's g8e binary on PATH for the remainder of this shell.
+if (($env:Path -split ';') -notcontains $PWD.Path) {
+    $env:Path = "$env:Path;$($PWD.Path)"
+}
 

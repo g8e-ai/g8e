@@ -41,7 +41,7 @@ EOF
 
 g8e_setup_init() {
     REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-    cd "$REPO_ROOT"
+    cd "$REPO_ROOT" || return 1
 
     if [[ ! -f go.mod ]]; then
         echo "FATAL: run this script from a g8e repository clone (go.mod not found)."
@@ -73,6 +73,10 @@ g8e_setup_init() {
     if [[ "${G8E_SETUP_YES:-}" == "1" ]]; then
         AUTO_YES=true
     fi
+
+    # Find a previous uv installation before checking prerequisites, including
+    # in shells that have not loaded the PATH update from the last setup run.
+    export PATH="$HOME/.local/bin:$PATH"
 }
 
 g8e_setup_confirm() {
@@ -370,8 +374,51 @@ g8e_check_python_env() {
             return 1
         fi
     done
+    # Editable installs use live source files, but dependency metadata must be
+    # refreshed after either project's manifest changes.
+    if ! "$py" - <<'PY'
+import importlib.metadata
+import json
+from pathlib import Path
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
+
+for name, directory in (("g8e", "protocol/python"), ("g8ee", "ensemble")):
+    try:
+        dist = importlib.metadata.distribution(name)
+        metadata = next(file for file in dist.files or () if file.name == "METADATA")
+        source = json.loads(dist.read_text("direct_url.json") or "{}")
+        url = urlsplit(source.get("url", ""))
+        project = Path(directory)
+        if (not source.get("dir_info", {}).get("editable")
+                or url.scheme != "file"
+                or Path(url2pathname(url.path)).resolve() != project.resolve()
+                or project.joinpath("pyproject.toml").stat().st_mtime
+                > dist.locate_file(metadata).stat().st_mtime):
+            raise ValueError(f"{name}: editable install is missing or out of date")
+    except (importlib.metadata.PackageNotFoundError, StopIteration, OSError, ValueError) as exc:
+        print(f"  .venv: {name} metadata needs refreshing ({exc}; run: make dev-python)")
+        raise SystemExit(1)
+PY
+    then
+        return 1
+    fi
+    if ! g8e_have uv || ! uv pip check --python "$py" --offline >/dev/null 2>&1; then
+        echo "  .venv: dependencies need checking or repair (run: make dev-python)"
+        return 1
+    fi
     echo "  .venv: ready (Python $ver, protocol + ensemble deps)"
     return 0
+}
+
+# npm's hidden lockfile is written after installation. Reuse the tree only
+# while both manifests are older and npm can resolve the declared packages.
+g8e_node_deps_current() {
+    local dir="$1" marker="$1/node_modules/.package-lock.json"
+    [[ -f "$marker" && -f "$dir/package.json" ]] || return 1
+    [[ "$dir/package.json" -nt "$marker" ]] && return 1
+    [[ -f "$dir/package-lock.json" && "$dir/package-lock.json" -nt "$marker" ]] && return 1
+    npm ls --prefix "$dir" --depth=0 --offline >/dev/null 2>&1
 }
 
 g8e_check_node_deps() {
@@ -420,14 +467,22 @@ g8e_build_evaluation_explorer() {
     fi
 
     echo "  building evaluation-explorer assets (required by make build)..."
-    pushd "$G8E_EXPLORER_DIR" >/dev/null
-    if [[ -f package-lock.json ]]; then
-        npm ci
+    local deps_current=false
+    if g8e_node_deps_current "$G8E_EXPLORER_DIR"; then
+        deps_current=true
+    fi
+    pushd "$G8E_EXPLORER_DIR" >/dev/null || return 1
+    if [[ "$deps_current" != true ]]; then
+        if [[ -f package-lock.json ]]; then
+            npm ci
+        else
+            npm install
+        fi
     else
-        npm install
+        echo "  evaluation-explorer dependencies are current — skipping npm install"
     fi
     npm run build
-    popd >/dev/null
+    popd >/dev/null || return 1
 }
 
 g8e_run_make_build() {

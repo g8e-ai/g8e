@@ -394,9 +394,9 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 		return nil, "", constants.ErrTxUnknownActionType
 	}
 
-	// ActionTypeHeartbeat uses HeartbeatRequested{} which has no fields and marshals
-	// to zero bytes — this is a valid empty proto, not a missing payload.
-	if len(envelope.Payload) == 0 && actionType != constants.ActionTypeHeartbeat {
+	// Heartbeat and Shutdown messages have no required fields and marshal to
+	// zero bytes when all-default — a valid empty proto, not a missing payload.
+	if len(envelope.Payload) == 0 && !PayloadMayBeEmpty(actionType) {
 		return nil, "", constants.ErrTxPayloadMissing
 	}
 

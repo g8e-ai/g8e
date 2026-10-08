@@ -880,12 +880,6 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 		return
 	}
 
-	payload := env.Payload
-	if len(payload) == 0 {
-		rs.logger.Error("GovernanceEnvelope missing required binary Payload bytes - request rejected", "message_id", env.Id)
-		return
-	}
-
 	cmdMsg := &PubSubCommandMessage{
 		ID:                env.Id,
 		EventType:         eventType,
@@ -896,7 +890,7 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 		CLISessionID:      env.CliSessionId,
 		OperatorSessionID: env.OperatorSessionId,
 		OperatorID:        &env.OperatorId,
-		Payload:           payload,
+		Payload:           env.Payload,
 		Timestamp:         env.Timestamp.AsTime(),
 	}
 

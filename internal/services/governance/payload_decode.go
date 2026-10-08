@@ -18,6 +18,18 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
+// PayloadMayBeEmpty reports whether the action's typed message is valid with
+// zero wire bytes because none of its fields are required: an all-default
+// proto marshals to nothing. Every other action must carry payload bytes.
+func PayloadMayBeEmpty(actionType constants.ActionType) bool {
+	switch actionType {
+	case constants.ActionTypeHeartbeat, constants.ActionTypeShutdown:
+		return true
+	default:
+		return false
+	}
+}
+
 // DecodePayloadForAction decodes a governed envelope's raw payload bytes into
 // the typed protobuf message for the given action type. It is the single decode
 // authority shared by the L4 Warden (operator-side verification) and the

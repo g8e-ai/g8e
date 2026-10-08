@@ -215,6 +215,46 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
 	})
+
+	// An all-default ShutdownRequested marshals to zero bytes, which is what
+	// the Gateway stop routes send when no reason is given. It must execute
+	// and signal shutdown, not be dropped after L4 has already verified it.
+	t.Run("executes shutdown envelope with empty payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.results = &mockResultsPublisher{}
+		env := &govpkg.GovernanceEnvelope{
+			OperatorId:      "operator-1",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.ShutdownRequested),
+			ActionType:      string(constants.ActionTypeShutdown),
+			TargetResource:  "localhost",
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-shutdown-empty",
+			Posture:         constants.PostureDoctrine,
+			Governance: &commonv1.GovernanceMetadata{
+				L2: &commonv1.L2Metadata{
+					ConsensusSetId: "test-consensus",
+					Votes:          []*commonv1.L2Vote{{SignerKeyId: "test-key", Decision: true}},
+				},
+			},
+		}
+		env.TransactionHash, _ = govpkg.GenerateMessageID(env)
+		env.Id = env.TransactionHash
+		sig := ed25519.Sign(f.SignerPriv, []byte(fmt.Sprintf("%s|true", env.TransactionHash)))
+		env.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(sig)
+
+		f.Svc.handleGovernanceEnvelope(env)
+
+		select {
+		case reason := <-f.Svc.ShutdownChan:
+			assert.Equal(t, "No reason provided", reason)
+		default:
+			t.Fatal("shutdown envelope with empty payload did not signal shutdown")
+		}
+	})
 }
 
 func TestGatewayDispatchedVerificationContext_AcceptsPDPBoundRootDespiteLiveDrift(t *testing.T) {

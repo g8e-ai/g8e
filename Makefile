@@ -502,17 +502,34 @@ protoc-install:
 # installed here, so the setup scripts and a manual install share one definition.
 # =============================================================================
 .PHONY: dev-setup
-dev-setup: dev-tools dev-python dev-node
+dev-setup:
+	@$(MAKE) dev-tools-if-needed
+	@$(MAKE) dev-python-if-needed
+	@$(MAKE) dev-node
 	@echo "Developer toolchain installed. Verify with: make dev-check"
 
-# Go-based tools (buf, protoc plugins, golangci-lint, govulncheck, swag), always
-# reinstalled at the pinned versions.
+# Go-based tools (buf, protoc plugins, golangci-lint, govulncheck, swag).
+# Explicit `make dev-tools` refreshes every tool to the pinned versions.
 .PHONY: dev-tools
 dev-tools:
 	@echo "Installing Go dev tools into $(GO_BIN_DIR)..."
 	@for pkg in $(GO_DEV_TOOL_PKGS); do \
 		echo "  go install $$pkg"; \
 		go install $$pkg || exit 1; \
+	done
+
+# Setup scripts reuse binaries that are already installed. Keep the explicit
+# `dev-tools` target above for contributors who want to refresh pinned tools.
+.PHONY: dev-tools-if-needed
+dev-tools-if-needed:
+	@set -e; source scripts/lib/dev-setup-common.sh; for pkg in $(GO_DEV_TOOL_PKGS); do \
+		bin=$${pkg%@*}; bin=$${bin##*/}; \
+		if g8e_have "$$bin"; then \
+			echo "  $$bin: already installed — skipping"; \
+		else \
+			echo "  installing $$bin ($$pkg)..."; \
+			go install "$$pkg" || exit 1; \
+		fi; \
 	done
 
 # Repo-root .venv (the interpreter the ensemble and proto targets prefer, see
@@ -535,13 +552,25 @@ dev-python: ensemble-env
 	@VENV_PY=$$(if [ -f .venv/Scripts/python.exe ]; then echo .venv/Scripts/python.exe; elif [ -f .venv/Scripts/python ]; then echo .venv/Scripts/python; else echo .venv/bin/python; fi); \
 	uv pip install --python "$$VENV_PY" --no-sources -e "ensemble[test]"
 
+.PHONY: dev-python-if-needed
+dev-python-if-needed:
+	@if G8E_PYTHON_VERSION="$(PYTHON_VERSION)" bash -c 'source scripts/lib/dev-setup-common.sh; g8e_check_python_env >/dev/null 2>&1'; then \
+		echo "  Python environment: already ready — skipping"; \
+	else \
+		$(MAKE) dev-python; \
+	fi
+
 .PHONY: dev-node
 dev-node:
 	@echo "Installing Node dependencies (protocol/node, console, g8e-adapter, website)..."
-	@npm ci --prefix protocol/node
-	@npm ci --prefix console
-	@npm ci --prefix g8e-adapter
-	@npm ci --prefix website
+	@set -e; source scripts/lib/dev-setup-common.sh; for dir in protocol/node console g8e-adapter website; do \
+		if ! g8e_node_deps_current "$$dir"; then \
+			echo "  installing dependencies in $$dir..."; \
+			npm ci --prefix "$$dir"; \
+		else \
+			echo "  $$dir dependencies: current — skipping"; \
+		fi; \
+	done
 	@npm run build --prefix g8e-adapter
 
 # Preflight for `make ci`: reports every missing or mismatched tool at once.
