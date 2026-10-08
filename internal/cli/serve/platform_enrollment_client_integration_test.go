@@ -56,7 +56,7 @@ func newMockGateway(t *testing.T) *mockGateway {
 
 // TestOperatorEnroll_FullFlowWithApproval verifies the full nine-step
 // enrollment sequence against a mock gateway: generate keys, submit
-// request, persist pending state, poll until approved, sign transcript
+// request, persist pending state, wait for approval, sign transcript
 // with both keys, submit completion, write credentials, and return the
 // resolved identity.
 func TestOperatorEnroll_FullFlowWithApproval(t *testing.T) {

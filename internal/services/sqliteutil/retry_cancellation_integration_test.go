@@ -143,6 +143,36 @@ func TestRetryHelpersBusyCancellationAndExhaustion(t *testing.T) {
 	}
 }
 
+// The driver's busy handler sleeps inside sqlite3_step, so a deadline cannot
+// interrupt it. This test uses the production default busy timeout and proves
+// the deadline is honored while another connection holds the write lock.
+func TestRetryHelpersDeadlineDuringDriverBusyWait(t *testing.T) {
+	db, err := OpenDB(DefaultDBConfig(filepath.Join(testutil.TempDir(t), "driver-busy.db")), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	_, err = db.Exec("CREATE TABLE records(id INTEGER PRIMARY KEY)")
+	require.NoError(t, err)
+	writer, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	defer writer.Close()
+	spare, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, spare.Close())
+	_, err = writer.ExecContext(t.Context(), "BEGIN IMMEDIATE")
+	require.NoError(t, err)
+	defer writer.ExecContext(context.Background(), "ROLLBACK")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err = db.ExecInImmediateTxWithRetry(ctx, func(conn *sql.Conn) error {
+		_, err := conn.ExecContext(ctx, "INSERT INTO records VALUES (1)")
+		return err
+	})
+	require.Less(t, time.Since(started), 500*time.Millisecond)
+	require.True(t, errors.Is(err, context.DeadlineExceeded) || IsBusyError(err), "got %v", err)
+}
+
 func TestBusyErrorClassificationUsesSQLiteCodes(t *testing.T) {
 	db, err := OpenDB(DefaultDBConfig(filepath.Join(testutil.TempDir(t), "codes.db")), testutil.NewTestLogger())
 	require.NoError(t, err)

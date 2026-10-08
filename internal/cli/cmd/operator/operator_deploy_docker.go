@@ -334,13 +334,12 @@ func (d *deployDocker) awaitRequestID(ctx context.Context, dir string) (string, 
 	return awaitDeploymentRequestID(ctx, d, dir)
 }
 
-func (d *deployDocker) awaitSessionID(ctx context.Context, dir string) (string, error) {
-	return awaitDeploymentSessionID(ctx, d, dir)
-}
-
-func (d *deployDocker) awaitReady(ctx context.Context, dir string) error {
-	_, err := awaitDeploymentState(ctx, d, dir, models.OperatorDeploymentPhaseReady)
-	return err
+func (d *deployDocker) awaitReady(ctx context.Context, dir string) (string, error) {
+	state, err := awaitDeploymentState(ctx, d, dir, models.OperatorDeploymentPhaseReady)
+	if err != nil {
+		return "", err
+	}
+	return state.OperatorSessionID, nil
 }
 
 func (d *deployDocker) markReady(ctx context.Context, dir string) error {

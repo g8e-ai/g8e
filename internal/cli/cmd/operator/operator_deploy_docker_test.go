@@ -240,10 +240,9 @@ func TestDockerDeploymentDiscoversProgressWithoutReadingLogs(t *testing.T) {
 	require.Equal(t, "request", requestID)
 	state.Phase = models.OperatorDeploymentPhaseReady
 	state.OperatorSessionID = "session"
-	sessionID, err := d.awaitSessionID(context.Background(), dir)
+	sessionID, err := d.awaitReady(context.Background(), dir)
 	require.NoError(t, err)
 	require.Equal(t, "session", sessionID)
-	require.NoError(t, d.awaitReady(context.Background(), dir))
 	state.LaunchID = "old-launch"
 	progress, err := d.readDeploymentState(context.Background(), dir)
 	require.NoError(t, err)

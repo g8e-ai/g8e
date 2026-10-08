@@ -133,26 +133,6 @@ func TestOperatorPlatformEnrollmentClient_SetFingerprintOptions_ReplacesPriorOpt
 // Helpers
 // ---------------------------------------------------------------------------
 
-func TestParseRetryAfter_AcceptsOnlyPositiveSeconds(t *testing.T) {
-	tests := []struct {
-		in   string
-		want time.Duration
-	}{
-		{"", 0},
-		{"1", time.Second},
-		{"30", 30 * time.Second},
-		{"0", 0},
-		{"-5", 0},
-		{"soon", 0},
-		{"Wed, 21 Oct 2015 07:28:00 GMT", 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			assert.Equal(t, tt.want, parseRetryAfter(tt.in))
-		})
-	}
-}
-
 func TestTrimTrailingSlash(t *testing.T) {
 	tests := map[string]string{
 		"":               "",
@@ -254,7 +234,7 @@ func TestCsrFingerprint_RejectsMalformedRequests(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// pollUntilApproved
+// awaitApproval
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

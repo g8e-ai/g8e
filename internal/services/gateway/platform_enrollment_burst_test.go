@@ -26,9 +26,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// platformEnrollmentBurstClientDeadline mirrors the Operator's enrollment HTTP
-// timeout (operatorEnrollHTTPTimeout in internal/cli/serve). Every call in the
-// burst runs under it.
+// platformEnrollmentBurstClientDeadline is the service-level budget each burst
+// call runs under. The Operator client itself sets no per-request timeout; its
+// approval wait is bounded by the request expiry.
 const platformEnrollmentBurstClientDeadline = 10 * time.Second
 
 const (

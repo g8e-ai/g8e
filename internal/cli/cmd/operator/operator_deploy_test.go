@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -164,13 +162,6 @@ func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 	dirs := operatorDeployDirs(remoteDir, 2)
 
-	sessions := make([]*operatorv1.OperatorDocument, len(dirs))
-	for i, dir := range dirs {
-		sessions[i] = &operatorv1.OperatorDocument{
-			OperatorSessionId: deployedDirID(dir) + "-111",
-			Status:            string(constants.OperatorStatusActive),
-		}
-	}
 	pending := models.PlatformEnrollmentPendingResponse{}
 	response := models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "batch-receipt"}
 	for _, dir := range dirs {
@@ -178,11 +169,7 @@ func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing
 		pending.Requests = append(pending.Requests, models.PlatformEnrollmentPendingRequest{RequestID: id})
 		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: id, State: models.PlatformEnrollmentStateApproved})
 	}
-	listBody, err := json.Marshal(struct {
-		Success   bool                                      `json:"success"`
-		Operators []*operatorv1.OperatorDocument            `json:"operators"`
-		Requests  []models.PlatformEnrollmentPendingRequest `json:"requests"`
-	}{true, sessions, pending.Requests})
+	listBody, err := json.Marshal(pending)
 	require.NoError(t, err)
 	decisionBody, err := json.Marshal(response)
 	require.NoError(t, err)
@@ -192,6 +179,7 @@ func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing
 		"--count", "2", "--background", "--endpoint", "localhost", "--approve", "--log", "error")
 	require.NoError(t, err, out)
 
+	assert.Equal(t, []string{constants.APIPaths.AuthPlatformEnrollmentPending}, client.GetCalls)
 	require.Len(t, client.PostCalls, 1)
 	require.Equal(t, constants.APIPaths.AuthPlatformEnrollmentBatchDecision, client.PostCalls[0].Path)
 	decision := client.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest)
@@ -206,11 +194,7 @@ func TestOperatorDeployDoesNotWaitForARequestFromAnAlreadyEnrolledOperator(t *te
 	useFakeSSH(t, fakeWorkerAlreadyEnrolled)
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 
-	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: []*operatorv1.OperatorDocument{
-		{OperatorSessionId: deployedDirID(remoteDir) + "-111", Status: string(constants.OperatorStatusActive)},
-	}})
-	require.NoError(t, err)
-	client := &cmdtest.MockAPIClient{GetResp: listBody}
+	client := &cmdtest.MockAPIClient{}
 
 	start := time.Now()
 	out, err := runOperatorDeploy(t, client, "--hosts", "localhost", "--remote-dir", remoteDir,
@@ -218,6 +202,7 @@ func TestOperatorDeployDoesNotWaitForARequestFromAnAlreadyEnrolledOperator(t *te
 	require.NoError(t, err, out)
 
 	assert.Less(t, time.Since(start), operatorDeployEnrollTimeout, "must not wait out the enrollment timeout")
+	assert.Empty(t, client.GetCalls, "command readiness does not require a registry status lookup")
 	assert.Empty(t, client.PostCalls, "there is no request to approve")
 	assert.Contains(t, out, "already enrolled")
 	assert.Contains(t, out, deployedDirID(remoteDir)+"-111")
@@ -397,10 +382,8 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	useFakeSSH(t, fakeWorkerEnrolls)
 	root := filepath.Join(t.TempDir(), "fleet")
 	dirs := operatorDeployDirs(root, 12)
-	sessions := make([]*operatorv1.OperatorDocument, len(dirs))
 	expected := make(map[string]bool, len(dirs))
-	for i, dir := range dirs {
-		sessions[i] = &operatorv1.OperatorDocument{OperatorSessionId: deployedDirID(dir) + "-111", Status: string(constants.OperatorStatusActive)}
+	for _, dir := range dirs {
 		expected[deployedDirID(dir)+"-000"] = true
 	}
 	pending := models.PlatformEnrollmentPendingResponse{Requests: []models.PlatformEnrollmentPendingRequest{{RequestID: "unrelated"}}}
@@ -410,11 +393,7 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 		pending.Requests = append(pending.Requests, models.PlatformEnrollmentPendingRequest{RequestID: id})
 		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: id, State: models.PlatformEnrollmentStateApproved})
 	}
-	body, err := json.Marshal(struct {
-		Success   bool                                      `json:"success"`
-		Operators []*operatorv1.OperatorDocument            `json:"operators"`
-		Requests  []models.PlatformEnrollmentPendingRequest `json:"requests"`
-	}{true, sessions, pending.Requests})
+	body, err := json.Marshal(pending)
 	require.NoError(t, err)
 	postBody, err := json.Marshal(response)
 	require.NoError(t, err)
@@ -423,13 +402,14 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	out, err := runOperatorDeploy(t, client, "--hosts", "host", "--dest-dir", root,
 		"--count", "12", "--parallel", "4", "--background", "--approve", "--endpoint", "localhost")
 	require.NoError(t, err, out)
+	assert.Equal(t, []string{constants.APIPaths.AuthPlatformEnrollmentPending}, client.GetCalls)
 	require.Len(t, client.PostCalls, 1)
 	for _, decision := range client.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest).Requests {
 		require.True(t, expected[decision.RequestID], "only this cohort may be approved")
 		delete(expected, decision.RequestID)
 	}
 	assert.Empty(t, expected)
-	for _, op := range sessions {
-		assert.Contains(t, out, op.OperatorSessionId)
+	for _, dir := range dirs {
+		assert.Contains(t, out, deployedDirID(dir)+"-111")
 	}
 }

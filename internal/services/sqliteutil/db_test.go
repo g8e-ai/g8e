@@ -27,7 +27,7 @@ func TestDefaultDBConfig(t *testing.T) {
 	cfg := DefaultDBConfig("/some/path/db.sqlite")
 	assert.Equal(t, "/some/path/db.sqlite", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
-	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
+	assert.Equal(t, DefaultBusyTimeoutMs, cfg.BusyTimeoutMs)
 	assert.Equal(t, 10, cfg.MaxRetries)
 	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }
@@ -703,7 +703,7 @@ func TestDefaultDBConfig_Tier1_SetsAllDefaults(t *testing.T) {
 
 	assert.Equal(t, "/test/path.db", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
-	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
+	assert.Equal(t, DefaultBusyTimeoutMs, cfg.BusyTimeoutMs)
 	assert.Equal(t, 10, cfg.MaxRetries)
 	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }

@@ -67,21 +67,21 @@ func TestDeploymentReadsSessionAndFailureWithoutLogs(t *testing.T) {
 			target := deploySSH{local: true, launchID: "current"}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 			defer cancel()
+			ops := []deployedOperator{{target: target, Dir: dir, SessionID: "retained-session"}}
 			requestID, err := target.awaitRequestID(ctx, dir)
 			if phase == models.OperatorDeploymentPhaseFailed {
 				require.ErrorIs(t, err, constants.ErrOperatorDeployFailed)
 				require.ErrorContains(t, err, "startup failed")
+				require.ErrorIs(t, awaitOperatorsOnline(ctx, ops), constants.ErrOperatorDeployFailed)
 				return
 			}
 			require.NoError(t, err)
 			require.Empty(t, requestID, "completed requests must not be approved again")
-			sessionID, err := target.awaitSessionID(ctx, dir)
-			require.NoError(t, err)
-			require.Equal(t, "session", sessionID)
 			if phase == models.OperatorDeploymentPhaseReady {
-				require.NoError(t, target.awaitReady(ctx, dir))
+				require.NoError(t, awaitOperatorsOnline(ctx, ops))
+				require.Equal(t, "session", ops[0].SessionID)
 			} else {
-				require.ErrorIs(t, target.awaitReady(ctx, dir), context.DeadlineExceeded)
+				require.ErrorIs(t, awaitOperatorsOnline(ctx, ops), context.DeadlineExceeded)
 			}
 		})
 	}

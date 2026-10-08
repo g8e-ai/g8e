@@ -18,18 +18,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
-	mathrand "math/rand/v2"
 	"net/http"
 
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -45,23 +41,7 @@ import (
 // component that submits two CSRs (operator + CLI) and signs the
 // completion transcript with both private keys.
 const (
-	operatorEnrollHTTPTimeout = 10 * time.Second
-	// Catch automated owner approval promptly, then back off for interactive enrollment.
-	operatorEnrollPollInitial     = 500 * time.Millisecond
-	operatorEnrollPollMax         = 30 * time.Second
-	operatorEnrollPollJitter      = 100 * time.Millisecond
 	operatorEnrollDefaultDeadline = 30 * time.Minute
-
-	// Request submission retry. The gateway starts with zero users; workloads
-	// start immediately after the gateway becomes healthy and may submit their
-	// enrollment request before the owner has bootstrapped the first user. The
-	// gateway returns 403 "platform enrollment requires a bootstrapped gateway"
-	// until bootstrap. The client retries with bounded backoff so the workload
-	// waits for bootstrap without exiting.
-	operatorEnrollSubmitInitial  = 3 * time.Second
-	operatorEnrollSubmitMax      = 30 * time.Second
-	operatorEnrollSubmitJitter   = 1 * time.Second
-	operatorEnrollSubmitDeadline = 30 * time.Minute
 )
 
 // OperatorEnrollmentResult is the resolved operator identity after a
@@ -272,12 +252,12 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		return nil, err
 	}
 
-	// Step 5: Poll status until approved.
+	// Step 5: Hold one status request until the owner decides.
 	deadline := operatorEnrollDefaultDeadline
 	if pending != nil && !pending.ExpiresAt.IsZero() {
 		deadline = time.Until(pending.ExpiresAt)
 	}
-	if err := c.pollUntilApproved(ctx, token, deadline); err != nil {
+	if err := c.awaitApproval(ctx, token, deadline); err != nil {
 		return nil, err
 	}
 
@@ -297,7 +277,7 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 	}
 
 	// Step 7: Submit completion and validate the response.
-	completionResp, err := c.submitCompletionUntilIssued(ctx, token, operatorProof, cliProof, time.Now().Add(deadline))
+	completionResp, err := c.submitCompletion(ctx, token, operatorProof, cliProof)
 	if err != nil {
 		return nil, err
 	}
@@ -388,156 +368,76 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 		return nil, fmt.Errorf("operator enrollment: marshal request: %w", err)
 	}
 
-	// Retry with bounded backoff until the gateway is bootstrapped. The gateway
-	// starts with zero users and returns 403 "platform enrollment requires a
-	// bootstrapped gateway" until the owner bootstraps the first user. Workloads
-	// start immediately after the gateway becomes healthy, so the first submit
-	// attempt may race with bootstrap.
-	delay := operatorEnrollSubmitInitial
-	deadline := time.Now().Add(operatorEnrollSubmitDeadline)
-	for {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := doHTTPRequest(ctx, req)
-		if err != nil {
-			// Network error: back off and retry.
-			if waitErr := c.sleep(ctx, delay); waitErr != nil {
-				return nil, waitErr
-			}
-			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollSubmitMax)))
-			if time.Now().After(deadline) {
-				return nil, fmt.Errorf("operator enrollment: submit request: %w", err)
-			}
-			continue
-		}
-
-		respBody, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			return nil, fmt.Errorf("operator enrollment: read response: %w", readErr)
-		}
-
-		if resp.StatusCode == http.StatusCreated {
-			var createResp models.PlatformEnrollmentCreateResponse
-			if err := json.Unmarshal(respBody, &createResp); err != nil {
-				return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
-			}
-			return &createResp, nil
-		}
-
-		// 403 "requires a bootstrapped gateway": the gateway is not yet
-		// bootstrapped. Back off and retry until bootstrap.
-		if resp.StatusCode == http.StatusForbidden && strings.Contains(string(respBody), constants.ErrPlatformEnrollmentRequiresBootstrap.Error()) {
-			c.logger.Info("operator enrollment: gateway not yet bootstrapped, retrying", "delay", delay.String())
-			if waitErr := c.sleep(ctx, delay); waitErr != nil {
-				return nil, waitErr
-			}
-			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollSubmitMax)))
-			if time.Now().After(deadline) {
-				return nil, fmt.Errorf("operator enrollment: gateway not bootstrapped within %s: HTTP %d: %s", operatorEnrollSubmitDeadline, resp.StatusCode, string(respBody))
-			}
-			continue
-		}
-
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := doHTTPRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: submit request: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("operator enrollment: request rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
+	var createResp models.PlatformEnrollmentCreateResponse
+	if err := json.Unmarshal(respBody, &createResp); err != nil {
+		return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
+	}
+	return &createResp, nil
 }
 
-func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context, token string, deadline time.Duration) error {
-	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentStatus
-	deadlineTime := time.Now().Add(deadline)
-	delay := operatorEnrollPollInitial
-
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if time.Now().After(deadlineTime) {
-			_ = c.removePendingState(c.pendingStatePath())
-			return fmt.Errorf("operator enrollment: polling deadline reached before approval")
-		}
-
-		pollCtx, cancel := context.WithTimeout(ctx, operatorEnrollHTTPTimeout)
-		u := endpoint + "?token=" + url.QueryEscape(token)
-		req, err := http.NewRequestWithContext(pollCtx, http.MethodGet, u, nil)
-		if err != nil {
-			cancel()
-			return fmt.Errorf("operator enrollment: create status request: %w", err)
-		}
-		req.Header.Set("Cache-Control", "no-store")
-
-		resp, err := doHTTPRequest(pollCtx, req)
-		if err != nil {
-			cancel()
-			// Network error: back off and retry.
-			if waitErr := c.sleep(ctx, delay); waitErr != nil {
-				return waitErr
-			}
-			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollPollMax)))
-			continue
-		}
-
-		if resp.StatusCode == http.StatusTooManyRequests {
-			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-			resp.Body.Close()
-			cancel()
-			wait := retryAfter
-			if wait == 0 {
-				wait = delay
-			}
-			if waitErr := c.sleep(ctx, wait); waitErr != nil {
-				return waitErr
-			}
-			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollPollMax)))
-			continue
-		}
-
-		respBody, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		cancel()
-		if err != nil {
-			return fmt.Errorf("operator enrollment: read status response: %w", err)
-		}
-		if resp.StatusCode == http.StatusGone {
-			_ = c.removePendingState(c.pendingStatePath())
-			return fmt.Errorf("operator enrollment: request has expired (HTTP 410)")
-		}
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("operator enrollment: status query failed: HTTP %d: %s", resp.StatusCode, string(respBody))
-		}
-
-		var statusResp models.PlatformEnrollmentStatusResponse
-		if err := json.Unmarshal(respBody, &statusResp); err != nil {
-			return fmt.Errorf("operator enrollment: parse status response: %w", err)
-		}
-
-		switch statusResp.State {
-		case models.PlatformEnrollmentStateApproved, models.PlatformEnrollmentStateCompleted:
-			return nil
-		case models.PlatformEnrollmentStateDenied:
-			return fmt.Errorf("operator enrollment: request was denied by the owner")
-		case models.PlatformEnrollmentStateExpired:
-			_ = c.removePendingState(c.pendingStatePath())
-			return fmt.Errorf("operator enrollment: request has expired")
-		}
-
-		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		wait := retryAfter
-		if wait == 0 {
-			wait = delay
-		}
-		if waitErr := c.sleep(ctx, wait); waitErr != nil {
-			return waitErr
-		}
-		delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollPollMax)))
+func (c *OperatorPlatformEnrollmentClient) awaitApproval(ctx context.Context, token string, deadline time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if deadline <= 0 {
+		_ = c.removePendingState(c.pendingStatePath())
+		return fmt.Errorf("operator enrollment: approval deadline reached before approval")
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentStatus + "?wait=true&token=" + url.QueryEscape(token)
+	req, err := http.NewRequestWithContext(waitCtx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("operator enrollment: create status request: %w", err)
+	}
+	req.Header.Set("Cache-Control", "no-store")
+	resp, err := doHTTPRequest(waitCtx, req)
+	if err != nil {
+		return fmt.Errorf("operator enrollment: await approval: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("operator enrollment: read status response: %w", err)
+	}
+	if resp.StatusCode == http.StatusGone {
+		_ = c.removePendingState(c.pendingStatePath())
+		return fmt.Errorf("operator enrollment: request has expired (HTTP 410)")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("operator enrollment: status query failed: HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+	var statusResp models.PlatformEnrollmentStatusResponse
+	if err := json.Unmarshal(respBody, &statusResp); err != nil {
+		return fmt.Errorf("operator enrollment: parse status response: %w", err)
+	}
+	switch statusResp.State {
+	case models.PlatformEnrollmentStateApproved, models.PlatformEnrollmentStateCompleted:
+		return nil
+	case models.PlatformEnrollmentStateDenied:
+		return fmt.Errorf("operator enrollment: request was denied by the owner")
+	case models.PlatformEnrollmentStateExpired:
+		_ = c.removePendingState(c.pendingStatePath())
+		return fmt.Errorf("operator enrollment: request has expired")
+	default:
+		return fmt.Errorf("operator enrollment: unexpected approval state %s", statusResp.State)
 	}
 }
 
@@ -555,16 +455,14 @@ func (c *OperatorPlatformEnrollmentClient) submitCompletion(ctx context.Context,
 		return nil, fmt.Errorf("operator enrollment: marshal completion: %w", err)
 	}
 
-	completionCtx, cancel := context.WithTimeout(ctx, operatorEnrollHTTPTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(completionCtx, http.MethodPost, endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("operator enrollment: create completion request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cache-Control", "no-store")
 
-	resp, err := doHTTPRequest(completionCtx, req)
+	resp, err := doHTTPRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("operator enrollment: submit completion: %w", err)
 	}
@@ -573,9 +471,6 @@ func (c *OperatorPlatformEnrollmentClient) submitCompletion(ctx context.Context,
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("operator enrollment: read completion response: %w", err)
-	}
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, &enrollmentIssuanceHeldError{retryAfter: parseRetryAfter(resp.Header.Get("Retry-After")), body: string(respBody)}
 	}
 	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("operator enrollment: completion rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
@@ -586,44 +481,6 @@ func (c *OperatorPlatformEnrollmentClient) submitCompletion(ctx context.Context,
 		return nil, fmt.Errorf("operator enrollment: parse completion response: %w", err)
 	}
 	return &completionResp, nil
-}
-
-// enrollmentIssuanceHeldError is the Gateway's 429 for a held issuance lease:
-// an earlier attempt (for example one whose response was lost) is still
-// issuing. The approval is intact, so the caller retries into the stored result.
-type enrollmentIssuanceHeldError struct {
-	retryAfter time.Duration
-	body       string
-}
-
-func (e *enrollmentIssuanceHeldError) Error() string {
-	return fmt.Sprintf("operator enrollment: issuance in progress: HTTP 429: %s", e.body)
-}
-
-// submitCompletionUntilIssued repeats submitCompletion while the issuance lease
-// is held, waiting its Retry-After (or the poll backoff) between attempts. Each
-// attempt keeps the operatorEnrollHTTPTimeout; only the overall wait until the
-// request's own expiry is extended.
-func (c *OperatorPlatformEnrollmentClient) submitCompletionUntilIssued(ctx context.Context, token, operatorProof, cliProof string, deadline time.Time) (*models.PlatformEnrollmentCompleteResponse, error) {
-	delay := operatorEnrollPollInitial
-	for {
-		resp, err := c.submitCompletion(ctx, token, operatorProof, cliProof)
-		var held *enrollmentIssuanceHeldError
-		if !errors.As(err, &held) {
-			return resp, err
-		}
-		if time.Now().After(deadline) {
-			return nil, err
-		}
-		wait := held.retryAfter
-		if wait == 0 {
-			wait = delay
-		}
-		if waitErr := c.sleep(ctx, wait); waitErr != nil {
-			return nil, waitErr
-		}
-		delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollPollMax)))
-	}
 }
 
 // --- Credential writes ---
@@ -829,33 +686,9 @@ func encodeECPrivateKeyPEM(key *ecdsa.PrivateKey) (string, error) {
 	return string(pemBytes), nil
 }
 
-func (c *OperatorPlatformEnrollmentClient) sleep(ctx context.Context, base time.Duration) error {
-	jitter := time.Duration(mathrand.Int64N(int64(operatorEnrollPollJitter))) //nolint:gosec // poll jitter, not security-sensitive; keys use crypto/rand
-	total := base + jitter
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(total):
-		return nil
-	}
-}
-
 func doHTTPRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 	client := &http.Client{}
 	return client.Do(req.WithContext(ctx))
-}
-
-func parseRetryAfter(value string) time.Duration {
-	if value == "" {
-		return 0
-	}
-	// Retry-After can be seconds or an HTTP-date. We only support
-	// seconds here, which is what the gateway sends.
-	var seconds int
-	if _, err := fmt.Sscanf(value, "%d", &seconds); err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 func trimTrailingSlash(s string) string {

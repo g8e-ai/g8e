@@ -110,30 +110,20 @@ func TestSubmitRequest_RejectionsAreTerminalAndNotRetried(t *testing.T) {
 	}
 }
 
-func TestSubmitRequest_WaitsForGatewayBootstrapInsteadOfFailing(t *testing.T) {
+func TestSubmitRequest_BootstrapAndNetworkFailuresAreReturnedWithoutRetry(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{request: func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = io.WriteString(w, constants.ErrPlatformEnrollmentRequiresBootstrap.Error())
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
-
-	resp, err := client.submitRequest(shortContext(t, 300*time.Millisecond), "op", "cli", "fp")
-
-	require.ErrorIs(t, err, context.DeadlineExceeded, "the client waits for bootstrap until its context ends")
-	assert.Nil(t, resp)
-	assert.EqualValues(t, 1, stub.requestHits.Load(), "the client must back off rather than hammer an unbootstrapped gateway")
-}
-
-func TestSubmitRequest_RetriesNetworkFailuresUntilContextEnds(t *testing.T) {
-	stub := newEnrollStub(t, enrollRoutes{})
-	url := stub.server.URL
+	_, err := client.submitRequest(t.Context(), "op", "cli", "fp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "request rejected: HTTP 403")
+	assert.EqualValues(t, 1, stub.requestHits.Load())
 	stub.server.Close()
-	client, _ := newEnrollClient(t, url)
-
-	resp, err := client.submitRequest(shortContext(t, 300*time.Millisecond), "op", "cli", "fp")
-
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Nil(t, resp)
+	_, err = client.submitRequest(t.Context(), "op", "cli", "fp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "submit request")
 }
 
 func TestSubmitRequest_ReturnsContextErrorWithoutContactingGatewayWhenAlreadyCancelled(t *testing.T) {
@@ -161,7 +151,7 @@ func TestSubmitRequest_RejectsUnparseableCreatedResponse(t *testing.T) {
 	assert.Contains(t, err.Error(), "parse response")
 }
 
-func TestPollUntilApproved_TerminalStates(t *testing.T) {
+func TestAwaitApproval_TerminalStates(t *testing.T) {
 	tests := []struct {
 		name    string
 		state   models.PlatformEnrollmentState
@@ -177,7 +167,7 @@ func TestPollUntilApproved_TerminalStates(t *testing.T) {
 			stub := newEnrollStub(t, enrollRoutes{status: statusReply(tt.state)})
 			client, _ := newEnrollClient(t, stub.server.URL)
 
-			err := client.pollUntilApproved(t.Context(), "tok", time.Minute)
+			err := client.awaitApproval(t.Context(), "tok", time.Minute)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)
@@ -185,12 +175,12 @@ func TestPollUntilApproved_TerminalStates(t *testing.T) {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErr)
 			}
-			assert.EqualValues(t, 1, stub.statusHits.Load(), "a terminal state ends polling immediately")
+			assert.EqualValues(t, 1, stub.statusHits.Load(), "a terminal state completes the held request")
 		})
 	}
 }
 
-func TestPollUntilApproved_EscapesTheRequesterTokenInTheQuery(t *testing.T) {
+func TestAwaitApproval_EscapesTheRequesterTokenInTheQuery(t *testing.T) {
 	const token = "a b&c=d/+?"
 	var gotToken, gotCacheControl string
 	stub := newEnrollStub(t, enrollRoutes{status: func(w http.ResponseWriter, r *http.Request) {
@@ -200,13 +190,13 @@ func TestPollUntilApproved_EscapesTheRequesterTokenInTheQuery(t *testing.T) {
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
 
-	require.NoError(t, client.pollUntilApproved(t.Context(), token, time.Minute))
+	require.NoError(t, client.awaitApproval(t.Context(), token, time.Minute))
 
 	assert.Equal(t, token, gotToken, "the token must survive URL encoding intact")
 	assert.Equal(t, "no-store", gotCacheControl)
 }
 
-func TestPollUntilApproved_FailsOnUnexpectedGatewayAnswers(t *testing.T) {
+func TestAwaitApproval_FailsOnUnexpectedGatewayAnswers(t *testing.T) {
 	tests := []struct {
 		name    string
 		handler http.HandlerFunc
@@ -233,7 +223,7 @@ func TestPollUntilApproved_FailsOnUnexpectedGatewayAnswers(t *testing.T) {
 			stub := newEnrollStub(t, enrollRoutes{status: tt.handler})
 			client, _ := newEnrollClient(t, stub.server.URL)
 
-			err := client.pollUntilApproved(t.Context(), "tok", time.Minute)
+			err := client.awaitApproval(t.Context(), "tok", time.Minute)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantMsg)
@@ -242,81 +232,65 @@ func TestPollUntilApproved_FailsOnUnexpectedGatewayAnswers(t *testing.T) {
 	}
 }
 
-func TestPollUntilApproved_StopsWhenDeadlineHasPassed(t *testing.T) {
+func TestAwaitApproval_StopsWhenDeadlineHasPassed(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{status: statusReply(models.PlatformEnrollmentStateApproved)})
 	client, _ := newEnrollClient(t, stub.server.URL)
 
-	err := client.pollUntilApproved(t.Context(), "tok", -time.Second)
+	err := client.awaitApproval(t.Context(), "tok", -time.Second)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "polling deadline reached before approval")
+	assert.Contains(t, err.Error(), "approval deadline reached before approval")
 	assert.Zero(t, stub.statusHits.Load(), "an expired attempt must not query the gateway")
 }
 
-func TestPollUntilApproved_ReturnsContextErrorWhenCancelled(t *testing.T) {
+func TestAwaitApproval_ReturnsContextErrorWhenCancelled(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{status: statusReply(models.PlatformEnrollmentStateApproved)})
 	client, _ := newEnrollClient(t, stub.server.URL)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := client.pollUntilApproved(ctx, "tok", time.Minute)
+	err := client.awaitApproval(ctx, "tok", time.Minute)
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Zero(t, stub.statusHits.Load())
 }
 
-func TestPollUntilApproved_HonorsGatewayBackpressure(t *testing.T) {
-	tests := []struct {
-		name    string
-		handler http.HandlerFunc
-	}{
-		{
-			name: "429 with Retry-After",
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Retry-After", "60")
-				w.WriteHeader(http.StatusTooManyRequests)
-			},
-		},
-		{
-			name: "429 without Retry-After falls back to the client backoff",
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusTooManyRequests)
-			},
-		},
-		{
-			name: "still pending with Retry-After",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Retry-After", "60")
-				statusReply(models.PlatformEnrollmentStatePending)(w, r)
-			},
-		},
-		{
-			name:    "still pending without Retry-After",
-			handler: statusReply(models.PlatformEnrollmentStatePending),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stub := newEnrollStub(t, enrollRoutes{status: tt.handler})
-			client, _ := newEnrollClient(t, stub.server.URL)
-
-			err := client.pollUntilApproved(shortContext(t, 300*time.Millisecond), "tok", time.Minute)
-
-			require.ErrorIs(t, err, context.DeadlineExceeded, "polling waits out the backoff until the caller's context ends")
-			assert.EqualValues(t, 1, stub.statusHits.Load(), "the client must back off instead of re-polling immediately")
-		})
-	}
+func TestAwaitApproval_HoldsOneRequestUntilDecision(t *testing.T) {
+	started := make(chan struct{})
+	decided := make(chan struct{})
+	stub := newEnrollStub(t, enrollRoutes{status: func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "true", r.URL.Query().Get("wait"))
+		close(started)
+		select {
+		case <-decided:
+			statusReply(models.PlatformEnrollmentStateApproved)(w, r)
+		case <-r.Context().Done():
+		}
+	}})
+	client, _ := newEnrollClient(t, stub.server.URL)
+	done := make(chan error, 1)
+	go func() { done <- client.awaitApproval(t.Context(), "tok", time.Minute) }()
+	<-started
+	close(decided)
+	require.NoError(t, <-done)
+	assert.EqualValues(t, 1, stub.statusHits.Load())
 }
 
-func TestPollUntilApproved_RetriesNetworkFailuresUntilContextEnds(t *testing.T) {
-	stub := newEnrollStub(t, enrollRoutes{})
-	url := stub.server.URL
-	stub.server.Close()
-	client, _ := newEnrollClient(t, url)
-
-	err := client.pollUntilApproved(shortContext(t, 300*time.Millisecond), "tok", time.Minute)
-
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+func TestAwaitApproval_CancellationEndsHeldRequest(t *testing.T) {
+	started := make(chan struct{})
+	stub := newEnrollStub(t, enrollRoutes{status: func(_ http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	}})
+	client, _ := newEnrollClient(t, stub.server.URL)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	go func() { done <- client.awaitApproval(ctx, "tok", time.Minute) }()
+	<-started
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+	assert.EqualValues(t, 1, stub.statusHits.Load())
 }
 
 func TestSubmitCompletion_SendsTokenAndBothProofs(t *testing.T) {
@@ -605,45 +579,13 @@ func TestEnroll_ProofsVerifyAgainstTheKeysSubmittedInTheRequest(t *testing.T) {
 	assert.False(t, verify(proofs.CLI, operatorKey), "the CLI proof must not verify against the operator key")
 }
 
-func TestSubmitCompletionUntilIssued_RetriesHeldLease(t *testing.T) {
-	var hits atomic.Int32
-	stub := newEnrollStub(t, enrollRoutes{complete: func(w http.ResponseWriter, _ *http.Request) {
-		if hits.Add(1) == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
-		respondJSON(w, http.StatusCreated, models.PlatformEnrollmentCompleteResponse{
-			RequestID: "req-1", ComponentKind: models.PlatformComponentOperator,
-			Operator: &models.PlatformEnrollmentOperatorCredentials{OperatorID: "op-9"},
-		})
-	}})
-	client, _ := newEnrollClient(t, stub.server.URL)
-
-	resp, err := client.submitCompletionUntilIssued(shortContext(t, 10*time.Second), "tok", "a", "b", time.Now().Add(time.Minute))
-
-	require.NoError(t, err)
-	assert.Equal(t, "op-9", resp.Operator.OperatorID)
-	assert.EqualValues(t, 2, hits.Load())
-}
-
-func TestSubmitCompletionUntilIssued_StopsAtDeadlineAndOnCancellation(t *testing.T) {
+func TestSubmitCompletion_HeldLeaseIsReturnedWithoutRetry(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{complete: func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
-
-	t.Run("request lifetime exhausted", func(t *testing.T) {
-		before := stub.completeHit.Load()
-		_, err := client.submitCompletionUntilIssued(t.Context(), "tok", "a", "b", time.Now().Add(-time.Second))
-
-		var held *enrollmentIssuanceHeldError
-		require.ErrorAs(t, err, &held)
-		assert.EqualValues(t, 1, stub.completeHit.Load()-before)
-	})
-
-	t.Run("caller cancelled while backing off", func(t *testing.T) {
-		_, err := client.submitCompletionUntilIssued(shortContext(t, 200*time.Millisecond), "tok", "a", "b", time.Now().Add(time.Hour))
-
-		require.ErrorIs(t, err, context.DeadlineExceeded)
-	})
+	_, err := client.submitCompletion(t.Context(), "tok", "a", "b")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "completion rejected: HTTP 429")
+	assert.EqualValues(t, 1, stub.completeHit.Load())
 }

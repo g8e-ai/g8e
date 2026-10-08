@@ -69,6 +69,17 @@ func (p *ApprovalsChangePublisher) EnrollmentsChanged() {
 	}
 }
 
+// EnrollmentsDecided wakes token-authenticated status requests after the
+// governed decision commits, then updates the owner's existing SSE views.
+// The internal invalidation uses the registered approvals event; no enrollment
+// token or request details enter pub/sub.
+func (p *ApprovalsChangePublisher) EnrollmentsDecided() {
+	if p.publisher.pubsub != nil {
+		p.publisher.pubsub.Publish(string(constants.EventPlatformApprovalsChanged), nil)
+	}
+	p.EnrollmentsChanged()
+}
+
 // publish emits the event to every unexpired web session and active CLI session of userID.
 // Sessions are delivered independently; the returned error joins every failure.
 func (p *ApprovalsChangePublisher) publish(userID string, subject models.ApprovalsChangedSubject) error {

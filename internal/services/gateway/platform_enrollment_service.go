@@ -343,6 +343,47 @@ func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string)
 	return s.statusResponse(req), nil
 }
 
+// WaitForDecision holds one status request while its enrollment is pending.
+// Subscribe before reading the snapshot so a concurrent committed decision
+// cannot fall between the read and the wait. Only decision events trigger a
+// subsequent read; expiry and cancellation bound the wait.
+func (s *PlatformEnrollmentService) WaitForDecision(ctx context.Context, token string) (*models.PlatformEnrollmentStatusResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.approvals.publisher.pubsub == nil {
+		return nil, constants.ErrPlatformEnrollmentDepsRequired
+	}
+	changed := make(chan struct{}, 1)
+	unregister := s.approvals.publisher.pubsub.RegisterHandler(string(constants.EventPlatformApprovalsChanged), func(_ string, _ []byte) {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+	defer unregister()
+
+	status, err := s.GetStatus(ctx, token)
+	if err != nil || status.State != models.PlatformEnrollmentStatePending {
+		return status, err
+	}
+	expiry := time.NewTimer(time.Until(status.ExpiresAt))
+	defer expiry.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-expiry.C:
+			return s.GetStatus(ctx, token)
+		case <-changed:
+			status, err = s.GetStatus(ctx, token)
+			if err != nil || status.State != models.PlatformEnrollmentStatePending {
+				return status, err
+			}
+		}
+	}
+}
+
 // Decide authorizes an owner decision (approve or deny) on a pending
 // request. The actorUserID is derived from authenticated context
 // (web session or mTLS CLI) by the controller; it must be the active
@@ -432,7 +473,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		"request_id", req.RequestID,
 		"decision", string(req.Decision),
 		"actor_user_id", actorUserID)
-	s.approvals.EnrollmentsChanged()
+	s.approvals.EnrollmentsDecided()
 
 	return &models.PlatformEnrollmentDecisionResponse{
 		RequestID: req.RequestID,
@@ -483,7 +524,7 @@ func (s *PlatformEnrollmentService) DecideBatch(ctx context.Context, actorUserID
 	for i, target := range req.Requests {
 		resp.Requests[i] = models.PlatformEnrollmentDecisionResponse{RequestID: target.RequestID, State: state}
 	}
-	s.approvals.EnrollmentsChanged()
+	s.approvals.EnrollmentsDecided()
 	return resp, nil
 }
 

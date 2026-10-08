@@ -81,8 +81,7 @@ type deployTarget interface {
 	startOperator(context.Context, string, string, ...string) error
 	readDeploymentState(context.Context, string) (*models.OperatorDeploymentState, error)
 	awaitRequestID(context.Context, string) (string, error)
-	awaitSessionID(context.Context, string) (string, error)
-	awaitReady(context.Context, string) error
+	awaitReady(context.Context, string) (string, error)
 	markReady(context.Context, string) error
 }
 
@@ -146,7 +145,7 @@ Role IDs default to unique, stable values per host/directory. Flag values suppor
 --operator-endpoint selects the worker-facing Gateway host and defaults to --endpoint.
 --approve approves enrollment as
 the authenticated owner in one batch after every worker is staged, then verifies
-all deployed sessions are active. Without --approve, workers remain pending. Repeating a deployment replaces only its own workers.`,
+every worker has established its command subscription. Without --approve, workers remain pending. Repeating a deployment replaces only its own workers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -238,7 +237,7 @@ all deployed sessions are active. Without --approve, workers remain pending. Rep
 					return err
 				}
 				cmd.Printf("Waiting for %d operator(s) to come online...\n", len(deployed))
-				if err := awaitOperatorsOnline(ctx, opts.client, creds.UserID, deployed); err != nil {
+				if err := awaitOperatorsOnline(ctx, deployed); err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrOperatorDeployFailed, err)
 				}
 				for _, op := range deployed {
@@ -359,47 +358,24 @@ func approveDeployedOperators(client authcmd.APIClient, ops []deployedOperator) 
 	return nil
 }
 
-// awaitOperatorsOnline resolves each Operator's session ID from its start log,
-// then waits until the Gateway lists every one of them as active.
-func awaitOperatorsOnline(ctx context.Context, client authcmd.APIClient, userID string, ops []deployedOperator) error {
+// awaitOperatorsOnline waits for this launch's acknowledged command subscription
+// and reads its session ID from the same deployment state.
+func awaitOperatorsOnline(ctx context.Context, ops []deployedOperator) error {
 	ctx, cancel := context.WithTimeout(ctx, operatorDeployOnlineBaseTimeout+time.Duration(len(ops))*operatorDeployOnlinePerOperator)
 	defer cancel()
 
 	for i := range ops {
-		if ops[i].SessionID != "" {
-			continue
-		}
-		sessionID, err := ops[i].target.awaitSessionID(ctx, ops[i].Dir)
+		sessionID, err := ops[i].target.awaitReady(ctx, ops[i].Dir)
 		if err != nil {
 			return fmt.Errorf("%s:%s: %w", ops[i].target.name(), ops[i].Dir, err)
 		}
 		ops[i].SessionID = sessionID
-		if err := ops[i].target.awaitReady(ctx, ops[i].Dir); err != nil {
-			return err
-		}
 		if err := ops[i].target.markReady(ctx, ops[i].Dir); err != nil {
 			return err
 		}
 	}
 
-	return pollUntil(ctx, func() (bool, error) {
-		operators, err := listUserOperators(client, userID)
-		if err != nil {
-			return false, err
-		}
-		active := make(map[string]struct{}, len(operators))
-		for _, op := range operators {
-			if constants.OperatorStatus(op.Status) == constants.OperatorStatusActive {
-				active[op.OperatorSessionId] = struct{}{}
-			}
-		}
-		for _, op := range ops {
-			if _, ok := active[op.SessionID]; !ok {
-				return false, nil
-			}
-		}
-		return true, nil
-	})
+	return nil
 }
 
 // pollUntil calls check every operatorDeployPollInterval until it reports done,
@@ -621,10 +597,6 @@ func (s deploySSH) awaitRequestID(ctx context.Context, dir string) (string, erro
 	return awaitDeploymentRequestID(ctx, s, dir)
 }
 
-func (s deploySSH) awaitSessionID(ctx context.Context, dir string) (string, error) {
-	return awaitDeploymentSessionID(ctx, s, dir)
-}
-
 // Reuse start's flag definitions so deploy and start cannot drift in types/defaults.
 var operatorDeployForwardFlags = []string{
 	"roles", "inference-enabled", "inference-ollama-endpoint", "inference-keep-alive",
@@ -735,9 +707,12 @@ func operatorDeployArgsForDir(args []string, host, dir string) []string {
 
 // A retained registry session may still be marked active from the old process.
 // Require this launch to establish its command subscription before trusting it.
-func (s deploySSH) awaitReady(ctx context.Context, dir string) error {
-	_, err := awaitDeploymentState(ctx, s, dir, models.OperatorDeploymentPhaseReady)
-	return err
+func (s deploySSH) awaitReady(ctx context.Context, dir string) (string, error) {
+	state, err := awaitDeploymentState(ctx, s, dir, models.OperatorDeploymentPhaseReady)
+	if err != nil {
+		return "", err
+	}
+	return state.OperatorSessionID, nil
 }
 
 func validateOperatorDeployFlags(

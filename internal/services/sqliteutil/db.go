@@ -22,6 +22,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
+// DefaultBusyTimeoutMs bounds the uninterruptible driver busy wait. Longer
+// waits belong to the retry helpers' context-aware backoff.
+const DefaultBusyTimeoutMs = 100
+
 // DBConfig holds common configuration for opening a SQLite database.
 type DBConfig struct {
 	// Path is the filesystem path to the SQLite database file.
@@ -31,8 +35,10 @@ type DBConfig struct {
 	// Default: 64
 	CacheSizeMB int
 
-	// BusyTimeoutMs is the SQLite busy timeout in milliseconds.
-	// Default: 5000
+	// BusyTimeoutMs is the SQLite busy timeout in milliseconds. The driver
+	// sleeps inside the statement for this long and a context cannot interrupt
+	// it, so it must stay short; the retry helpers do the context-aware waiting.
+	// Default: DefaultBusyTimeoutMs
 	BusyTimeoutMs int
 
 	// MaxRetries is the maximum number of retry attempts for SQLITE_BUSY errors.
@@ -51,7 +57,7 @@ func DefaultDBConfig(path string) DBConfig {
 	return DBConfig{
 		Path:             path,
 		CacheSizeMB:      64,
-		BusyTimeoutMs:    30000, // Increased to 30s for parallel test concurrency
+		BusyTimeoutMs:    DefaultBusyTimeoutMs,
 		MaxRetries:       10,
 		RetryBaseDelayMs: 50,
 	}

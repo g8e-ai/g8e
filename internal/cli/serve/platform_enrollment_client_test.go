@@ -354,28 +354,28 @@ func (mg *mockGateway) handleStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	// Wait for approval signal.
+	// wait=true holds the response until the owner decides, as the Gateway does.
+	if r.URL.Query().Get("wait") == "true" {
+		select {
+		case <-mg.approveCh:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	state := models.PlatformEnrollmentStatePending
 	select {
 	case <-mg.approveCh:
-		resp := models.PlatformEnrollmentStatusResponse{
-			RequestID:     mg.requestID,
-			ComponentKind: models.PlatformComponentOperator,
-			State:         models.PlatformEnrollmentStateApproved,
-			ExpiresAt:     time.Now().Add(25 * time.Minute).UTC(),
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		state = models.PlatformEnrollmentStateApproved
 	default:
-		resp := models.PlatformEnrollmentStatusResponse{
-			RequestID:     mg.requestID,
-			ComponentKind: models.PlatformComponentOperator,
-			State:         models.PlatformEnrollmentStatePending,
-			ExpiresAt:     time.Now().Add(25 * time.Minute).UTC(),
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Retry-After", "1")
-		json.NewEncoder(w).Encode(resp)
 	}
+	resp := models.PlatformEnrollmentStatusResponse{
+		RequestID:     mg.requestID,
+		ComponentKind: models.PlatformComponentOperator,
+		State:         state,
+		ExpiresAt:     time.Now().Add(25 * time.Minute).UTC(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (mg *mockGateway) handleComplete(w http.ResponseWriter, r *http.Request) {
@@ -416,8 +416,7 @@ func (mg *mockGateway) handleComplete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// approve signals the mock gateway to return "approved" on the next
-// status poll.
+// approve releases any held status request with "approved".
 func (mg *mockGateway) approve() {
 	close(mg.approveCh)
 }

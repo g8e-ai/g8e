@@ -117,11 +117,3 @@ func awaitDeploymentRequestID(ctx context.Context, target deployTarget, dir stri
 	}
 	return state.RequestID, nil
 }
-
-func awaitDeploymentSessionID(ctx context.Context, target deployTarget, dir string) (string, error) {
-	state, err := awaitDeploymentState(ctx, target, dir, models.OperatorDeploymentPhaseEnrolled)
-	if err != nil {
-		return "", err
-	}
-	return state.OperatorSessionID, nil
-}

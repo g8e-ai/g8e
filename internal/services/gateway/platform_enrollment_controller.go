@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -24,7 +25,7 @@ import (
 )
 
 // PlatformEnrollmentController handles the owner-approved platform
-// workload enrollment flow: request creation, status polling,
+// workload enrollment flow: request creation, decision waiting,
 // proof-of-possession-gated completion, authenticated pending-list
 // discovery, and owner decisions (approve/deny).
 //
@@ -131,7 +132,8 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentRequest(w http.Re
 // passed as the "token" query parameter and is hashed for lookup; the
 // raw token is never stored. The response carries no CSR PEM,
 // certificates, or identity details — only state, expiry, and
-// retry-after for issuing-state requests.
+// retry-after for issuing-state requests. With wait=true, a pending request
+// holds the response until a committed decision, expiry, or cancellation.
 //
 // GET /api/v1/auth/platform-enrollments/status?token=<token>  (RouteAuthNone)
 func (c *PlatformEnrollmentController) handlePlatformEnrollmentStatus(w http.ResponseWriter, r *http.Request) {
@@ -146,8 +148,22 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentStatus(w http.Res
 		return
 	}
 
-	resp, err := c.enrollSvc.GetStatus(r.Context(), token)
+	var resp *models.PlatformEnrollmentStatusResponse
+	var err error
+	if r.URL.Query().Get("wait") == "true" {
+		// The pending request's expiry bounds this held response, rather than
+		// the HTTP server's short absolute write deadline.
+		if deadlineErr := http.NewResponseController(w).SetWriteDeadline(time.Time{}); deadlineErr != nil && !errors.Is(deadlineErr, http.ErrNotSupported) {
+			c.logger.Warn("platform enrollment: clear status write deadline", "error", deadlineErr)
+		}
+		resp, err = c.enrollSvc.WaitForDecision(r.Context(), token)
+	} else {
+		resp, err = c.enrollSvc.GetStatus(r.Context(), token)
+	}
 	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -156,8 +172,8 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentStatus(w http.Res
 	c.responder.JSON(w, http.StatusOK, resp)
 }
 
-// handlePlatformEnrollmentComplete is polled by the requester with
-// bounded backoff after approval. The caller proves possession of every
+// handlePlatformEnrollmentComplete receives the requester's completion after
+// approval. The caller proves possession of every
 // CSR private key by signing the canonical completion transcript. The
 // gateway verifies the token, state, expiry, CSR fingerprints, and
 // proofs before issuing or resuming issuance. A completed request
