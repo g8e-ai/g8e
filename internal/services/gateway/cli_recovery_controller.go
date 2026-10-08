@@ -115,7 +115,7 @@ func (c *CLIRecoveryController) handleRecoveryRequest(w http.ResponseWriter, r *
 
 	// Recovery is only available on an already-bootstrapped gateway.
 	// An unbootstrapped gateway must use the bootstrap endpoint instead.
-	hasUsers, err := c.userSvc.HasAnyUsers()
+	hasUsers, err := c.userSvc.HasAnyUsers(r.Context())
 	if err != nil {
 		c.logger.Error("CLI recovery: failed to check bootstrap state", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to check gateway state")

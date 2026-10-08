@@ -12,6 +12,7 @@ package gateway
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,4 +100,42 @@ func TestPlatformEnrollmentService_DisconnectDuringIssuanceStillCompletes(t *tes
 	require.NoError(t, err)
 	require.NotNil(t, resp.App)
 	assert.Equal(t, models.PlatformEnrollmentStateCompleted, loadStoredRequest(t, env, requestID).State)
+}
+
+// Occupy the only database connection after fixture setup so creation blocks
+// inside its bootstrap read, rather than in the context-aware reservation.
+func TestPlatformEnrollmentService_CreateCancellationInterruptsBootstrapRead(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	csr, _ := generateAppCSRAndKey(t)
+	db := env.enrollSvc.db.db
+	db.SetMaxOpenConns(1)
+	conn, err := db.Conn(t.Context())
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := env.enrollSvc.CreateRequest(ctx, models.PlatformEnrollmentCreateRequest{
+			ComponentKind: models.PlatformComponentDashboard,
+			InstanceID:    "dashboard-blocked-bootstrap",
+			Hostname:      "dashboard.local",
+			App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
+		}, "https://localhost")
+		done <- err
+	}()
+	// Always release the connection and join the requester before fixture cleanup,
+	// including when the regression demonstrates the uncancellable read.
+	defer func() {
+		cancel()
+		require.NoError(t, conn.Close())
+		<-done
+	}()
+	select {
+	case err := <-done:
+		done <- err
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(3 * time.Second):
+		t.Fatal("bootstrap read remained blocked after request cancellation")
+	}
+	require.Positive(t, db.Stats().WaitCount, "request must have waited for the occupied connection")
 }

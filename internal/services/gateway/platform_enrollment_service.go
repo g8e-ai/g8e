@@ -203,7 +203,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 	}
 	// Invariant 1: a gateway with no users never issues a platform
 	// certificate. Request creation requires a bootstrapped gateway.
-	hasUsers, err := s.userSvc.HasAnyUsers()
+	hasUsers, err := s.userSvc.HasAnyUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: check bootstrap: %w", err)
 	}

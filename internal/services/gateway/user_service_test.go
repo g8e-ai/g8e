@@ -331,7 +331,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check if users exist
-		hasUsers, err := userSvc.HasAnyUsers()
+		hasUsers, err := userSvc.HasAnyUsers(t.Context())
 		assert.NoError(t, err)
 		assert.True(t, hasUsers)
 	})
@@ -341,7 +341,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		hasUsers, err := userSvc.HasAnyUsers()
+		hasUsers, err := userSvc.HasAnyUsers(t.Context())
 		assert.NoError(t, err)
 		assert.False(t, hasUsers)
 	})

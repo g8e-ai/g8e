@@ -116,14 +116,34 @@ func (s *DocumentStoreService) FindOperatorsBySession(sessionID string) ([]*mode
 	return docs, nil
 }
 
+// DocCollectionHasDocuments reports whether collection holds at least one
+// document without reading any document data. ctx bounds the read, including
+// its wait for a database connection.
+func (s *DocumentStoreService) DocCollectionHasDocuments(ctx context.Context, collection string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowWithRetry(ctx,
+		"SELECT EXISTS(SELECT 1 FROM documents WHERE collection = ?)", collection,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("gateway: document store: collection exists: %w", err)
+	}
+	return exists, nil
+}
+
 // DocGet retrieves a document by collection and id.
 // Returns a typed Document with native time.Time timestamps, or nil if not found.
-// An Operator document is reconciled for heartbeat staleness before it is read.
+// An Operator document is reconciled for heartbeat staleness before it is
+// returned.
 func (s *DocumentStoreService) DocGet(collection, id string) (*models.Document, error) {
-	if err := s.reconcileOperatorStaleness(collection, id); err != nil {
-		return nil, err
+	for {
+		doc, err := s.docGet(collection, id)
+		if err != nil || doc == nil {
+			return doc, err
+		}
+		if stale, err := s.reconcileOperatorStaleness(doc); err != nil || !stale {
+			return doc, err
+		}
 	}
-	return s.docGet(collection, id)
 }
 
 // docGet is DocGet without staleness reconciliation, for the reconciler itself.
@@ -387,11 +407,21 @@ func (s *DocumentStoreService) DocMerge(collection, id string, fields json.RawMe
 }
 
 // DocList returns all documents in a collection, ordered by id ascending.
-// The operators collection is reconciled for heartbeat staleness first.
+// Operator documents are reconciled for heartbeat staleness before they are
+// returned.
 func (s *DocumentStoreService) DocList(collection string) ([]*models.Document, error) {
-	if err := s.reconcileOperatorStaleness(collection, ""); err != nil {
-		return nil, err
+	for {
+		docs, err := s.docList(collection)
+		if err != nil {
+			return nil, err
+		}
+		if stale, err := s.reconcileOperatorStaleness(docs...); err != nil || !stale {
+			return docs, err
+		}
 	}
+}
+
+func (s *DocumentStoreService) docList(collection string) ([]*models.Document, error) {
 	type docRow struct {
 		docID        string
 		dataJSON     string
@@ -468,8 +498,10 @@ func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, err
 // GetField extracts a single field value from a document using dot notation.
 // This is used for JIT field resolution with governed access controls.
 func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.FieldValue, error) {
-	if err := s.reconcileOperatorStaleness(collection, id); err != nil {
-		return mcp.FieldValue{}, err
+	if collection == marshaler.CollectionName(constants.CollectionOperators) {
+		if _, err := s.DocGet(collection, id); err != nil {
+			return mcp.FieldValue{}, err
+		}
 	}
 	// Use json_quote(json_extract(...)) so SQLite re-encodes the extracted value as
 	// valid JSON regardless of its native type (TEXT, INTEGER, REAL, NULL).
@@ -501,15 +533,23 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.F
 
 // DocQuery returns documents matching field conditions.
 // Supported ops: ==, !=, <, >, <=, >=. orderBy is "field" or "field DESC". limit 0 means no limit.
-// The operators collection is reconciled for heartbeat staleness first.
+// Operator documents are reconciled for heartbeat staleness before they are
+// returned. A reconciled transition can change which documents match, so the
+// query then runs again.
 func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
-	if err := s.reconcileOperatorStaleness(collection, ""); err != nil {
-		return nil, err
+	for {
+		docs, err := s.docQuery(collection, filters, orderBy, limit)
+		if err != nil {
+			return nil, err
+		}
+		if stale, err := s.reconcileOperatorStaleness(docs...); err != nil || !stale {
+			return docs, err
+		}
 	}
-	return s.docQuery(collection, filters, orderBy, limit)
 }
 
-// docQuery is DocQuery without staleness reconciliation, for the reconciler itself.
+// docQuery is DocQuery without staleness reconciliation, for the staleness
+// watcher.
 func (s *DocumentStoreService) docQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
 	var query strings.Builder
 	query.WriteString("SELECT id, data, created_at, updated_at FROM documents WHERE collection = ?")

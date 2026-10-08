@@ -249,7 +249,7 @@ func TestUserService_HasAnyUsers_Integration(t *testing.T) {
 		// Close DB to force DocQuery error
 		db.Close()
 
-		hasUsers, err := userSvc.HasAnyUsers()
+		hasUsers, err := userSvc.HasAnyUsers(t.Context())
 		require.Error(t, err)
 		require.False(t, hasUsers)
 	})

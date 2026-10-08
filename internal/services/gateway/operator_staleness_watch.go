@@ -26,7 +26,14 @@ import (
 type operatorStalenessWatcher struct {
 	mu       sync.Mutex
 	watching bool
-	timers   map[string]*time.Timer
+	timers   map[string]*operatorStaleTimer
+}
+
+// operatorStaleTimer is one Operator's deadline timer and the silence window,
+// read from its document when the timer was armed, that a heartbeat restarts.
+type operatorStaleTimer struct {
+	timer      *time.Timer
+	staleAfter time.Duration
 }
 
 // WatchOperatorStaleness starts the deadline timers: it arms one per active
@@ -39,7 +46,7 @@ func (s *DocumentStoreService) WatchOperatorStaleness(ctx context.Context) error
 	w := &s.staleness
 	w.mu.Lock()
 	w.watching = true
-	w.timers = make(map[string]*time.Timer)
+	w.timers = make(map[string]*operatorStaleTimer)
 	w.mu.Unlock()
 
 	go func() {
@@ -47,8 +54,8 @@ func (s *DocumentStoreService) WatchOperatorStaleness(ctx context.Context) error
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		w.watching = false
-		for id, timer := range w.timers {
-			timer.Stop()
+		for id, t := range w.timers {
+			t.timer.Stop()
 			delete(w.timers, id)
 		}
 	}()
@@ -65,9 +72,28 @@ func (s *DocumentStoreService) WatchOperatorStaleness(ctx context.Context) error
 	return nil
 }
 
-// RearmOperatorStaleness moves operatorID's deadline timer to its next stale
-// deadline. The heartbeat path calls it after recording a heartbeat. A failure
-// only costs the timely push: the next read still reconciles the Operator.
+// ExtendOperatorStaleness moves operatorID's armed deadline timer to the stale
+// deadline that follows a heartbeat recorded at heartbeatAt. The heartbeat path
+// calls it after recording a heartbeat. An armed timer already holds the
+// Operator's silence window, so this reads nothing; an Operator without one is
+// armed from its document. A timer that fires re-reads the persisted deadline
+// before acting, so a window that changed since arming is corrected then.
+func (s *DocumentStoreService) ExtendOperatorStaleness(operatorID string, heartbeatAt time.Time) {
+	w := &s.staleness
+	w.mu.Lock()
+	t, ok := w.timers[operatorID]
+	if ok {
+		t.timer.Reset(max(time.Until(heartbeatAt.Add(t.staleAfter)), 0))
+	}
+	w.mu.Unlock()
+	if !ok {
+		s.RearmOperatorStaleness(operatorID)
+	}
+}
+
+// RearmOperatorStaleness sets operatorID's deadline timer from its persisted
+// document. A failure only costs the timely push: the next read still
+// reconciles the Operator.
 func (s *DocumentStoreService) RearmOperatorStaleness(operatorID string) {
 	s.staleness.mu.Lock()
 	watching := s.staleness.watching
@@ -98,7 +124,7 @@ func (s *DocumentStoreService) trackOperatorStaleness(t OperatorStatusTransition
 // armOperatorStaleness sets doc's timer to its stale deadline, or cancels it
 // when doc is not an active remote Operator.
 func (s *DocumentStoreService) armOperatorStaleness(doc *models.Document) error {
-	deadline, _, err := operatorStaleDeadline(doc)
+	deadline, op, err := operatorStaleDeadline(doc)
 	if err != nil {
 		return err
 	}
@@ -114,12 +140,16 @@ func (s *DocumentStoreService) armOperatorStaleness(doc *models.Document) error 
 		return nil
 	}
 	delay := max(time.Until(deadline), 0)
-	if timer, ok := w.timers[doc.ID]; ok {
-		timer.Reset(delay)
+	if t, ok := w.timers[doc.ID]; ok {
+		t.staleAfter = operatorStaleAfter(op)
+		t.timer.Reset(delay)
 		return nil
 	}
 	operatorID := doc.ID
-	w.timers[operatorID] = time.AfterFunc(delay, func() { s.operatorWentSilent(operatorID) })
+	w.timers[operatorID] = &operatorStaleTimer{
+		timer:      time.AfterFunc(delay, func() { s.operatorWentSilent(operatorID) }),
+		staleAfter: operatorStaleAfter(op),
+	}
 	return nil
 }
 
@@ -128,22 +158,30 @@ func (s *DocumentStoreService) disarmOperatorStaleness(operatorID string) {
 	w := &s.staleness
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if timer, ok := w.timers[operatorID]; ok {
-		timer.Stop()
+	if t, ok := w.timers[operatorID]; ok {
+		t.timer.Stop()
 		delete(w.timers, operatorID)
 	}
 }
 
-// operatorWentSilent runs when operatorID's deadline timer fires. Reconciling
-// re-checks the persisted deadline, so a heartbeat that landed in the meantime
-// keeps the Operator active; a real transition is persisted and reported to the
-// status observer, which also cancels the timer. An Operator that is still
-// active afterwards (the timer fired a hair before the persisted deadline) has
-// its timer re-armed, so it can never be left without one.
+// operatorWentSilent runs when operatorID's deadline timer fires. The
+// reconciling read re-checks the persisted deadline, so a heartbeat that landed
+// in the meantime keeps the Operator active; a real transition is persisted and
+// reported to the status observer, which also cancels the timer. An Operator
+// that is still active afterwards (the timer fired a hair before the persisted
+// deadline) has its timer re-armed from that same read, so it can never be left
+// without one. A deleted Operator's timer is dropped.
 func (s *DocumentStoreService) operatorWentSilent(operatorID string) {
-	if err := s.reconcileOperatorStaleness(marshaler.CollectionName(constants.CollectionOperators), operatorID); err != nil {
+	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	if err != nil {
 		s.logger.Warn("Operator staleness reconcile failed", "operator_id", operatorID, "error", err)
 		return
 	}
-	s.RearmOperatorStaleness(operatorID)
+	if doc == nil {
+		s.disarmOperatorStaleness(operatorID)
+		return
+	}
+	if err := s.armOperatorStaleness(doc); err != nil {
+		s.logger.Warn("Operator staleness timer not rearmed", "operator_id", operatorID, "error", err)
+	}
 }

@@ -53,7 +53,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 			"cli_session_id MUST be a distinct identifier from operator_session_id")
 		// Bootstrap creates exactly one real user (the first human enrollee
 		// and gateway admin). There is no ephemeral bootstrap-user concept.
-		hasUsers, err := c.userSvc.HasAnyUsers()
+		hasUsers, err := c.userSvc.HasAnyUsers(t.Context())
 		require.NoError(t, err)
 		assert.True(t, hasUsers, "bootstrap must create the first real user")
 	})

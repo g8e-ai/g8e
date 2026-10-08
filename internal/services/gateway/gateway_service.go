@@ -1571,15 +1571,16 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
+	heartbeatAt := time.Now().UTC()
 	if err := ls.docStore.RecordOperatorHeartbeat(env.GetOperatorId(), heartbeatUpdate{
 		LatestHeartbeatSnapshot: snapshot,
-		LastHeartbeatAt:         time.Now().UTC(),
+		LastHeartbeatAt:         heartbeatAt,
 		CurrentHostname:         currentHostnameFromHeartbeat(heartbeat),
 	}); err != nil {
 		ls.logger.Warn("heartbeat: failed to record telemetry", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}
-	ls.docStore.RearmOperatorStaleness(env.GetOperatorId())
+	ls.docStore.ExtendOperatorStaleness(env.GetOperatorId(), heartbeatAt)
 
 	// Conditional on the document still being stale so a stopped or
 	// terminated Operator that keeps publishing is never revived.

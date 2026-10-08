@@ -19,71 +19,57 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// reconcileOperatorStaleness moves every remote Operator document that has been
+// reconcileOperatorStaleness moves each of docs that is a remote Operator
 // silent for longer than its constants.OperatorStaleAfter window (derived from
-// the heartbeat interval it declared at session start) from active to
-// stale, persisting the transition before the caller reads. It is a no-op for
-// every collection except operators. An empty id reconciles the whole
-// collection; a non-empty id reconciles that one document.
+// the heartbeat interval it declared at session start) from active to stale,
+// persisting the transition. It reports whether any of docs was stale: the
+// caller's read then no longer reflects the store and must be repeated before
+// it is returned. It is a no-op for every collection except operators.
 //
 // The registry otherwise holds an Operator `active` until it is explicitly
 // terminated, so a killed process, crashed host, or stopped container would
-// stay selectable forever. Running the check inside the document store means no
-// reader (registration, auth, SSE, the data API, enrollment, selection) can
-// observe a stale-but-active document.
+// stay selectable forever. Running the check on every document a read returns
+// means no reader (registration, auth, SSE, the data API, enrollment,
+// selection) can observe a stale-but-active document. Operators no reader
+// touches move when their staleness deadline timer fires
+// (operator_staleness_watch.go).
 //
 // Every transition the reconciler applies is reported to the bound
 // OperatorStatusObserver after it is persisted, so the dashboard hears about it
-// whichever reader or staleness deadline timer (operator_staleness_watch.go)
-// happened to apply it.
+// whichever reader or staleness deadline timer happened to apply it.
 //
 // The embedded Operator is exempt: it is the Gateway's own in-process
 // substrate and is live exactly when the Gateway is.
-func (s *DocumentStoreService) reconcileOperatorStaleness(collection, id string) error {
-	if collection != marshaler.CollectionName(constants.CollectionOperators) {
-		return nil
-	}
-
-	var candidates []*models.Document
-	if id != "" {
-		doc, err := s.docGet(collection, id)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrOperatorStalenessReconcile, err)
-		}
-		if doc != nil {
-			candidates = append(candidates, doc)
-		}
-	} else {
-		docs, err := s.docQuery(collection, activeRemoteOperatorFilters(), "", 0)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrOperatorStalenessReconcile, err)
-		}
-		candidates = docs
+func (s *DocumentStoreService) reconcileOperatorStaleness(docs ...*models.Document) (bool, error) {
+	if len(docs) == 0 || docs[0].Collection != marshaler.CollectionName(constants.CollectionOperators) {
+		return false, nil
 	}
 
 	now := time.Now().UTC()
-	for _, doc := range candidates {
+	found := false
+	for _, doc := range docs {
 		stale, op, err := operatorHeartbeatStale(doc, now)
 		if err != nil {
-			return fmt.Errorf("%w: operator %s: %w", constants.ErrOperatorStalenessReconcile, doc.ID, err)
+			return false, fmt.Errorf("%w: operator %s: %w", constants.ErrOperatorStalenessReconcile, doc.ID, err)
 		}
 		if !stale {
 			continue
 		}
+		found = true
 		// Conditional on the status still being active so a concurrent
 		// heartbeat recovery, stop, or termination is never overwritten.
 		applied, err := s.DocConditionalUpdate(
-			collection, doc.ID,
+			doc.Collection, doc.ID,
 			json.RawMessage(fmt.Sprintf(`{"status":%q}`, constants.OperatorStatusStale)),
 			"status", string(constants.OperatorStatusActive),
 		)
 		if err != nil {
-			return fmt.Errorf("%w: operator %s: %w", constants.ErrOperatorStalenessReconcile, doc.ID, err)
+			return false, fmt.Errorf("%w: operator %s: %w", constants.ErrOperatorStalenessReconcile, doc.ID, err)
 		}
 		if applied {
 			s.logger.Warn("Operator heartbeat stale; marked stale",
 				"operator_id", doc.ID,
-				"stale_after", constants.OperatorStaleAfter(time.Duration(op.GetRuntimeConfig().GetHeartbeatIntervalMs())*time.Millisecond))
+				"stale_after", operatorStaleAfter(op))
 			s.NotifyOperatorStatusChanged(OperatorStatusTransition{
 				OperatorID: doc.ID,
 				UserID:     op.GetUserId(),
@@ -92,7 +78,7 @@ func (s *DocumentStoreService) reconcileOperatorStaleness(collection, id string)
 			})
 		}
 	}
-	return nil
+	return found, nil
 }
 
 // activeRemoteOperatorFilters selects the Operators that can go stale: remote
@@ -117,14 +103,33 @@ func operatorHeartbeatStale(doc *models.Document, now time.Time) (bool, *operato
 	return !deadline.IsZero() && now.After(deadline), op, nil
 }
 
+// storedActiveRemoteOperator reports from doc's stored status and type fields
+// whether it can be an active remote Operator, so only those documents pay for
+// a full decode. A field that does not decode as a string is left to the full
+// decode to reject.
+func storedActiveRemoteOperator(doc *models.Document) bool {
+	var status, operatorType string
+	if raw, ok := doc.Data["status"]; ok && json.Unmarshal(raw, &status) != nil {
+		return true
+	}
+	if raw, ok := doc.Data["operator_type"]; ok && json.Unmarshal(raw, &operatorType) != nil {
+		return true
+	}
+	return constants.OperatorStatus(status) == constants.OperatorStatusActive && constants.OperatorType(operatorType) == constants.OperatorTypeRemote
+}
+
 // operatorStaleDeadline returns the instant after which doc, an active remote
 // Operator, is stale if it stays silent: its last sign of life plus
 // constants.OperatorStaleAfter for the heartbeat interval it declared at
 // session start. The last sign of life is the Gateway-stamped
 // last_heartbeat_at, falling back to claimed_at and then to the document's
 // created_at for an Operator that has not heartbeated yet. The deadline is zero
-// for any other Operator, which can never go stale.
+// for any other Operator, which can never go stale, and the operator document
+// is then nil when the stored status or type alone rules doc out.
 func operatorStaleDeadline(doc *models.Document) (time.Time, *operatorv1.OperatorDocument, error) {
+	if !storedActiveRemoteOperator(doc) {
+		return time.Time{}, nil, nil
+	}
 	op, err := models.OperatorDocumentFromStore(doc)
 	if err != nil {
 		return time.Time{}, nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
@@ -140,6 +145,12 @@ func operatorStaleDeadline(doc *models.Document) (time.Time, *operatorv1.Operato
 	if lastHeartbeatAt := op.GetLastHeartbeatAt(); lastHeartbeatAt != nil {
 		lastSeen = lastHeartbeatAt.AsTime()
 	}
+	return lastSeen.Add(operatorStaleAfter(op)), op, nil
+}
+
+// operatorStaleAfter is op's constants.OperatorStaleAfter window for the
+// heartbeat interval it declared at session start.
+func operatorStaleAfter(op *operatorv1.OperatorDocument) time.Duration {
 	declared := time.Duration(op.GetRuntimeConfig().GetHeartbeatIntervalMs()) * time.Millisecond
-	return lastSeen.Add(constants.OperatorStaleAfter(declared)), op, nil
+	return constants.OperatorStaleAfter(declared)
 }

@@ -200,11 +200,45 @@ func TestOperatorStaleness_OtherCollectionsAreNotReconciled(t *testing.T) {
 	assert.JSONEq(t, `"active"`, string(doc.Data["status"]))
 }
 
+// A reader never returns a stale-but-active document, including the documents
+// a re-run query reaches after the first ones it matched were reconciled.
+func TestOperatorStaleness_ReadersReturnReconciledDocuments(t *testing.T) {
+	svc := newDocumentStoreService(t)
+	for _, id := range []string{"op-a", "op-b"} {
+		silent := remoteOperator(constants.OperatorStatusActive)
+		silent.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
+		putOperator(t, svc, id, silent, time.Hour)
+	}
+	live := remoteOperator(constants.OperatorStatusActive)
+	live.LastHeartbeatAt = timeAgo(time.Second)
+	putOperator(t, svc, "op-c", live, time.Hour)
+
+	docs, err := svc.DocQuery(operatorsCollection, []models.DocFilter{
+		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusActive))},
+	}, "", 1)
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+	assert.Equal(t, "op-c", docs[0].ID)
+
+	doc, err := svc.DocGet(operatorsCollection, "op-a")
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+	assert.JSONEq(t, fmt.Sprintf("%q", constants.OperatorStatusStale), string(doc.Data["status"]))
+}
+
 func TestOperatorStaleness_ReconcileFailureFailsTheRead(t *testing.T) {
 	svc := newDocumentStoreService(t)
-	require.NoError(t, svc.db.Close())
+	op := remoteOperator(constants.OperatorStatusActive)
+	op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
+	putOperator(t, svc, "op-1", op, time.Hour)
 
-	_, err := svc.DocGet(operatorsCollection, "op-1")
+	// Reads still succeed on the single read-only connection; the stale
+	// transition write does not.
+	svc.db.SetMaxOpenConns(1)
+	_, err := svc.db.Exec("PRAGMA query_only = ON")
+	require.NoError(t, err)
+
+	_, err = svc.DocGet(operatorsCollection, "op-1")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOperatorStalenessReconcile)
 

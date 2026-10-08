@@ -102,7 +102,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	// only run on a genuinely empty system. The first `auth enroll user`
 	// creates the first real (admin) user; no other path creates the first
 	// user.
-	hasUsers, err := c.userSvc.HasAnyUsers()
+	hasUsers, err := c.userSvc.HasAnyUsers(r.Context())
 	if err != nil {
 		c.logger.Error("Failed to check for existing users during bootstrap", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
@@ -228,7 +228,7 @@ func (c *BootstrapController) handleBootstrapStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
-	hasUsers, err := c.userSvc.HasAnyUsers()
+	hasUsers, err := c.userSvc.HasAnyUsers(r.Context())
 	if err != nil {
 		c.logger.Error("Failed to check for existing users", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "status check failed")

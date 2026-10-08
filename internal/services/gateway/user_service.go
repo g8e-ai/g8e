@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -372,13 +373,10 @@ func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []mode
 	return nil
 }
 
-// HasAnyUsers checks whether any users exist in the system.
-func (s *UserService) HasAnyUsers() (bool, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
-	if err != nil {
-		return false, err
-	}
-	return len(docs) > 0, nil
+// HasAnyUsers checks whether any users exist in the system. ctx bounds the
+// read, including its wait for a database connection.
+func (s *UserService) HasAnyUsers(ctx context.Context) (bool, error) {
+	return s.db.DocCollectionHasDocuments(ctx, marshaler.CollectionName(constants.CollectionUsers))
 }
 
 // DeleteUser removes a user by ID.
