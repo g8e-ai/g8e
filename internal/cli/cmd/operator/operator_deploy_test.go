@@ -87,10 +87,10 @@ func deployedDirID(dir string) string {
 // as staged and ready.
 func runOperatorDeploy(t *testing.T, client authcmd.APIClient, args ...string) (string, error) {
 	t.Helper()
-	return runOperatorDeployWith(t, client, scriptedConnector(true, constants.OperatorStatusActive), time.Minute, args...)
+	return runOperatorDeployWith(t, client, scriptedConnector(true, constants.OperatorStatusActive), args...)
 }
 
-func runOperatorDeployWith(t *testing.T, client authcmd.APIClient, connect deploymentEventsConnector, within time.Duration, args ...string) (string, error) {
+func runOperatorDeployWith(t *testing.T, client authcmd.APIClient, connect deploymentEventsConnector, args ...string) (string, error) {
 	t.Helper()
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
@@ -107,7 +107,7 @@ func runOperatorDeployWith(t *testing.T, client authcmd.APIClient, connect deplo
 	cmd.SetErr(&buf)
 	cmd.SetArgs(append([]string{"--parallel", "1"}, args...))
 
-	ctx, cancel := context.WithTimeout(context.Background(), within)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	t.Cleanup(cancel)
 	err := cmd.ExecuteContext(ctx)
 	return buf.String(), err
@@ -205,7 +205,7 @@ func TestOperatorDeployDoesNotWaitForARequestFromAnAlreadyEnrolledOperator(t *te
 	client := &cmdtest.MockAPIClient{}
 
 	start := time.Now()
-	out, err := runOperatorDeployWith(t, client, scriptedConnector(false, constants.OperatorStatusActive), time.Minute,
+	out, err := runOperatorDeployWith(t, client, scriptedConnector(false, constants.OperatorStatusActive),
 		"--hosts", "localhost", "--remote-dir", remoteDir, "--background", "--endpoint", "localhost", "--approve")
 	require.NoError(t, err, out)
 
@@ -224,7 +224,7 @@ func TestOperatorDeployFailsWhenAWorkerIsNeverAnnouncedAndNamesItsOwnFailure(t *
 	operatorDeployEnrollTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { operatorDeployEnrollTimeout = previous })
 
-	out, err := runOperatorDeployWith(t, client, scriptedConnector(false, ""), time.Minute,
+	out, err := runOperatorDeployWith(t, client, scriptedConnector(false, ""),
 		"--hosts", "localhost", "--remote-dir", remoteDir, "--background", "--endpoint", "localhost", "--approve")
 	require.Error(t, err, out)
 	assert.ErrorIs(t, err, constants.ErrOperatorDeployFailed)
@@ -246,7 +246,7 @@ func TestOperatorDeployDoesNotCallASubscriptionOnAStoppedOperatorReady(t *testin
 	require.NoError(t, err)
 
 	out, err := runOperatorDeployWith(t, &cmdtest.MockAPIClient{GetResp: listBody, PostResp: decisionBody},
-		scriptedConnector(true, constants.OperatorStatusStopped), time.Minute,
+		scriptedConnector(true, constants.OperatorStatusStopped),
 		"--hosts", "localhost", "--remote-dir", remoteDir, "--background", "--endpoint", "localhost", "--approve")
 	require.ErrorIs(t, err, constants.ErrOperatorDeployFailed, out)
 	assert.Contains(t, err.Error(), "stopped")
