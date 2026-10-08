@@ -45,12 +45,6 @@ func OperatorStaleAfter(declaredInterval time.Duration) time.Duration {
 	return max(OperatorHeartbeatStaleAfter, declaredInterval*OperatorHeartbeatStaleMultiplier)
 }
 
-// OperatorStalenessSweepInterval is how often the Gateway sweeps the Operator
-// registry for silent Operators so the stale transition is pushed to the
-// dashboard without waiting for a reader. A quarter of the stale window bounds
-// the delay between an Operator going stale and the push to 15 seconds.
-const OperatorStalenessSweepInterval = OperatorHeartbeatStaleAfter / 4
-
 // ExecutionStatus is a typed string for execution status.
 type ExecutionStatus string
 

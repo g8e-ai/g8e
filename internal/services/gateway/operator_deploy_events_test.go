@@ -114,17 +114,20 @@ func TestOperatorCommandSubscribed_StaleSessionAndUnknownOperatorAnnounceNothing
 	require.ErrorIs(t, store.OperatorCommandSubscribed("op-missing", "sess-1", "launch-1"), constants.ErrNotFound)
 }
 
-func TestOperatorStatusEvents_EnrollmentActiveAnnouncementDoesNotReachCLISessions(t *testing.T) {
+func TestOperatorStatusEvents_EnrollmentActiveAnnouncementReachesOwnerCLISessionWithoutLaunchKey(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{})
 	store := ls.GetDocStore()
 	putCLISession(t, store, "cli-owner", statusEventOwner)
+	putCLISession(t, store, "cli-other", statusEventOther)
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 
 	store.NotifyOperatorEnrolled("op-1", statusEventOwner, "edge-1")
 
 	require.Len(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"), 1)
-	assert.Empty(t, cliSessionEvents(t, ls, statusEventOwner, "cli-owner"),
-		"only a launch-keyed readiness announcement is delivered to CLI sessions")
+	events := cliSessionEvents(t, ls, statusEventOwner, "cli-owner")
+	require.Len(t, events, 1, "the TUI re-lists Operators on any status transition")
+	assert.Empty(t, events[0].payload.DeploymentID)
+	assert.Empty(t, cliSessionEvents(t, ls, statusEventOther, "cli-other"), "another user's CLI must not hear it")
 }
 
 func TestApprovalsChanged_EnrollmentRequestedCarriesTheLaunchToOwnerCLISession(t *testing.T) {

@@ -43,7 +43,7 @@ var operatorStatusEvents = map[constants.OperatorStatus]constants.EventType{
 //
 // DeploymentID and OperatorSessionID are set only for the readiness
 // announcement of a worker launched by `operator deploy` (see
-// OperatorCommandSubscribed); that event also goes to the owner's CLI sessions.
+// OperatorCommandSubscribed); the CLI that launched the worker matches on them.
 type OperatorStatusTransition struct {
 	OperatorID        string
 	UserID            string
@@ -113,7 +113,7 @@ type OperatorStatusObserver interface {
 }
 
 // OperatorStatusPublisher pushes Operator status transitions to the owning
-// user's dashboard as g8e.v1.operator.status.updated.<state> SSE events.
+// user's dashboard and CLI sessions as g8e.v1.operator.status.updated.<state> SSE events.
 //
 // The events are telemetry, not records: a failed push is logged and never
 // fails or rolls back the transition, and a dashboard that missed one
@@ -141,8 +141,8 @@ func (p *OperatorStatusPublisher) OperatorStatusChanged(t OperatorStatusTransiti
 	}
 }
 
-// Publish emits the status.updated event for t to every unexpired web session
-// of the Operator's owner. It returns constants.ErrOperatorStatusEventUnsupported
+// Publish emits the status.updated event for t to every unexpired web and CLI
+// session of the Operator's owner. It returns constants.ErrOperatorStatusEventUnsupported
 // when t.Status has no Gateway-published event. Sessions are delivered
 // independently, so one failing session does not hide the event from the rest;
 // the returned error joins every per-session failure.
@@ -172,13 +172,11 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 			errs = append(errs, fmt.Errorf("web session %s: %w", sessionID, err))
 		}
 	}
-	if t.DeploymentID == "" {
-		return errors.Join(errs...)
-	}
 
-	// A launch-keyed readiness event is for the CLI that launched the worker.
-	// Like every status event it is a recorded fact, so a CLI that reconnects
-	// replays it from the stream.
+	// The owner's CLI sessions hear every transition too: a launch-keyed
+	// readiness event (DeploymentID set) is for the CLI that launched the worker,
+	// and the TUI re-lists Operators on any of them. Like every status event it
+	// is a recorded fact, so a CLI that reconnects replays it from the stream.
 	cliIDs, err := ownerCLISessionIDs(p.docStore, t.UserID)
 	if err != nil {
 		return errors.Join(append(errs, fmt.Errorf("operator status event: resolve cli sessions of %s: %w", t.UserID, err))...)

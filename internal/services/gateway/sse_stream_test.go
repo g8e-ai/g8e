@@ -372,6 +372,43 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	assert.Contains(t, body, "live_type")
 }
 
+// Row IDs are assigned in commit order but published after commit by
+// concurrent writers, so live events reach a stream out of ID order. A lower
+// ID arriving after a higher one was not replayed and must still be delivered.
+func TestHandleInternalSSEStream_OutOfOrderLiveEventsDelivered(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	ctx, _, cliSessionID := seedCLISessionCtx(t, h, "outoforder")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?since_id=0", nil)
+	rr := httptest.NewRecorder()
+	streamCtx, cancel := context.WithCancel(ctx)
+	req = req.WithContext(streamCtx)
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(rr, req)
+		close(done)
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	for _, e := range []struct {
+		id   int64
+		kind string
+	}{{12, "higher_type"}, {11, "lower_type"}} {
+		raw, err := json.Marshal(models.SSEPublishedEvent{ID: e.id, Payload: json.RawMessage(fmt.Sprintf(`{"event":{"type":%q}}`, e.kind))})
+		require.NoError(t, err)
+		h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, raw)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rr.Body.String()
+	assert.Contains(t, body, "higher_type")
+	assert.Contains(t, body, "lower_type", "an event with a lower ID than one already emitted live must not be dropped as a duplicate\nbody: %s", body)
+}
+
 // ---------------------------------------------------------------------------
 // R3 regression: write error terminates stream goroutine
 // ---------------------------------------------------------------------------

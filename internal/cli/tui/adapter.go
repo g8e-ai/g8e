@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -51,11 +50,6 @@ type wireEvent struct {
 	Data json.RawMessage `json:"data"`
 	raw  json.RawMessage
 }
-
-// operatorRefreshInterval is how often the Operator list is re-fetched.
-// Operator status events (g8e.v1.operator.status.updated.*) are routed only
-// to the owner's web sessions, never to a CLI session, so the TUI polls.
-const operatorRefreshInterval = 15 * time.Second
 
 // sessionExpiredDetail is the connection detail shown when the Gateway
 // rejects the CLI session; it names the same recovery as the rest of the CLI.
@@ -112,6 +106,7 @@ func (a *Adapter) runSession(ctx context.Context, gw *gateway, generation uint64
 	connected := make(chan struct{}, 1)
 	approvalsChanged := make(chan struct{}, 1)
 	enrollmentsChanged := make(chan struct{}, 1)
+	operatorsChanged := make(chan struct{}, 1)
 	signal := func(ch chan struct{}) {
 		select {
 		case ch <- struct{}{}:
@@ -136,7 +131,7 @@ func (a *Adapter) runSession(ctx context.Context, gw *gateway, generation uint64
 	refresherDone := make(chan struct{})
 	go func() {
 		defer close(refresherDone)
-		a.refresh(streamCtx, connected, approvalsChanged, enrollmentsChanged)
+		a.refresh(streamCtx, connected, approvalsChanged, enrollmentsChanged, operatorsChanged)
 	}()
 	defer func() { <-refresherDone }()
 
@@ -147,7 +142,8 @@ func (a *Adapter) runSession(ctx context.Context, gw *gateway, generation uint64
 			a.sender.Send(LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()})
 			return
 		}
-		if ev.Type == string(constants.EventPlatformApprovalsChanged) {
+		switch ev.Type {
+		case string(constants.EventPlatformApprovalsChanged):
 			var p models.ApprovalsChangedPayload
 			_ = json.Unmarshal(ev.Data, &p)
 			if p.Subject == models.ApprovalsChangedEnrollments {
@@ -155,6 +151,11 @@ func (a *Adapter) runSession(ctx context.Context, gw *gateway, generation uint64
 			} else {
 				signal(approvalsChanged)
 			}
+		case string(constants.EventOperatorStatusUpdatedActive),
+			string(constants.EventOperatorStatusUpdatedStale),
+			string(constants.EventOperatorStatusUpdatedStopped),
+			string(constants.EventOperatorStatusUpdatedTerminated):
+			signal(operatorsChanged)
 		}
 		for _, msg := range translateEvent(ev) {
 			a.sender.Send(msg)
@@ -169,10 +170,8 @@ func (a *Adapter) runSession(ctx context.Context, gw *gateway, generation uint64
 
 // refresh re-fetches Gateway state until ctx is cancelled: everything on each
 // connect, pending approvals or platform enrollments on each approvals.changed
-// for that subject, and Operators on operatorRefreshInterval.
-func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged, enrollmentsChanged <-chan struct{}) {
-	ticker := time.NewTicker(operatorRefreshInterval)
-	defer ticker.Stop()
+// for that subject, and Operators on each operator.status.updated event.
+func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged, enrollmentsChanged, operatorsChanged <-chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -192,7 +191,7 @@ func (a *Adapter) refresh(ctx context.Context, connected, approvalsChanged, enro
 			if gw := a.currentGateway(); gw != nil {
 				a.sender.Send(gw.fetchEnrollments(ctx))
 			}
-		case <-ticker.C:
+		case <-operatorsChanged:
 			if gw := a.currentGateway(); gw != nil {
 				a.sender.Send(gw.fetchOperators(ctx))
 			}

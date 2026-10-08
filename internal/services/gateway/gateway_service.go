@@ -108,9 +108,11 @@ type GatewayModeService struct {
 
 	extraIPs []net.IP
 
-	mu      sync.Mutex
-	running bool
-	ready   bool
+	mu        sync.Mutex
+	running   bool
+	ready     bool
+	readyCh   chan struct{}
+	readyOnce sync.Once
 }
 
 // gatewayServiceBuilder constructs a GatewayModeService from configuration.
@@ -547,6 +549,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		modelProvenanceCoord:     modelProvenanceCoord,
 		observeProducer:          NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
 		responder:                res,
+		readyCh:                  make(chan struct{}),
 	}
 
 	// Build the HTTP handler and servers now that all dependencies are constructed.
@@ -1175,6 +1178,12 @@ func (ls *GatewayModeService) IsReady() bool {
 	return ls.ready
 }
 
+// Ready returns a channel that is closed once every Gateway server is
+// listening. It is closed at most once and stays closed across Stop.
+func (ls *GatewayModeService) Ready() <-chan struct{} {
+	return ls.readyCh
+}
+
 func (ls *GatewayModeService) IsGovernanceReady() bool {
 	// When L2 is audited rather than enforced, governance is ready as soon as
 	// the service is running without requiring registered L2 signers.
@@ -1262,9 +1271,12 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 	// Start background enrollment token cleanup
 	go ls.runEnrollmentTokenCleanup(ctx)
 
-	// Start the Operator staleness sweep so a silent Operator is marked stale
-	// and pushed to the dashboard without waiting for a reader.
-	go ls.runOperatorStalenessSweep(ctx, constants.OperatorStalenessSweepInterval)
+	// Arm a stale deadline timer per active remote Operator so a silent
+	// Operator is marked stale and pushed to the dashboard the moment its
+	// deadline passes, without waiting for a reader.
+	if err := ls.docStore.WatchOperatorStaleness(ctx); err != nil {
+		return fmt.Errorf("gateway: watch operator staleness: %w", err)
+	}
 
 	// Start managed cleanup for platform enrollment (expired lease
 	// reconciliation and terminal request retention cleanup).
@@ -1336,6 +1348,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		ls.mu.Lock()
 		ls.ready = true
 		ls.mu.Unlock()
+		ls.readyOnce.Do(func() { close(ls.readyCh) })
 		ls.logger.Info("operator Gateway Mode fully operational",
 			"posture", ls.cfg.Gateway.Posture)
 	}()
@@ -1488,25 +1501,6 @@ func (ls *GatewayModeService) notifyOperatorRecovered(operatorID string) {
 	ls.docStore.NotifyOperatorStatusChanged(transition)
 }
 
-// runOperatorStalenessSweep reconciles the Operator registry every interval
-// until ctx is cancelled. Reconciling persists each stale transition and
-// reports it to the bound status observer.
-func (ls *GatewayModeService) runOperatorStalenessSweep(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := ls.docStore.ReconcileOperatorStaleness(); err != nil {
-				ls.logger.Warn("Operator staleness sweep error", "error", err)
-			}
-		}
-	}
-}
-
 // runServiceCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the service certificate if it is expiring soon.
 func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
@@ -1585,6 +1579,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		ls.logger.Warn("heartbeat: failed to record telemetry", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}
+	ls.docStore.RearmOperatorStaleness(env.GetOperatorId())
 
 	// Conditional on the document still being stale so a stopped or
 	// terminated Operator that keeps publishing is never revived.

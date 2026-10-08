@@ -39,6 +39,10 @@ type DocumentStoreService struct {
 	// during Gateway construction; an unbound store, as in unit tests, reports
 	// to no one.
 	statusObserver atomic.Pointer[OperatorStatusObserver]
+
+	// staleness holds the per-Operator stale deadline timers
+	// (operator_staleness_watch.go).
+	staleness operatorStalenessWatcher
 }
 
 // BindOperatorStatusObserver registers the observer told about every Operator
@@ -58,8 +62,10 @@ func (s *DocumentStoreService) BindOperatorStatusObserver(observer OperatorStatu
 
 // NotifyOperatorStatusChanged reports a status transition that is already
 // persisted to the bound observer. Callers that change an Operator's status
-// outside the staleness reconciler call this after the write succeeds.
+// outside the staleness reconciler call this after the write succeeds. It also
+// keeps the Operator's stale deadline timer in step with the new status.
 func (s *DocumentStoreService) NotifyOperatorStatusChanged(t OperatorStatusTransition) {
+	s.trackOperatorStaleness(t)
 	if observer := s.statusObserver.Load(); observer != nil {
 		(*observer).OperatorStatusChanged(t)
 	}

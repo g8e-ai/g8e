@@ -536,6 +536,9 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		); err != nil {
 			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator session: %w", err)
 		}
+		// The recovery Operator is persisted active, so announce it; this also
+		// arms its stale deadline timer.
+		c.docStore.NotifyOperatorEnrolled(operatorID, user.ID, operator.Name)
 	}
 
 	// Persist CLI session linked to the operator session.

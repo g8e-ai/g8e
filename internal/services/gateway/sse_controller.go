@@ -599,11 +599,14 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		buf.Close()
 	}()
 
-	// lastEmittedID tracks the highest event ID emitted on this connection.
-	// It is maintained inside the single HTTP-handler goroutine, so no mutex
-	// is required. It seeds the dedup cursor from the replay cursor so that
-	// any event appended between RegisterHandler and SSEEventsListSince (the
-	// duplicate-delivery race window, F1) is suppressed on the live path.
+	// lastEmittedID is the highest event ID the replay emitted on this
+	// connection. It is maintained inside the single HTTP-handler goroutine, so
+	// no mutex is required. Any event appended between RegisterHandler and
+	// SSEEventsListSince (the duplicate-delivery race window, F1) was already
+	// replayed, so the live path suppresses IDs at or below it. Live events do
+	// not advance it: row IDs are assigned in commit order but published after
+	// commit by concurrent writers, so live events arrive out of ID order and
+	// a lower ID after a higher one is a new event, not a duplicate.
 	var lastEmittedID int64
 
 	// Replay from DB. A replay is requested when:
@@ -699,7 +702,7 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 			}
 			// Ephemeral events are never persisted, so they carry ID 0: they
 			// are emitted without an `id:` field (it would rewind the client's
-			// Last-Event-ID cursor) and never advance the dedup cursor.
+			// Last-Event-ID cursor).
 			frame := fmt.Sprintf("data: %s\n\n", string(pubEvent.Payload))
 			if pubEvent.ID > 0 {
 				frame = fmt.Sprintf("id: %d\n%s", pubEvent.ID, frame)
@@ -707,9 +710,6 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 			if _, wErr := fmt.Fprint(w, frame); wErr != nil {
 				c.logger.Info("SSE Stream: write error on live event, disconnecting", "channel", channel, "error", wErr)
 				return
-			}
-			if pubEvent.ID > 0 {
-				lastEmittedID = pubEvent.ID
 			}
 			flusher.Flush()
 		}

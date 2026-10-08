@@ -111,7 +111,8 @@ func TestOperatorStatusEvents_StaleTransitionReachesOnlyOwnerLiveWebSessions(t *
 	putWebSession(t, store, "web-other", statusEventOther, time.Hour)
 	putSilentOperator(t, store, "op-silent", statusEventOwner, "edge-1")
 
-	require.NoError(t, store.ReconcileOperatorStaleness())
+	_, err := store.DocQuery(operatorsCollection, nil, "", 0)
+	require.NoError(t, err)
 
 	for _, sessionID := range []string{"web-owner-1", "web-owner-2"} {
 		events := webSessionEvents(t, ls, statusEventOwner, sessionID)
@@ -149,9 +150,11 @@ func TestOperatorStatusEvents_AlreadyStaleOperatorIsNotReportedAgain(t *testing.
 	require.NoError(t, store.BindOperatorStatusObserver(recorder))
 	putSilentOperator(t, store, "op-silent", statusEventOwner, "edge-1")
 
-	require.NoError(t, store.ReconcileOperatorStaleness())
-	require.NoError(t, store.ReconcileOperatorStaleness())
-	_, err := store.DocGet(operatorsCollection, "op-silent")
+	_, err := store.DocQuery(operatorsCollection, nil, "", 0)
+	require.NoError(t, err)
+	_, err = store.DocQuery(operatorsCollection, nil, "", 0)
+	require.NoError(t, err)
+	_, err = store.DocGet(operatorsCollection, "op-silent")
 	require.NoError(t, err)
 
 	assert.Len(t, recorder.recorded(), 1)
@@ -283,30 +286,77 @@ func TestOperatorStatusEvents_HeartbeatFromHealthyOperatorIsNotPushed(t *testing
 	assert.Empty(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"))
 }
 
-func TestOperatorStatusEvents_SweepPushesStaleOperatorWithoutAReader(t *testing.T) {
+func TestOperatorStatusEvents_DeadlineTimerPushesStaleOperatorWithoutAReader(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{})
 	store := ls.GetDocStore()
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 	putSilentOperator(t, store, "op-silent", statusEventOwner, "edge-1")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ls.runOperatorStalenessSweep(ctx, 10*time.Millisecond)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
+	t.Cleanup(cancel)
+	require.NoError(t, store.WatchOperatorStaleness(ctx))
 
+	// The Operator is already past its deadline, so its timer fires at once.
 	require.Eventually(t, func() bool {
 		return len(webSessionEvents(t, ls, statusEventOwner, "web-owner")) == 1
 	}, 5*time.Second, 10*time.Millisecond)
 
-	// Further sweeps find the Operator already stale and push nothing more.
-	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"), 1)
+	// The stale transition cancelled the timer, so nothing more is pushed.
+	store.staleness.mu.Lock()
+	armed := len(store.staleness.timers)
+	store.staleness.mu.Unlock()
+	assert.Zero(t, armed)
+}
+
+func TestOperatorStatusEvents_HeartbeatKeepsDeadlineTimerPendingAndOperatorActive(t *testing.T) {
+	ls := newTestGatewayService(t, testGatewayOpts{})
+	store := ls.GetDocStore()
+	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
+	op := remoteOperator(constants.OperatorStatusActive)
+	op.UserId = statusEventOwner
+	op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
+	putOperator(t, store, "op-beating", op, time.Hour)
+	publishTestHeartbeat(t, ls, "op-beating")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	require.NoError(t, store.WatchOperatorStaleness(ctx))
+
+	store.staleness.mu.Lock()
+	timer := store.staleness.timers["op-beating"]
+	store.staleness.mu.Unlock()
+	assert.NotNil(t, timer, "a fresh heartbeat leaves a pending deadline timer")
+	assert.Empty(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"))
+}
+
+func TestOperatorStatusEvents_FiredTimerAfterLateHeartbeatKeepsOperatorActiveAndRearms(t *testing.T) {
+	ls := newTestGatewayService(t, testGatewayOpts{})
+	store := ls.GetDocStore()
+	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
+	op := remoteOperator(constants.OperatorStatusActive)
+	op.UserId = statusEventOwner
+	op.LastHeartbeatAt = timeAgo(time.Second)
+	putOperator(t, store, "op-beating", op, time.Hour)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	require.NoError(t, store.WatchOperatorStaleness(ctx))
+
+	// The timer fires although the persisted deadline has not passed, as when a
+	// heartbeat lands just before it fires.
+	store.operatorWentSilent("op-beating")
+
+	doc, err := store.docGet(operatorsCollection, "op-beating")
+	require.NoError(t, err)
+	opDoc, err := models.OperatorDocumentFromStore(doc)
+	require.NoError(t, err)
+	assert.Equal(t, string(constants.OperatorStatusActive), opDoc.GetStatus())
+	assert.Empty(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"))
+
+	store.staleness.mu.Lock()
+	timer := store.staleness.timers["op-beating"]
+	store.staleness.mu.Unlock()
+	assert.NotNil(t, timer, "an Operator still active keeps a pending deadline timer")
 }
 
 func TestOperatorStatusPublisher_RejectsStatusWithoutGatewayEvent(t *testing.T) {

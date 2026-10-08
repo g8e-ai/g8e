@@ -259,11 +259,10 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for !svc.IsReady() {
-			time.Sleep(100 * time.Millisecond)
-			if ctx.Err() != nil {
-				return
-			}
+		select {
+		case <-svc.Ready():
+		case <-ctx.Done():
+			return
 		}
 		logger.Info("Gateway service ready, starting in-process command service")
 		if err := cmdSvc.Start(ctx); err != nil {
