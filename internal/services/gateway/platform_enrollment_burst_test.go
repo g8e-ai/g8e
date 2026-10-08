@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-//go:build integration
+//go:build integration && !race
 
 package gateway
 
@@ -44,9 +44,10 @@ const (
 // Every call must succeed on its first attempt before the deadline, and the
 // cohort must end with exactly N distinct issued identities. Each phase logs
 // its wall time, throughput and latency percentiles. Timings are only
-// meaningful from a build without the race detector.
+// meaningful from a build without the race detector, so this deadline contract
+// is excluded from race builds. Correctness tests retain race detection.
 func TestPlatformEnrollmentBurst(t *testing.T) {
-	for _, n := range []int{100} {
+	for _, n := range []int{100, 1000} {
 		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
 			runPlatformEnrollmentBurst(t, n)
 		})

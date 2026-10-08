@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -134,6 +135,8 @@ func TestEnrollmentQueriesUseIndexes(t *testing.T) {
 		{`SELECT data FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ?`, "idx_enrollment_token", []any{platformEnrollmentCollectionName(), "token"}},
 		{`SELECT data FROM documents WHERE collection = ? AND json_extract(data, '$.state') = ? AND julianday(json_extract(data, '$.expires_at')) >= julianday(?)`,
 			"idx_enrollment_pending", []any{platformEnrollmentCollectionName(), models.PlatformEnrollmentStatePending, time.Now().UTC().Format(time.RFC3339Nano)}},
+		{operatorLeaseIdentityQuery, "idx_operator_lease_identity", []any{
+			marshaler.CollectionName(constants.CollectionOperators), "owner", "fingerprint", constants.OperatorTypeRemote, constants.OperatorStatusTerminated}},
 	} {
 		t.Run(tc.index, func(t *testing.T) {
 			rows, err := store.db.Query("EXPLAIN QUERY PLAN "+tc.query, tc.args...)
@@ -150,6 +153,53 @@ func TestEnrollmentQueriesUseIndexes(t *testing.T) {
 			require.Contains(t, strings.Join(details, "\n"), tc.index)
 		})
 	}
+}
+
+func TestFindOperatorLeases_IdentityScopeAndReadOnly(t *testing.T) {
+	store := newDocumentStoreService(t)
+	_, err := store.db.Exec(gatewaySchema)
+	require.NoError(t, err)
+	for _, identity := range []struct {
+		id, owner, fingerprint string
+		status                 constants.OperatorStatus
+		typeOf                 constants.OperatorType
+	}{
+		{"active", "owner", "fingerprint", constants.OperatorStatusActive, constants.OperatorTypeRemote},
+		{"stale", "owner", "fingerprint", constants.OperatorStatusStale, constants.OperatorTypeRemote},
+		{"stopped", "owner", "fingerprint", constants.OperatorStatusStopped, constants.OperatorTypeRemote},
+		{"offline", "owner", "fingerprint", constants.OperatorStatusOffline, constants.OperatorTypeRemote},
+		{"terminated", "owner", "fingerprint", constants.OperatorStatusTerminated, constants.OperatorTypeRemote},
+		{"embedded", "owner", "fingerprint", constants.OperatorStatusActive, constants.OperatorTypeEmbedded},
+		{"other-owner", "other", "fingerprint", constants.OperatorStatusActive, constants.OperatorTypeRemote},
+		{"other-fingerprint", "owner", "other", constants.OperatorStatusActive, constants.OperatorTypeRemote},
+	} {
+		op := remoteOperator(identity.status)
+		op.OperatorType = string(identity.typeOf)
+		op.UserId = identity.owner
+		op.SystemFingerprint = identity.fingerprint
+		op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
+		putOperator(t, store, identity.id, op, time.Hour)
+	}
+	// An unrelated malformed runtime configuration must not be decoded by
+	// lease replacement or cause an unrelated identity's enrollment to fail.
+	require.NoError(t, store.DocSet(operatorsCollection, "malformed-other", json.RawMessage(
+		`{"user_id":"other","system_fingerprint":"other","status":"active","operator_type":"remote","runtime_config":"invalid"}`)))
+	rootSvc := NewStateRootService(store.db, store.logger)
+	before, err := rootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	docs, err := store.FindOperatorLeases("owner", "fingerprint")
+	require.NoError(t, err)
+	var ids []string
+	for _, doc := range docs {
+		ids = append(ids, doc.ID)
+	}
+	assert.ElementsMatch(t, []string{"active", "stale", "stopped", "offline"}, ids)
+	after, err := rootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "lease lookup must neither reconcile heartbeat state nor write")
+
+	_, err = store.DocQuery(operatorsCollection, nil, "", 0)
+	require.Error(t, err, "the fixture must exercise a malformed fleet record that reconciliation would decode")
 }
 
 func TestEnrollmentDecisionAtomicAuthorityAndRollback(t *testing.T) {

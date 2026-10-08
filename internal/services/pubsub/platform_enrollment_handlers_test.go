@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"net/url"
@@ -166,6 +167,15 @@ func (s *enrollTestDocStore) DocQuery(collection string, filters []models.DocFil
 		}
 	}
 	return out, nil
+}
+
+func (s *enrollTestDocStore) FindOperatorLeases(ownerID, systemFingerprint string) ([]*models.Document, error) {
+	return s.DocQuery(marshaler.CollectionName(constants.CollectionOperators), []models.DocFilter{
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", ownerID))},
+		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", systemFingerprint))},
+		{Field: "operator_type", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorTypeRemote))},
+		{Field: "status", Op: "!=", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusTerminated))},
+	}, "", 0)
 }
 
 func (s *enrollTestDocStore) DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error) {

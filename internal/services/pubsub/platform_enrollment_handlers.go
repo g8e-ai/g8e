@@ -460,12 +460,7 @@ func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ownerID, systemFinge
 	if systemFingerprint == "" {
 		return nil
 	}
-	docs, err := h.deps.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), []models.DocFilter{
-		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", ownerID))},
-		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", systemFingerprint))},
-		{Field: "operator_type", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorTypeRemote))},
-		{Field: "status", Op: "!=", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusTerminated))},
-	}, "", 0)
+	docs, err := h.deps.DocStore.FindOperatorLeases(ownerID, systemFingerprint)
 	if err != nil {
 		return fmt.Errorf("query operators for fingerprint: %w", err)
 	}

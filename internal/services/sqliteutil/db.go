@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -72,8 +73,23 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		logger = slog.Default()
 	}
 
-	dsn := fmt.Sprintf("file:%s?_synchronous=NORMAL&_journal_mode=WAL&_busy_timeout=%d&_mutex=full",
-		cfg.Path, cfg.BusyTimeoutMs)
+	// modernc applies _pragma parameters to every physical connection. Setting
+	// PRAGMAs through sql.DB.Exec configures only the connection it happens to
+	// acquire; later connections would keep FULL synchronization and no busy
+	// timeout. The driver does not recognize _synchronous or _busy_timeout.
+	params := url.Values{}
+	for _, pragma := range []string{
+		fmt.Sprintf("busy_timeout(%d)", cfg.BusyTimeoutMs),
+		"synchronous(NORMAL)",
+		"journal_mode(WAL)",
+		"foreign_keys(ON)",
+		fmt.Sprintf("cache_size(-%d)", cfg.CacheSizeMB*1024),
+		"auto_vacuum(INCREMENTAL)",
+		"temp_store(MEMORY)",
+	} {
+		params.Add("_pragma", pragma)
+	}
+	dsn := fmt.Sprintf("file:%s?%s", cfg.Path, params.Encode())
 
 	sqlDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -91,21 +107,6 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 			return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, errors.Join(err, fmt.Errorf("close database: %w", closeErr)))
 		}
 		return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, err)
-	}
-
-	cacheSizeKB := cfg.CacheSizeMB * 1024
-	pragmas := []string{
-		"PRAGMA synchronous = NORMAL",
-		"PRAGMA journal_mode = WAL",
-		"PRAGMA foreign_keys = ON",
-		fmt.Sprintf("PRAGMA cache_size = -%d", cacheSizeKB),
-		"PRAGMA auto_vacuum = INCREMENTAL",
-		"PRAGMA temp_store = MEMORY",
-	}
-	for _, pragma := range pragmas {
-		if _, err := sqlDB.Exec(pragma); err != nil {
-			logger.Warn("Failed to set pragma", "pragma", pragma, string(constants.ConnectionStateError), err)
-		}
 	}
 
 	logger.Info("SQLite database opened", "path", cfg.Path)
@@ -127,7 +128,8 @@ func OpenReadOnlyDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	dsn := fmt.Sprintf("file:%s?mode=ro&_query_only=true&_busy_timeout=%d&_mutex=full", cfg.Path, cfg.BusyTimeoutMs)
+	params := url.Values{"mode": {"ro"}, "_pragma": {"query_only(ON)", fmt.Sprintf("busy_timeout(%d)", cfg.BusyTimeoutMs)}}
+	dsn := fmt.Sprintf("file:%s?%s", cfg.Path, params.Encode())
 	sqlDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("sqliteutil: open read-only database %s: %w", cfg.Path, err)

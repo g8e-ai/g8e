@@ -233,6 +233,8 @@ The workload enrollment flow is:
 5. After approval, the workload calls `POST /api/v1/auth/platform/complete`, proves possession of every requested private key, and receives its certificate, trust bundle, and session or application policy.
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 
+Operator issuance finds prior non-terminated remote leases through the document owner's indexed owner/fingerprint lookup. Replacement includes active, stale, stopped, and offline leases and does not reconcile unrelated fleet heartbeats. See [Operator identity replacement](./operator.md#disambiguation-and-composite-fingerprinting) and [Storage Architecture](./storage.md#owned-surfaces).
+
 Once the issuance lease is held, the issue and downstream session steps no longer follow the HTTP request's cancellation, and the lease TTL bounds them. A client that disconnects mid-issuance therefore retries into the stored result rather than rolling the approval back. While that lease is held, a retry receives `429` with `Retry-After`; the Operator client retries it, honoring `Retry-After`, until the request's own expiry.
 7. The active first owner can revoke completed enrollments by request ID using `g8e auth enroll revoke <request-id> [--yes] [--reason <text>]`. Completed enrollments are discovered using `g8e auth enroll list`. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
 

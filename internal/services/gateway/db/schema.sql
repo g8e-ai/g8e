@@ -45,6 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_retention ON documents(
     json_extract(data, '$.state'), julianday(json_extract(data, '$.last_transition_at')))
     WHERE collection = 'platform_enrollments';
 
+-- Enrollment replacement searches one owner's fingerprint, not fleet liveness.
+CREATE INDEX IF NOT EXISTS idx_operator_lease_identity ON documents(
+    json_extract(data, '$.user_id'), json_extract(data, '$.system_fingerprint'))
+    WHERE collection = 'operators';
+
 -- KV store with TTL
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,

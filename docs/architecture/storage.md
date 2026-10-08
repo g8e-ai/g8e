@@ -60,6 +60,8 @@ Documents g8e's storage architecture: local SQLite databases, persistence topolo
 | Runtime paths | `RuntimeFileService`, `internal/constants/paths.go` | Isolated runtime fixture tests |
 
 Enrollment admission uses the existing document store and `BEGIN IMMEDIATE` transaction owner. Deduplication, live-request counting, and insertion share one transaction. Partial expression indexes cover enrollment identity, token hash, live capacity, pending expiry, issuance leases, and retention. Token and pending reads decode only matching requests; the cleanup owner explicitly expires abandoned requests and retains completed issuance records. Batch decisions recheck active-owner authority and every fingerprint-bound member in one transaction, recording the same governed receipt ID on every member.
+
+Operator replacement uses `DocumentStoreService.FindOperatorLeases`, an indexed lookup of the approving owner's exact system fingerprint. It includes every non-terminated remote lease regardless of heartbeat staleness and decodes only matching identities. The lookup performs no liveness reconciliation; registry and session-validity reads retain their existing reconciliation behavior.
 ## Procedures
 
 This document does not define a general SQLite backup or recovery procedure. The supported lifecycle operations are owned by CLI commands; confirm flags and defaults with `./g8e <command> --help`.
@@ -103,7 +105,7 @@ In the root Compose deployment, `g8e-gateway`, `g8e-data-operator`, `g8e-inferen
 
 ## Canonical Database
 
-The canonical database ([internal/services/storage/](../../internal/services/storage/)) opens in SQLite WAL mode with foreign-key enforcement, busy timeout, bounded retries for lock contention, and incremental vacuum. Database-file permissions are owned by the RuntimeFileService; the SQLite abstraction does not create parent directories or change permissions on open. Gateway and audit services use separate connection pools against the same `g8e.db` file.
+The canonical database ([internal/services/storage/](../../internal/services/storage/)) opens in SQLite WAL mode with foreign-key enforcement, busy timeout, bounded retries for lock contention, and incremental vacuum. `sqliteutil.OpenDB` applies the settings through the modernc driver's `_pragma` connection parameters, so every pooled connection uses `synchronous=NORMAL`, the configured busy timeout and page cache, foreign-key enforcement, and memory-backed temporary storage. Read-only connections apply `query_only=ON` and the configured busy timeout. Database-file permissions are owned by the RuntimeFileService; the SQLite abstraction does not create parent directories or change permissions on open. Gateway and audit services use separate connection pools against the same `g8e.db` file.
 
 ### Platform Documents
 

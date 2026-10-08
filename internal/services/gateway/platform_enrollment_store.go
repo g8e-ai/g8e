@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
@@ -25,6 +26,32 @@ import (
 // remain parameters. The live-state predicate is shared by dedup and capacity
 // accounting, so expired and terminal history cannot consume admission slots.
 const enrollmentLivePredicate = `json_extract(data, '$.state') IN ('pending', 'approved', 'issuing') AND julianday(json_extract(data, '$.expires_at')) >= julianday(?)`
+
+const operatorLeaseIdentityQuery = `SELECT id, data, created_at, updated_at FROM documents
+ WHERE collection = ? AND json_extract(data, '$.user_id') = ?
+ AND json_extract(data, '$.system_fingerprint') = ?
+ AND json_extract(data, '$.operator_type') = ? AND json_extract(data, '$.status') != ?`
+
+// FindOperatorLeases reads the non-terminated remote identities that enrollment
+// must replace. Both active and stale leases are replaced, so this lookup needs
+// no heartbeat reconciliation. Literal JSON paths use the identity index and
+// only matching rows are decoded. Liveness reads keep their existing owner.
+func (s *DocumentStoreService) FindOperatorLeases(ownerID, systemFingerprint string) ([]*models.Document, error) {
+	collection := marshaler.CollectionName(constants.CollectionOperators)
+	docs, err := sqliteutil.MaterializeRows(s.db, operatorLeaseIdentityQuery,
+		[]interface{}{collection, ownerID, systemFingerprint, constants.OperatorTypeRemote, constants.OperatorStatusTerminated},
+		func(row *sql.Rows) (*models.Document, error) {
+			var id, data, createdAt, updatedAt string
+			if err := row.Scan(&id, &data, &createdAt, &updatedAt); err != nil {
+				return nil, fmt.Errorf("scan operator lease: %w", err)
+			}
+			return scanDocument(collection, id, data, createdAt, updatedAt)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("find operator leases: %w", err)
+	}
+	return docs, nil
+}
 
 // createRequestRecord reserves capacity and inserts the initial, non-mutating
 // enrollment request in one write transaction. Duplicate lookup precedes quota

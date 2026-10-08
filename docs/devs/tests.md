@@ -215,6 +215,8 @@ Port-availability checks share `netutil.CheckTCPPortAvailable`. On Windows, the 
 
 ### Diagnose Slow Tests
 
+The enrollment burst deadline contract (`TestPlatformEnrollmentBurst`) runs only on a normal build; use `GOFLAGS='-run=^TestPlatformEnrollmentBurst$ -v' make test-integration TEST_RACE= TEST_PKGS=./internal/services/gateway` to measure it.
+
 Measure uncached execution through the canonical entry point. Integration runs already use `-count=1` and the race detector on non-Windows. The package duration in an `ok` line includes test setup and cleanup, but excludes compilation.
 
 ```bash
