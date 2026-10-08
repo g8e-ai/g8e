@@ -92,6 +92,9 @@ func (s *DocumentStoreService) OperatorCommandSubscribed(operatorID, sessionID, 
 		return err
 	}
 	if op.GetOperatorSessionId() != sessionID {
+		s.logger.Info("operator command subscription not announced: session superseded",
+			"operator_id", operatorID, "subscribed_session_id", sessionID,
+			"current_session_id", op.GetOperatorSessionId(), "deployment_id", deploymentID)
 		return nil
 	}
 	s.NotifyOperatorStatusChanged(OperatorStatusTransition{

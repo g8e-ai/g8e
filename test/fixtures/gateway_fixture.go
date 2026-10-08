@@ -304,9 +304,6 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		serverErr <- ls.Start(ctx)
 	}()
 
-	// Wait for the gateway service to be ready
-	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
-
 	// Register cleanup via t.Cleanup() — fires when the test completes
 	t.Cleanup(func() {
 		cancel()
@@ -325,6 +322,12 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			t.Logf("gateway stop error: %v", err)
 		}
 	})
+
+	select {
+	case <-ls.Ready():
+	case <-time.After(10 * time.Second):
+		t.Fatal("gateway service did not become ready")
+	}
 
 	return &GatewayFixture{
 		Config:           cfg,

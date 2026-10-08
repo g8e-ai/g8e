@@ -36,14 +36,23 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	select {
+	case <-ls.Ready():
+		t.Fatal("Ready must not be closed before Start")
+	default:
+	}
+
 	errChan := make(chan error, 1)
 	go func() {
 		errChan <- ls.Start(ctx)
 	}()
 
-	require.Eventually(t, func() bool {
-		return ls.IsReady()
-	}, 5*time.Second, 100*time.Millisecond, "service should become ready")
+	select {
+	case <-ls.Ready():
+	case <-time.After(5 * time.Second):
+		t.Fatal("service should become ready")
+	}
+	assert.True(t, ls.IsReady())
 
 	httpPort := ls.GetHTTPPort()
 	httpsPort := ls.GetHTTPSPort()
@@ -64,6 +73,11 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 
 	assert.False(t, ls.running)
 	assert.False(t, ls.IsReady())
+	select {
+	case <-ls.Ready():
+	default:
+		t.Fatal("Ready must stay closed across Stop")
+	}
 }
 
 func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {

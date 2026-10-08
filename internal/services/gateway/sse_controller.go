@@ -698,6 +698,8 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 			}
 			if pubEvent.ID > 0 && pubEvent.ID <= lastEmittedID {
 				// Already emitted via replay; suppress the duplicate.
+				c.logger.Debug("SSE Stream: live event suppressed as replay duplicate",
+					"channel", channel, "event_id", pubEvent.ID, "last_emitted_id", lastEmittedID)
 				continue
 			}
 			// Ephemeral events are never persisted, so they carry ID 0: they

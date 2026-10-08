@@ -124,6 +124,7 @@ type testSession struct {
 	unbindJSON        string
 	postErr           error
 	enrollListCalls   int
+	operatorCalls     int
 	posted            []interface{}
 }
 
@@ -170,6 +171,7 @@ func (s *testSession) DoRequestContext(_ context.Context, method, path string, b
 		s.listCalls++
 		return []byte(orDefault(s.pendingJSON, `{"transactions":[]}`)), nil
 	case strings.HasPrefix(path, constants.APIPaths.Operators):
+		s.operatorCalls++
 		return []byte(orDefault(s.operatorsJSON, `{"success":true,"operators":[]}`)), nil
 	case path == constants.APIPaths.Health:
 		return []byte(orDefault(s.healthJSON, `{"status":"ok","posture":"notary"}`)), nil
@@ -189,6 +191,12 @@ func (s *testSession) enrollmentListCalls() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.enrollListCalls
+}
+
+func (s *testSession) operatorListCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.operatorCalls
 }
 
 func (s *testSession) pendingListCalls() int {

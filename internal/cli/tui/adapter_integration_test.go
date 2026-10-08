@@ -157,6 +157,47 @@ func TestAdapterRun_ReconcilesPendingApprovals(t *testing.T) {
 	assert.Equal(t, "tx-pending-1", got.Transactions[0].TransactionHash)
 }
 
+// TestAdapterRun_ReconcilesOperatorsOnStatusEvents verifies the Operator list
+// is fetched on connect and re-fetched on every operator.status.updated.*
+// event, without a refresh ticker and without re-listing L3 transactions.
+func TestAdapterRun_ReconcilesOperatorsOnStatusEvents(t *testing.T) {
+	statuses := []constants.EventType{
+		constants.EventOperatorStatusUpdatedActive,
+		constants.EventOperatorStatusUpdatedStale,
+		constants.EventOperatorStatusUpdatedStopped,
+		constants.EventOperatorStatusUpdatedTerminated,
+	}
+	changed := make(chan constants.EventType)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		for {
+			select {
+			case ev := <-changed:
+				frame := gatewayFrame(t, string(ev), map[string]string{"operator_id": "op-1"})
+				fmt.Fprintf(w, "data: %s\n\n", frame)
+				w.(http.Flusher).Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	session := &testSession{url: srv.URL}
+	stop := runAdapter(t, session, &mockSender{})
+	defer stop()
+
+	require.Eventually(t, func() bool { return session.operatorListCalls() == 1 }, 3*time.Second, 20*time.Millisecond, "operators not fetched on connect")
+	for i, ev := range statuses {
+		changed <- ev
+		want := i + 2
+		require.Eventually(t, func() bool { return session.operatorListCalls() == want }, 3*time.Second, 20*time.Millisecond, "operators not re-fetched on %s", ev)
+	}
+	assert.Equal(t, 1, session.pendingListCalls(), "an operator status change must not re-list L3 transactions")
+}
+
 // TestAdapterRun_ReconcilesEnrollments verifies platform enrollments are
 // fetched on connect and re-fetched on approvals.changed for enrollments only,
 // without re-listing pending L3 transactions.
