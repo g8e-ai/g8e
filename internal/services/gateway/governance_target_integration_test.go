@@ -45,7 +45,7 @@ func TestGovernanceEnvelope_ForeignOperatorTarget_Returns403(t *testing.T) {
 	eventType, err := constants.RequestEventForAction(constants.ActionTypeFsRead)
 	require.NoError(t, err)
 	env.EventType = string(eventType)
-	env.StateMerkleRoot, err = svc.GetStateRootSvc().GetCurrentStateRoot()
+	env.StateMerkleRoot, err = svc.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	env.Id, err = govtypes.GenerateMessageID(env)
 	require.NoError(t, err)

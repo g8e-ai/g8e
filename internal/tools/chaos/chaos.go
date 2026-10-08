@@ -289,7 +289,7 @@ type dynamicStateRoot struct {
 	root string
 }
 
-func (d *dynamicStateRoot) GetCurrentStateRoot() (string, error) {
+func (d *dynamicStateRoot) GetCurrentStateRoot(context.Context) (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.root, nil
@@ -607,7 +607,7 @@ func Run(cfg Config) error {
 			defer func() { <-sem }()
 
 			// Fetch current state root at execution time (may have been updated by prior mutations)
-			currentRoot, _ := stateRootProvider.GetCurrentStateRoot()
+			currentRoot, _ := stateRootProvider.GetCurrentStateRoot(context.Background())
 
 			// Build envelope JUST-IN-TIME to avoid expiration during pre-build
 			env, err := buildEnvelope(id, c, currentRoot, privKey, keyID, sid)

@@ -10,6 +10,8 @@
 package governancetest
 
 import (
+	"context"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
@@ -56,7 +58,7 @@ type SimpleStateRootProvider struct {
 	Root string
 }
 
-func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
+func (s *SimpleStateRootProvider) GetCurrentStateRoot(context.Context) (string, error) {
 	if s.Root == "" {
 		return "", constants.ErrTxProviderMisconfigured
 	}

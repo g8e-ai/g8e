@@ -309,7 +309,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	}
 
 	// 2. Fetch the gateway's current state root.
-	stateRoot, err := d.stateRootProvider.GetCurrentStateRoot()
+	stateRoot, err := d.stateRootProvider.GetCurrentStateRoot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: get state root: %w", err)
 	}

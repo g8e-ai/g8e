@@ -36,7 +36,7 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_Success(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := NewRemoteStateRootProvider(srv.Client(), srv.URL, testutil.NewTestLogger())
-	root, err := provider.GetCurrentStateRoot()
+	root, err := provider.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, wantRoot, root)
 }
@@ -49,7 +49,7 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_Non200Status(t *testing.T) 
 	t.Cleanup(srv.Close)
 
 	provider := NewRemoteStateRootProvider(srv.Client(), srv.URL, testutil.NewTestLogger())
-	root, err := provider.GetCurrentStateRoot()
+	root, err := provider.GetCurrentStateRoot(t.Context())
 
 	require.Error(t, err)
 	assert.Empty(t, root)
@@ -68,7 +68,7 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_EmptyRoot(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := NewRemoteStateRootProvider(srv.Client(), srv.URL, testutil.NewTestLogger())
-	root, err := provider.GetCurrentStateRoot()
+	root, err := provider.GetCurrentStateRoot(t.Context())
 
 	require.Error(t, err)
 	assert.Empty(t, root)
@@ -85,7 +85,7 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_InvalidJSON(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := NewRemoteStateRootProvider(srv.Client(), srv.URL, testutil.NewTestLogger())
-	root, err := provider.GetCurrentStateRoot()
+	root, err := provider.GetCurrentStateRoot(t.Context())
 
 	require.Error(t, err)
 	assert.Empty(t, root)
@@ -100,7 +100,7 @@ func TestRemoteStateRootProvider_GetCurrentStateRoot_UnreachableServer(t *testin
 	srv.Close()
 
 	provider := NewRemoteStateRootProvider(srv.Client(), srv.URL, testutil.NewTestLogger())
-	root, err := provider.GetCurrentStateRoot()
+	root, err := provider.GetCurrentStateRoot(t.Context())
 
 	require.Error(t, err)
 	assert.Empty(t, root)

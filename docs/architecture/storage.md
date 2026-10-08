@@ -122,6 +122,8 @@ There is no HTTP key-value API; Gateway services access KV state directly throug
 
 Bound documents, bound key-value entries, and bound blobs contribute to the state root that L4 verifies. Replay nonces and SSE events do not contribute to that root. Observed key-value entries and blobs are excluded from the admission root and can be hashed as a separate observed-state commitment.
 
+A state-root read honors its caller's context, including while it waits for a pooled connection; a canceled read returns an error, and a canceled pending-change fold rolls back without publishing a root. Admission callers (governed dispatch, MCP/A2A, platform enrollment, `/api/v1/state`, and health) pass their request context, and an Operator's remote fetch ends at the earlier of its caller's deadline or 15 seconds. L5 receipt `state_root_before`/`state_root_after` reads ignore caller cancellation, as the receipt writes do.
+
 ### Scrubbing Token Store
 
 The scrubbing service stores reversible UEI token values through an encrypted adapter over the canonical key-value store. The adapter adds a dedicated namespace, marks entries as observed state, and applies their TTL. Token values are encrypted before persistence; reads and writes fail when the vault is locked.

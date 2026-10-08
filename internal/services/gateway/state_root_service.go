@@ -127,9 +127,11 @@ func (s *StateRootService) SetKeymapHashProvider(p KeymapHashProvider) {
 }
 
 // GetCurrentStateRoot returns the committed bound state root, first folding in
-// any committed changes not yet reflected in the tree.
-func (s *StateRootService) GetCurrentStateRoot() (string, error) {
-	treeRoot, err := s.committedTreeRoot(stateTierBound)
+// any committed changes not yet reflected in the tree. The read and any flush
+// honor ctx, including while waiting for a pooled connection; a canceled flush
+// rolls back and publishes nothing.
+func (s *StateRootService) GetCurrentStateRoot(ctx context.Context) (string, error) {
+	treeRoot, err := s.committedTreeRoot(ctx, stateTierBound)
 	if err != nil {
 		return "", err
 	}
@@ -143,8 +145,8 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 // GetObservedStateRoot returns the observed-state commitment root.
 // This root is separate from the bound root and does NOT gate transaction
 // admission. It is used for audit ledger chaining of observed evidence.
-func (s *StateRootService) GetObservedStateRoot() (string, error) {
-	treeRoot, err := s.committedTreeRoot(stateTierObserved)
+func (s *StateRootService) GetObservedStateRoot(ctx context.Context) (string, error) {
+	treeRoot, err := s.committedTreeRoot(ctx, stateTierObserved)
 	if err != nil {
 		return "", err
 	}
@@ -153,10 +155,10 @@ func (s *StateRootService) GetObservedStateRoot() (string, error) {
 
 // committedTreeRoot reads the tier's tree root and the dirty marker in one
 // statement (one snapshot). Pending changes are flushed first.
-func (s *StateRootService) committedTreeRoot(tier string) ([]byte, error) {
+func (s *StateRootService) committedTreeRoot(ctx context.Context, tier string) ([]byte, error) {
 	var dirty bool
 	var digest []byte
-	err := s.db.QueryRowWithRetry(context.Background(),
+	err := s.db.QueryRowWithRetry(ctx,
 		`SELECT EXISTS(SELECT 1 FROM state_commitment_dirty),
 		        (SELECT digest FROM state_nodes WHERE tier = ? AND level = 0 AND idx = 0)`,
 		tier,
@@ -165,12 +167,12 @@ func (s *StateRootService) committedTreeRoot(tier string) ([]byte, error) {
 		return nil, fmt.Errorf("%w: read committed root: %w", constants.ErrStateRootCalculate, err)
 	}
 	if dirty {
-		err = s.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
-			if err := s.flush(conn); err != nil {
+		err = s.db.ExecInImmediateTxWithRetry(ctx, func(conn *sql.Conn) error {
+			if err := s.flush(ctx, conn); err != nil {
 				return err
 			}
 			digest = nil
-			err := conn.QueryRowContext(context.Background(),
+			err := conn.QueryRowContext(ctx,
 				"SELECT digest FROM state_nodes WHERE tier = ? AND level = 0 AND idx = 0", tier).Scan(&digest)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("%w: read flushed root: %w", constants.ErrStateRootCalculate, err)
@@ -204,7 +206,7 @@ func (s *StateRootService) RebuildCommitment(ctx context.Context) error {
 				return fmt.Errorf("%w: rebuild: %w", constants.ErrStateRootPersist, err)
 			}
 		}
-		if err := s.flush(conn); err != nil {
+		if err := s.flush(ctx, conn); err != nil {
 			return err
 		}
 		_, err := conn.ExecContext(ctx,
@@ -242,8 +244,7 @@ type stateTierBucket struct {
 
 // flush applies every pending dirty row to the leaves and recomputes the
 // affected buckets and ancestor paths. The caller owns the write transaction.
-func (s *StateRootService) flush(conn *sql.Conn) error {
-	ctx := context.Background()
+func (s *StateRootService) flush(ctx context.Context, conn *sql.Conn) error {
 	keys, err := readDirtyKeys(ctx, conn)
 	if err != nil || len(keys) == 0 {
 		return err

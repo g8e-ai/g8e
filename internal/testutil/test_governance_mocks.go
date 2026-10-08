@@ -91,7 +91,7 @@ type MockStateRootProvider struct {
 	Root string
 }
 
-func (m *MockStateRootProvider) GetCurrentStateRoot() (string, error) {
+func (m *MockStateRootProvider) GetCurrentStateRoot(context.Context) (string, error) {
 	return m.Root, nil
 }
 

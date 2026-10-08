@@ -75,11 +75,6 @@ type L2ConsensusDeliberator interface {
 	Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error)
 }
 
-// StateRootProvider defines the interface for obtaining the current state root.
-type StateRootProvider interface {
-	GetCurrentStateRoot() (string, error)
-}
-
 // GatewayService handles MCP/A2A protocol translation and downstream dispatch.
 // This service is shared across both gateway mode and outbound mode - the same
 // implementation is used in both contexts (truly polymorphic).
@@ -101,7 +96,7 @@ type GatewayService struct {
 	maxPayloadBytes   int64
 
 	envProc                governance.EnvelopeProcessor
-	stateRootProvider      StateRootProvider
+	stateRootProvider      governance.StateRootProvider
 	signingKey             ed25519.PrivateKey
 	keyID                  string
 	downstreamURL          string
@@ -208,7 +203,7 @@ type Dependencies struct {
 	FieldPathRegistryFactory func(*slog.Logger) (*FieldPathRegistry, error)
 
 	EnvProc                governance.EnvelopeProcessor
-	StateRootProvider      StateRootProvider
+	StateRootProvider      governance.StateRootProvider
 	SigningKey             ed25519.PrivateKey
 	KeyID                  string
 	DownstreamURL          string
@@ -940,7 +935,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	stateRoot = ""
 	if g.stateRootProvider != nil {
 		var err error
-		stateRoot, err = g.stateRootProvider.GetCurrentStateRoot()
+		stateRoot, err = g.stateRootProvider.GetCurrentStateRoot(ctx)
 		if err != nil {
 			g.logger.Warn("Failed to get current state root", "error", err)
 		}

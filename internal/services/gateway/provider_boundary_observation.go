@@ -399,7 +399,7 @@ func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommand
 	if err != nil {
 		return "", fmt.Errorf("dispatch: publish command: validate operator session: %w", err)
 	}
-	stateRoot, err := d.stateRootProvider.GetCurrentStateRoot()
+	stateRoot, err := d.stateRootProvider.GetCurrentStateRoot(ctx)
 	if err != nil {
 		return "", fmt.Errorf("dispatch: publish command: get state root: %w", err)
 	}

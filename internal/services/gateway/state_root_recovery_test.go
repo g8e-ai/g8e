@@ -61,7 +61,7 @@ func TestStateRootService_CrashRecovery(t *testing.T) {
 			require.NoError(t, db.GetDocStore().DocSet("crash", "a", mustDocJSON(t, map[string]int{"v": 1})))
 			require.NoError(t, db.GetDocStore().DocSet("crash", "b", mustDocJSON(t, map[string]int{"v": 1})))
 			require.NoError(t, db.GetKVStore().KVSet("crash:k", "v", 0))
-			_, err = db.GetStateRootSvc().GetCurrentStateRoot()
+			_, err = db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 			require.NoError(t, err)
 			treeBefore := committedBoundTreeRoot(t, db.db)
 			db.Close()
@@ -117,7 +117,7 @@ func TestStateRootService_CrashChild(t *testing.T) {
 		require.NoError(t, err)
 		_, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE")
 		require.NoError(t, err)
-		require.NoError(t, NewStateRootService(db, logger).flush(conn))
+		require.NoError(t, NewStateRootService(db, logger).flush(ctx, conn))
 	}
 
 	fmt.Println(stateRootCrashMarker)
@@ -167,7 +167,7 @@ func TestStateRootService_ConcurrentWritersAndReaders(t *testing.T) {
 	_, err := db.db.Exec(`CREATE TABLE test_commit_log (
 		seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, data TEXT)`)
 	require.NoError(t, err)
-	_, err = svc.GetCurrentStateRoot()
+	_, err = svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	initial := oracleLeafSet(t, db)
 
@@ -220,7 +220,7 @@ func TestStateRootService_ConcurrentWritersAndReaders(t *testing.T) {
 					return
 				default:
 				}
-				root, err := svc.GetCurrentStateRoot()
+				root, err := svc.GetCurrentStateRoot(t.Context())
 				if err != nil {
 					readErrs <- fmt.Errorf("reader %d: %w", r, err)
 					return
@@ -284,7 +284,7 @@ func TestStateRootService_ConcurrentWritersAndReaders(t *testing.T) {
 	t.Logf("%d writes, %d root reads, %d distinct committed roots", prefix, reads, len(prefixByRoot))
 	assert.Positive(t, reads)
 
-	final, err := svc.GetCurrentStateRoot()
+	final, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Contains(t, prefixByRoot[final], prefix, "the final root must be the root of the full commit log")
 	requireRootsMatchOracle(t, db)

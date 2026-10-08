@@ -50,9 +50,10 @@ func NewRemoteStateRootProvider(client *http.Client, baseURL string, logger *slo
 
 // GetCurrentStateRoot fetches the gateway's current state Merkle root.
 // Fail-closed: any HTTP, network, or parse error is returned; the provider
-// never returns a stale or empty root.
-func (p *RemoteStateRootProvider) GetCurrentStateRoot() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+// never returns a stale or empty root. The fetch ends when ctx ends or after 15
+// seconds, whichever comes first.
+func (p *RemoteStateRootProvider) GetCurrentStateRoot(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.stateURL, nil)

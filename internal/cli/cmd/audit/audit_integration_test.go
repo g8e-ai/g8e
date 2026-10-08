@@ -148,7 +148,7 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 		}
 		payload, err := proto.Marshal(&operatorv1.DocumentUpdateRequested{Collection: string(constants.CollectionInvestigations), DocumentId: "audit-document", Updates: fields, Merge: merge})
 		require.NoError(t, err)
-		root, err := svc.GetStateRootSvc().GetCurrentStateRoot()
+		root, err := svc.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 		require.NoError(t, err)
 		env := &commonv1.GovernanceEnvelope{ProtocolVersion: govtypes.GovernanceProtocolVersionV2, Timestamp: timestamppb.Now(), ExpiresAt: timestamppb.New(time.Now().Add(time.Minute)), SourceComponent: commonv1.Component_COMPONENT_AGENT, ActingAppId: "g8ee", RequestorUserId: bootstrap.UserID, EventType: string(constants.EventAppDocumentUpdateRequested), ActionType: string(constants.ActionTypeDocumentUpdate), TargetResource: string(constants.CollectionInvestigations) + "/audit-document", Payload: payload, StateMerkleRoot: root, Nonce: []string{"create-nonce", "merge-nonce"}[index]}
 		env.Id, err = govtypes.GenerateMessageID(env)

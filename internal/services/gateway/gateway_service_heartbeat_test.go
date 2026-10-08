@@ -108,16 +108,16 @@ func TestGatewayModeService_HandleHeartbeatPublish_LeavesBoundRootUnchanged(t *t
 	putOperator(t, store, "op-root", remoteOperator(constants.OperatorStatusActive), time.Hour)
 	publishTestHeartbeat(t, ls, "op-root")
 
-	boundBefore, err := ls.stateRootSvc.GetCurrentStateRoot()
+	boundBefore, err := ls.stateRootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
-	observedBefore, err := ls.stateRootSvc.GetObservedStateRoot()
+	observedBefore, err := ls.stateRootSvc.GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 
 	publishTestHeartbeat(t, ls, "op-root")
 
-	boundAfter, err := ls.stateRootSvc.GetCurrentStateRoot()
+	boundAfter, err := ls.stateRootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
-	observedAfter, err := ls.stateRootSvc.GetObservedStateRoot()
+	observedAfter, err := ls.stateRootSvc.GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, boundBefore, boundAfter, "heartbeats must not move the bound root")
 	assert.NotEqual(t, observedBefore, observedAfter, "heartbeat telemetry is committed in the observed root")

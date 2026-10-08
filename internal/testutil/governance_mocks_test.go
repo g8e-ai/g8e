@@ -115,7 +115,7 @@ func TestMockStateRootProvider(t *testing.T) {
 
 	require.Equal(t, root, provider.Root, "Root should be set correctly")
 
-	retrievedRoot, err := provider.GetCurrentStateRoot()
+	retrievedRoot, err := provider.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, root, retrievedRoot, "Retrieved root should match set root")
 }
@@ -124,7 +124,7 @@ func TestMockStateRootProvider_EmptyRoot(t *testing.T) {
 	provider := NewMockStateRootProvider("")
 	require.Empty(t, provider.Root)
 
-	retrievedRoot, err := provider.GetCurrentStateRoot()
+	retrievedRoot, err := provider.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, retrievedRoot)
 }

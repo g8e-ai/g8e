@@ -11,6 +11,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 	"math/rand"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -130,9 +132,9 @@ func sortLeaves(leaves [][2][]byte) {
 func requireRootsMatchOracle(t *testing.T, db *CanonicalDBService) {
 	t.Helper()
 	wantBound, wantObserved := oracleStateRoots(t, db)
-	bound, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	bound, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
-	observed, err := db.GetStateRootSvc().GetObservedStateRoot()
+	observed, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, wantBound, bound, "incremental bound root must equal the full-rebuild oracle")
 	require.Equal(t, wantObserved, observed, "incremental observed root must equal the full-rebuild oracle")
@@ -141,29 +143,63 @@ func requireRootsMatchOracle(t *testing.T, db *CanonicalDBService) {
 func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
 	svc := newStateRootService(t)
 
-	root1, err := svc.GetCurrentStateRoot()
+	root1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Len(t, root1, 64)
 
-	root2, err := svc.GetCurrentStateRoot()
+	root2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2)
+}
+
+// TestStateRootService_CancellationInterruptsPooledRead occupies the sole
+// SQLite connection and proves that a root read waiting for it returns when its
+// caller's context ends, instead of blocking until the connection is released.
+func TestStateRootService_CancellationInterruptsPooledRead(t *testing.T) {
+	svc := newStateRootService(t)
+	pool := svc.db
+	pool.SetMaxOpenConns(1)
+	conn, err := pool.Conn(t.Context())
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.GetCurrentStateRoot(ctx)
+		done <- err
+	}()
+	// Always release the connection and join the reader before fixture cleanup,
+	// including when the read ignores cancellation.
+	defer func() {
+		cancel()
+		require.NoError(t, conn.Close())
+		<-done
+	}()
+	select {
+	case err := <-done:
+		done <- err
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorIs(t, err, constants.ErrStateRootCalculate)
+	case <-time.After(3 * time.Second):
+		t.Fatal("state root read remained blocked after caller cancellation")
+	}
+	require.Positive(t, pool.Stats().WaitCount, "read must have waited for the occupied connection")
 }
 
 func TestStateRootService_StateChangeDetection(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
 
-	root1, err := svc.GetCurrentStateRoot()
+	root1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	require.NoError(t, db.GetDocStore().DocSet("test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
-	root2, err := svc.GetCurrentStateRoot()
+	root2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root2, "state root should change after document insertion")
 
 	require.NoError(t, db.GetDocStore().DocDelete("test", "doc1"))
-	root3, err := svc.GetCurrentStateRoot()
+	root3, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root3, "deleting the only change must restore the previous root")
 }
@@ -207,15 +243,15 @@ func TestStateRootService_TierMoveUpdatesBothRoots(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
 	require.NoError(t, db.GetKVStore().KVSet("move:me", "v", 0))
-	bound1, err := svc.GetCurrentStateRoot()
+	bound1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
-	observed1, err := svc.GetObservedStateRoot()
+	observed1, err := svc.GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 
 	require.NoError(t, db.GetKVStore().KVSetObserved("move:me", "v", 0))
-	bound2, err := svc.GetCurrentStateRoot()
+	bound2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
-	observed2, err := svc.GetObservedStateRoot()
+	observed2, err := svc.GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.NotEqual(t, bound1, bound2, "the leaf must leave the bound tree")
@@ -228,7 +264,7 @@ func TestStateRootService_TierMoveUpdatesBothRoots(t *testing.T) {
 func TestStateRootService_RolledBackWriteChangesNothing(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
-	root1, err := svc.GetCurrentStateRoot()
+	root1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	flushed := svc.flushedLeaves.Load()
 
@@ -241,7 +277,7 @@ func TestStateRootService_RolledBackWriteChangesNothing(t *testing.T) {
 	})
 	require.ErrorIs(t, err, rollback)
 
-	root2, err := svc.GetCurrentStateRoot()
+	root2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2)
 	assert.Equal(t, flushed, svc.flushedLeaves.Load(), "a rolled-back write must leave nothing to flush")
@@ -251,7 +287,7 @@ func TestStateRootService_MetadataOnlyUpdateIsNotDirty(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
 	require.NoError(t, db.GetDocStore().DocSet("t", "x", json.RawMessage(`{"a":1}`)))
-	_, err := svc.GetCurrentStateRoot()
+	_, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	_, err = db.db.Exec("UPDATE documents SET updated_at = 'later' WHERE collection = 't' AND id = 'x'")
@@ -268,13 +304,13 @@ func TestStateRootService_OneWriteWorkIsIndependentOfHistory(t *testing.T) {
 	db := newTestDB(t)
 	seedHistoryDocuments(t, db, 10000)
 	svc := db.GetStateRootSvc()
-	_, err := svc.GetCurrentStateRoot()
+	_, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
 		before := svc.flushedLeaves.Load()
 		require.NoError(t, db.GetDocStore().DocSet("operators", "op-1", json.RawMessage(fmt.Sprintf(`{"n":%d}`, i))))
-		_, err := svc.GetCurrentStateRoot()
+		_, err := svc.GetCurrentStateRoot(t.Context())
 		require.NoError(t, err)
 		assert.EqualValues(t, 1, svc.flushedLeaves.Load()-before)
 	}
@@ -293,7 +329,7 @@ func TestStateRootService_LegacyDatabaseIsRebuiltOnOpen(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet("legacy", "d1", json.RawMessage(`{"v":1}`)))
 	require.NoError(t, db.GetKVStore().KVSet("legacy:k", "v", 0))
-	want, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	want, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	for _, stmt := range []string{
 		"DELETE FROM state_commitment",
@@ -316,7 +352,7 @@ func TestStateRootService_LegacyDatabaseIsRebuiltOnOpen(t *testing.T) {
 	algorithm, err := reopened.GetStateRootSvc().CommitmentAlgorithm()
 	require.NoError(t, err)
 	assert.Equal(t, stateCommitmentAlgorithm, algorithm)
-	got, err := reopened.GetStateRootSvc().GetCurrentStateRoot()
+	got, err := reopened.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, want, got, "the rebuild must reproduce the incremental root")
 
@@ -333,7 +369,7 @@ func TestStateRootService_MissingCommitmentTableFailsClosed(t *testing.T) {
 	_, err := db.db.Exec("DROP TABLE state_nodes")
 	require.NoError(t, err)
 
-	_, err = db.GetStateRootSvc().GetCurrentStateRoot()
+	_, err = db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.ErrorIs(t, err, constants.ErrStateRootCalculate)
 }
 

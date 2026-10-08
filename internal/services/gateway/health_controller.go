@@ -93,7 +93,7 @@ func (c *HealthController) handleHealth(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	root, err := c.stateRootSvc.GetCurrentStateRoot()
+	root, err := c.stateRootSvc.GetCurrentStateRoot(r.Context())
 	if err != nil {
 		c.logger.Error("Health check failed to calculate state root", string(constants.ConnectionStateError), err)
 		c.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
@@ -147,7 +147,7 @@ func (c *HealthController) handleState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, err := c.stateRootSvc.GetCurrentStateRoot()
+	root, err := c.stateRootSvc.GetCurrentStateRoot(r.Context())
 	if err != nil {
 		c.logger.Error("State endpoint failed to calculate state root", string(constants.ConnectionStateError), err)
 		c.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")

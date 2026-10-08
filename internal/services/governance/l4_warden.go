@@ -475,7 +475,7 @@ func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.Gover
 		currentRoot = root
 	} else {
 		var err error
-		currentRoot, err = tv.stateRootProvider.GetCurrentStateRoot()
+		currentRoot, err = tv.stateRootProvider.GetCurrentStateRoot(ctx)
 		if err != nil {
 			tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
 			return fmt.Errorf("l4 warden: get current state root: %w", err)

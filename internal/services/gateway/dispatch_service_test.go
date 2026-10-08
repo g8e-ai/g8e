@@ -41,7 +41,7 @@ type stubStateRootProvider struct {
 	err  error
 }
 
-func (s *stubStateRootProvider) GetCurrentStateRoot() (string, error) {
+func (s *stubStateRootProvider) GetCurrentStateRoot(context.Context) (string, error) {
 	return s.root, s.err
 }
 

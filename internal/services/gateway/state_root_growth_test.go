@@ -54,7 +54,7 @@ func TestStateRoot_OneWriteCostAtGrowingHistory(t *testing.T) {
 			db := newTestDB(t)
 			seedHistoryDocuments(t, db, n)
 			svc := db.GetStateRootSvc()
-			_, err := svc.GetCurrentStateRoot()
+			_, err := svc.GetCurrentStateRoot(t.Context())
 			require.NoError(t, err)
 
 			const rounds = 20
@@ -62,7 +62,7 @@ func TestStateRoot_OneWriteCostAtGrowingHistory(t *testing.T) {
 			for i := 0; i < rounds; i++ {
 				require.NoError(t, db.GetDocStore().DocSet("operators", "op-1", json.RawMessage(fmt.Sprintf(`{"heartbeat":%d}`, i))))
 				start := time.Now()
-				_, err := svc.GetCurrentStateRoot()
+				_, err := svc.GetCurrentStateRoot(t.Context())
 				require.NoError(t, err)
 				elapsed := time.Since(start)
 				total += elapsed

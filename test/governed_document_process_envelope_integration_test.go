@@ -115,7 +115,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 	)
 
 	// Step 1: Create initial investigation document with merge=false (full model).
-	stateRoot, err := stateRootSvc.GetCurrentStateRoot()
+	stateRoot, err := stateRootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	initialFields, err := structpb.NewStruct(map[string]interface{}{
@@ -161,7 +161,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 	assert.Equal(t, "open", rawJSONToString(t, doc.Data["status"]))
 
 	// Step 2: Apply a concurrent title-only patch with merge=true.
-	stateRoot, err = stateRootSvc.GetCurrentStateRoot()
+	stateRoot, err = stateRootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	patchFields, err := structpb.NewStruct(map[string]interface{}{
@@ -203,7 +203,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 	assert.Equal(t, "AI Generated: Create smoke test file (Refined)", rawJSONToString(t, docAfterMerge.Data["case_title"]), "case_title must be updated")
 
 	// Step 4: Delete the document via DOCUMENT_DELETE envelope.
-	stateRoot, err = stateRootSvc.GetCurrentStateRoot()
+	stateRoot, err = stateRootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	deletePayload := &operatorv1.DocumentDeleteRequested{

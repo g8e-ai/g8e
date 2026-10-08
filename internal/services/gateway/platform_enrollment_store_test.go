@@ -187,7 +187,7 @@ func TestFindOperatorLeases_IdentityScopeAndReadOnly(t *testing.T) {
 	require.NoError(t, store.DocSet(operatorsCollection, "malformed-other", json.RawMessage(
 		`{"user_id":"other","system_fingerprint":"other","status":"active","operator_type":"remote","runtime_config":"invalid"}`)))
 	rootSvc := NewStateRootService(store.db, store.logger)
-	before, err := rootSvc.GetCurrentStateRoot()
+	before, err := rootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	docs, err := store.FindOperatorLeases("owner", "fingerprint")
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestFindOperatorLeases_IdentityScopeAndReadOnly(t *testing.T) {
 		ids = append(ids, doc.ID)
 	}
 	assert.ElementsMatch(t, []string{"active", "stale", "stopped", "offline"}, ids)
-	after, err := rootSvc.GetCurrentStateRoot()
+	after, err := rootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, before, after, "lease lookup must neither reconcile heartbeat state nor write")
 

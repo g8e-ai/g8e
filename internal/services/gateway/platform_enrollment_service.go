@@ -965,7 +965,7 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 
 	var lastErr error
 	for attempt := 0; attempt <= platformEnrollmentStateRootMaxRetries; attempt++ {
-		stateRoot, err := s.stateRoot.GetCurrentStateRoot()
+		stateRoot, err := s.stateRoot.GetCurrentStateRoot(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("get state root: %w", err)
 		}

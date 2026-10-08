@@ -28,18 +28,18 @@ func TestStateRootSemantics(t *testing.T) {
 	db := newTestDB(t)
 
 	// 1. Initial state root must be deterministic
-	root1, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root1, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, root1)
 
-	root1Again, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root1Again, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root1Again, "State root must be deterministic for identical state")
 
 	// 2. Document content change alters root
 	err = db.GetDocStore().DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
-	root2, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root2, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root2, "Content change must alter state root")
 
@@ -48,21 +48,21 @@ func TestStateRootSemantics(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	err = db.GetDocStore().DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
-	root3, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root3, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root2, root3, "Metadata-only change (updated_at) must NOT alter state root")
 
 	// 4. KV change alters root
 	err = db.GetKVStore().KVSet("k1", "v1", 0)
 	require.NoError(t, err)
-	root4, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root4, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root3, root4, "KV change must alter state root")
 
 	// 5. Blob change alters root
 	err = db.GetBlobStore().BlobPut("ns", "b1", []byte("data"), "text/plain", 0)
 	require.NoError(t, err)
-	root5, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root5, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root4, root5, "Blob change must alter state root")
 
@@ -70,21 +70,21 @@ func TestStateRootSemantics(t *testing.T) {
 	replayed, err := db.GetReplayStore().ReserveNonce("nonce1", time.Now().Add(time.Hour))
 	require.NoError(t, err)
 	assert.False(t, replayed)
-	root6, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root6, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root5, root6, "Nonce insert must NOT alter state root")
 
 	// 7. SSE event insert does NOT alter root
 	_, err = db.GetSSEStore().SSEEventsAppend(SSERoute{UserID: "u-state-root", WebSessionID: "session1"}, "type1", "payload1", "")
 	require.NoError(t, err)
-	root7, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root7, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root6, root7, "SSE event insert must NOT alter state root")
 
 	// 8. Expired KV is excluded from root
 	err = db.GetKVStore().KVSet("exp1", "val", 1) // 1 second TTL
 	require.NoError(t, err)
-	rootWithExp, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	rootWithExp, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, rootWithExp, root7)
 
@@ -92,7 +92,7 @@ func TestStateRootSemantics(t *testing.T) {
 	_, err = db.db.Exec("DELETE FROM kv_store WHERE key = 'exp1'")
 	require.NoError(t, err)
 
-	rootAfterExp, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	rootAfterExp, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, rootAfterExp, root7, "Expired KV must be excluded from state root calculation")
 }
@@ -117,7 +117,7 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 	require.NoError(t, db1.GetDocStore().DocSet("test", "b", json.RawMessage(`{"v":2}`)))
 	require.NoError(t, db1.GetKVStore().KVSet("k1", "v1", 0))
 	require.NoError(t, db1.GetKVStore().KVSet("k2", "v2", 0))
-	root1, err := db1.GetStateRootSvc().GetCurrentStateRoot()
+	root1, err := db1.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	// Insert in different order into db2
@@ -125,7 +125,7 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 	require.NoError(t, db2.GetDocStore().DocSet("test", "b", json.RawMessage(`{"v":2}`)))
 	require.NoError(t, db2.GetKVStore().KVSet("k1", "v1", 0))
 	require.NoError(t, db2.GetDocStore().DocSet("test", "a", json.RawMessage(`{"v":1}`)))
-	root2, err := db2.GetStateRootSvc().GetCurrentStateRoot()
+	root2, err := db2.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, root1, root2, "State root must be deterministic regardless of insertion order")
@@ -135,17 +135,17 @@ func TestStateRootUnchangedReadsDoNoFlushWork(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
 
-	root1, err := svc.GetCurrentStateRoot()
+	root1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	flushed := svc.flushedLeaves.Load()
 
-	root2, err := svc.GetCurrentStateRoot()
+	root2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2)
 	assert.Equal(t, flushed, svc.flushedLeaves.Load(), "an unchanged root read must not rehash any leaf")
 
 	require.NoError(t, db.GetDocStore().DocSet("cache_test", "doc1", json.RawMessage(`{"data":1}`)))
-	root3, err := svc.GetCurrentStateRoot()
+	root3, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root3, "Root must change after data change")
 	assert.Equal(t, flushed+1, svc.flushedLeaves.Load(), "one write must rehash exactly one leaf")
@@ -171,7 +171,7 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := db.GetStateRootSvc().GetCurrentStateRoot()
+		_, err := db.GetStateRootSvc().GetCurrentStateRoot(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -198,7 +198,7 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := db.GetStateRootSvc().GetCurrentStateRoot()
+		_, err := db.GetStateRootSvc().GetCurrentStateRoot(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -209,7 +209,7 @@ func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
 	db := newTestDB(t)
 
 	// Get initial bound root
-	root1, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root1, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	// Write an observed-state KV entry
@@ -217,14 +217,14 @@ func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bound root must NOT change — observed state is excluded
-	root2, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root2, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2, "bound root must not change when observed-state KV is written")
 
 	// Write a bound KV entry — root must change
 	err = db.GetKVStore().KVSet("bound:config:timeout", "30", 0)
 	require.NoError(t, err)
-	root3, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root3, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root2, root3, "bound root must change when bound-state KV is written")
 }
@@ -233,7 +233,7 @@ func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
 	db := newTestDB(t)
 
 	// Get initial bound root
-	root1, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root1, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	// Write an observed-state blob
@@ -241,14 +241,14 @@ func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bound root must NOT change
-	root2, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root2, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2, "bound root must not change when observed-state blob is written")
 
 	// Write a bound blob — root must change
 	err = db.GetBlobStore().BlobPut("config", "binary1", []byte("bound-data"), "application/octet-stream", 0)
 	require.NoError(t, err)
-	root3, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	root3, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root2, root3, "bound root must change when bound-state blob is written")
 }
@@ -257,7 +257,7 @@ func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
 	db := newTestDB(t)
 
 	// Get initial observed root (may be empty hash if no observed state)
-	obsRoot1, err := db.GetStateRootSvc().GetObservedStateRoot()
+	obsRoot1, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 
 	// Write an observed-state KV entry
@@ -265,23 +265,23 @@ func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Observed root must change
-	obsRoot2, err := db.GetStateRootSvc().GetObservedStateRoot()
+	obsRoot2, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, obsRoot1, obsRoot2, "observed root must change when observed-state KV is written")
 
 	// Bound root must NOT change
-	boundRoot1, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	boundRoot1, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
 	err = db.GetKVStore().KVSetObserved("observed:metric:disk", "512", 0)
 	require.NoError(t, err)
 
-	boundRoot2, err := db.GetStateRootSvc().GetCurrentStateRoot()
+	boundRoot2, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, boundRoot1, boundRoot2, "bound root must not change when only observed state changes")
 
 	// Observed root must change again
-	obsRoot3, err := db.GetStateRootSvc().GetObservedStateRoot()
+	obsRoot3, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, obsRoot2, obsRoot3, "observed root must change when more observed state is written")
 }
@@ -290,14 +290,14 @@ func TestStateRoot_ObservedStateRootSurvivesRebuild(t *testing.T) {
 	db := newTestDB(t)
 	require.NoError(t, db.GetKVStore().KVSetObserved("observed:metric:load", "0.5", 0))
 
-	root1, err := db.GetStateRootSvc().GetObservedStateRoot()
+	root1, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
-	root2, err := db.GetStateRootSvc().GetObservedStateRoot()
+	root2, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root2, "observed root must be stable without changes")
 
 	require.NoError(t, db.GetStateRootSvc().RebuildCommitment(t.Context()))
-	root3, err := db.GetStateRootSvc().GetObservedStateRoot()
+	root3, err := db.GetStateRootSvc().GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root3, "a full rebuild must reproduce the incremental observed root")
 }

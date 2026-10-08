@@ -44,7 +44,7 @@ func TestSimpleAppPolicyStore_Found(t *testing.T) {
 func TestSimpleStateRootProvider_EmptyRoot(t *testing.T) {
 	t.Parallel()
 	s := &SimpleStateRootProvider{Root: ""}
-	_, err := s.GetCurrentStateRoot()
+	_, err := s.GetCurrentStateRoot(t.Context())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrTxProviderMisconfigured)
 }
@@ -52,7 +52,7 @@ func TestSimpleStateRootProvider_EmptyRoot(t *testing.T) {
 func TestSimpleStateRootProvider_ValidRoot(t *testing.T) {
 	t.Parallel()
 	s := &SimpleStateRootProvider{Root: "abc123"}
-	root, err := s.GetCurrentStateRoot()
+	root, err := s.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "abc123", root)
 }

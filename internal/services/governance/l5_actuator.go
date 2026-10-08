@@ -134,7 +134,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		"action_type", vt.ActionType,
 		"event_type", eventType)
 
-	receipt := w.buildInitialReceipt(vt)
+	receipt := w.buildInitialReceipt(ctx, vt)
 
 	// The receipt and its commitment are persisted by one write, so both stages
 	// share its start.
@@ -214,7 +214,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	cap.Dissolve()
 	w.Logger.Info("Dissolved JIT capability", "message_id", vt.Envelope.Id, "action_type", vt.ActionType)
 
-	w.finalizeReceipt(receipt, summary, execErr)
+	w.finalizeReceipt(ctx, receipt, summary, execErr)
 	executionStage.StateRootAfter = receipt.StateRootAfter
 
 	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
@@ -248,7 +248,7 @@ func (w *L5Actuator) RecordRejectedTransaction(ctx context.Context, vt *Verified
 		return nil, constants.ErrL5ActuatorSigningKeyMissing
 	}
 
-	receipt := w.buildInitialReceipt(vt)
+	receipt := w.buildInitialReceipt(ctx, vt)
 	receipt.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 	receipt.ResultSummary = fmt.Sprintf("rejected: %v", rejection)
 	receipt.FailureCode = operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED
@@ -267,11 +267,13 @@ func (w *L5Actuator) RecordRejectedTransaction(ctx context.Context, vt *Verified
 }
 
 // buildInitialReceipt constructs the EXECUTING-status receipt with state root and L2/L3 status.
-func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.ActionReceipt {
+// Receipt evidence does not depend on the caller staying connected, so the
+// state root read ignores ctx cancellation, as the receipt writes do.
+func (w *L5Actuator) buildInitialReceipt(ctx context.Context, vt *VerifiedTransaction) *operatorv1.ActionReceipt {
 	stateBefore := ""
 	if w.StateRootProvider != nil {
 		var err error
-		stateBefore, err = w.StateRootProvider.GetCurrentStateRoot()
+		stateBefore, err = w.StateRootProvider.GetCurrentStateRoot(context.WithoutCancel(ctx))
 		if err != nil {
 			w.Logger.Warn("Failed to get state root before execution", string(constants.ConnectionStateError), err)
 		}
@@ -497,7 +499,8 @@ func (w *L5Actuator) rehydratePayload(ctx context.Context, vt *VerifiedTransacti
 }
 
 // finalizeReceipt updates the receipt with execution result, state root after, and timestamp.
-func (w *L5Actuator) finalizeReceipt(receipt *operatorv1.ActionReceipt, summary string, execErr error) {
+// The mutation has already run, so the state root read ignores ctx cancellation.
+func (w *L5Actuator) finalizeReceipt(ctx context.Context, receipt *operatorv1.ActionReceipt, summary string, execErr error) {
 	status := operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	if summary == "" {
 		summary = "completed"
@@ -510,7 +513,7 @@ func (w *L5Actuator) finalizeReceipt(receipt *operatorv1.ActionReceipt, summary 
 	stateAfter := ""
 	if w.StateRootProvider != nil {
 		var stateErr error
-		stateAfter, stateErr = w.StateRootProvider.GetCurrentStateRoot()
+		stateAfter, stateErr = w.StateRootProvider.GetCurrentStateRoot(context.WithoutCancel(ctx))
 		if stateErr != nil {
 			w.Logger.Warn("Failed to get state root after execution", string(constants.ConnectionStateError), stateErr)
 		}

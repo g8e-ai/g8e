@@ -397,7 +397,7 @@ func TestDynamicStateRoot(t *testing.T) {
 	provider := &dynamicStateRoot{root: "initial-root"}
 
 	t.Run("GetCurrentStateRoot", func(t *testing.T) {
-		root, err := provider.GetCurrentStateRoot()
+		root, err := provider.GetCurrentStateRoot(t.Context())
 		if err != nil {
 			t.Fatalf("GetCurrentStateRoot() error = %v", err)
 		}
@@ -410,7 +410,7 @@ func TestDynamicStateRoot(t *testing.T) {
 		newRoot := "updated-root"
 		provider.UpdateRoot(newRoot)
 
-		root, err := provider.GetCurrentStateRoot()
+		root, err := provider.GetCurrentStateRoot(t.Context())
 		if err != nil {
 			t.Fatalf("GetCurrentStateRoot() after update error = %v", err)
 		}
@@ -1406,7 +1406,7 @@ func TestDynamicStateRootConcurrency(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := provider.GetCurrentStateRoot()
+				_, err := provider.GetCurrentStateRoot(t.Context())
 				if err != nil {
 					errors <- err
 				}
@@ -1433,7 +1433,7 @@ func TestDynamicStateRootConcurrency(t *testing.T) {
 				if idx%2 == 0 {
 					provider2.UpdateRoot(fmt.Sprintf("root-%d", idx))
 				} else {
-					provider2.GetCurrentStateRoot()
+					provider2.GetCurrentStateRoot(t.Context())
 				}
 			}(i)
 		}
@@ -1441,7 +1441,7 @@ func TestDynamicStateRootConcurrency(t *testing.T) {
 		wg.Wait()
 
 		// Final state should be one of the updated roots
-		root, err := provider2.GetCurrentStateRoot()
+		root, err := provider2.GetCurrentStateRoot(t.Context())
 		if err != nil {
 			t.Errorf("GetCurrentStateRoot() error = %v", err)
 		}
@@ -1733,7 +1733,7 @@ func TestDynamicStateRootEmpty(t *testing.T) {
 	provider := &dynamicStateRoot{root: ""}
 
 	t.Run("empty root", func(t *testing.T) {
-		root, err := provider.GetCurrentStateRoot()
+		root, err := provider.GetCurrentStateRoot(t.Context())
 		if err != nil {
 			t.Errorf("GetCurrentStateRoot() error = %v", err)
 		}
@@ -1744,7 +1744,7 @@ func TestDynamicStateRootEmpty(t *testing.T) {
 
 	t.Run("update to empty root", func(t *testing.T) {
 		provider.UpdateRoot("")
-		root, err := provider.GetCurrentStateRoot()
+		root, err := provider.GetCurrentStateRoot(t.Context())
 		if err != nil {
 			t.Errorf("GetCurrentStateRoot() error = %v", err)
 		}

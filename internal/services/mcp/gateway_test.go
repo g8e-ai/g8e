@@ -54,7 +54,7 @@ type fakeStateRootProvider struct {
 	root string
 }
 
-func (f *fakeStateRootProvider) GetCurrentStateRoot() (string, error) {
+func (f *fakeStateRootProvider) GetCurrentStateRoot(context.Context) (string, error) {
 	return f.root, nil
 }
 

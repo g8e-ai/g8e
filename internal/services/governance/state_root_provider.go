@@ -7,9 +7,12 @@
 
 package governance
 
+import "context"
+
 //go:generate mockery --name StateRootProvider --output ./mocks --dir .
 
 // StateRootProvider defines the interface for obtaining the current state root.
+// Implementations honor ctx for every read they perform.
 type StateRootProvider interface {
-	GetCurrentStateRoot() (string, error)
+	GetCurrentStateRoot(ctx context.Context) (string, error)
 }

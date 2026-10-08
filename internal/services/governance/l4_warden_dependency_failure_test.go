@@ -34,7 +34,7 @@ var errStateRootComputation = errors.New("state root computation failed")
 // errorStateRootProvider simulates a StateRootProvider whose computation fails.
 type errorStateRootProvider struct{}
 
-func (m *errorStateRootProvider) GetCurrentStateRoot() (string, error) {
+func (m *errorStateRootProvider) GetCurrentStateRoot(context.Context) (string, error) {
 	return "", errStateRootComputation
 }
 
