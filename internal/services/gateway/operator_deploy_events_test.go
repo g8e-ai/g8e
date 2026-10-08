@@ -12,6 +12,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +36,13 @@ func putCLISession(t *testing.T, store *DocumentStoreService, id, userID string)
 	})
 	require.NoError(t, err)
 	require.NoError(t, store.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), id, body))
+}
+
+// connectCLIStream simulates the open SSE stream of CLI session id, which is
+// what makes the session a recipient of live status events.
+func connectCLIStream(t *testing.T, ls *GatewayModeService, id string) {
+	t.Helper()
+	t.Cleanup(ls.GetGatewayWebSocketHandler().RegisterHandler(sseCLIChannelPrefix+id, func(string, []byte) {}))
 }
 
 // cliSessionEvents returns the operator status events recorded for one CLI session.
@@ -70,6 +78,8 @@ func TestOperatorCommandSubscribed_AnnouncesReadinessToOwnerCLIAndWebSessions(t 
 	store := ls.GetDocStore()
 	putCLISession(t, store, "cli-owner", statusEventOwner)
 	putCLISession(t, store, "cli-other", statusEventOther)
+	connectCLIStream(t, ls, "cli-owner")
+	connectCLIStream(t, ls, "cli-other")
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 	putSubscribableOperator(t, store, constants.OperatorStatusActive)
 
@@ -92,6 +102,7 @@ func TestOperatorCommandSubscribed_ReportsTheDocumentsStatusNotReadiness(t *test
 	ls := newTestGatewayService(t, testGatewayOpts{})
 	store := ls.GetDocStore()
 	putCLISession(t, store, "cli-owner", statusEventOwner)
+	connectCLIStream(t, ls, "cli-owner")
 	putSubscribableOperator(t, store, constants.OperatorStatusStopped)
 
 	require.NoError(t, store.OperatorCommandSubscribed("op-1", "sess-1", "launch-1"))
@@ -106,6 +117,7 @@ func TestOperatorCommandSubscribed_StaleSessionAndUnknownOperatorAnnounceNothing
 	ls := newTestGatewayService(t, testGatewayOpts{})
 	store := ls.GetDocStore()
 	putCLISession(t, store, "cli-owner", statusEventOwner)
+	connectCLIStream(t, ls, "cli-owner")
 	putSubscribableOperator(t, store, constants.OperatorStatusActive)
 
 	require.NoError(t, store.OperatorCommandSubscribed("op-1", "sess-superseded", "launch-1"))
@@ -119,6 +131,8 @@ func TestOperatorStatusEvents_EnrollmentActiveAnnouncementReachesOwnerCLISession
 	store := ls.GetDocStore()
 	putCLISession(t, store, "cli-owner", statusEventOwner)
 	putCLISession(t, store, "cli-other", statusEventOther)
+	connectCLIStream(t, ls, "cli-owner")
+	connectCLIStream(t, ls, "cli-other")
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 
 	store.NotifyOperatorEnrolled("op-1", statusEventOwner, "edge-1")
@@ -128,6 +142,27 @@ func TestOperatorStatusEvents_EnrollmentActiveAnnouncementReachesOwnerCLISession
 	require.Len(t, events, 1, "the TUI re-lists Operators on any status transition")
 	assert.Empty(t, events[0].payload.DeploymentID)
 	assert.Empty(t, cliSessionEvents(t, ls, statusEventOther, "cli-other"), "another user's CLI must not hear it")
+}
+
+// Enrollment creates a CLI session per worker and none of them opens a stream.
+// A status event must cost one durable row for the one connected consumer, not
+// one per session on record.
+func TestOperatorStatusEvents_WorkerCLISessionsWithoutAStreamGetNoRows(t *testing.T) {
+	ls := newTestGatewayService(t, testGatewayOpts{})
+	store := ls.GetDocStore()
+	putCLISession(t, store, "cli-owner", statusEventOwner)
+	connectCLIStream(t, ls, "cli-owner")
+	const workers = 50
+	for i := range workers {
+		putCLISession(t, store, fmt.Sprintf("cli-worker-%d", i), statusEventOwner)
+	}
+
+	store.NotifyOperatorEnrolled("op-1", statusEventOwner, "edge-1")
+
+	require.Len(t, cliSessionEvents(t, ls, statusEventOwner, "cli-owner"), 1)
+	for i := range workers {
+		assert.Empty(t, cliSessionEvents(t, ls, statusEventOwner, fmt.Sprintf("cli-worker-%d", i)))
+	}
 }
 
 func TestApprovalsChanged_EnrollmentRequestedCarriesTheLaunchToOwnerCLISession(t *testing.T) {

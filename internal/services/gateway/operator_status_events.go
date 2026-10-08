@@ -176,11 +176,13 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 		}
 	}
 
-	// The owner's CLI sessions hear every transition too: a launch-keyed
-	// readiness event (DeploymentID set) is for the CLI that launched the worker,
-	// and the TUI re-lists Operators on any of them. Like every status event it
-	// is a recorded fact, so a CLI that reconnects replays it from the stream.
-	cliIDs, err := ownerCLISessionIDs(p.docStore, t.UserID)
+	// The owner's connected CLI sessions hear every transition too: a
+	// launch-keyed readiness event (DeploymentID set) is for the CLI that
+	// launched the worker, and the TUI re-lists Operators on any of them. Only
+	// CLIs with an open stream are addressed; each worker has a CLI session that
+	// never connects, and a row per such session would multiply with the fleet.
+	// A CLI that connects later reconciles against the Operator list.
+	cliIDs, err := ownerConnectedCLISessionIDs(p.docStore, p.publisher, t.UserID)
 	if err != nil {
 		return errors.Join(append(errs, fmt.Errorf("operator status event: resolve cli sessions of %s: %w", t.UserID, err))...)
 	}

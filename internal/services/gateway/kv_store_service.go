@@ -118,6 +118,28 @@ func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
 	return keys, nil
 }
 
+// KVEntries returns every live key/value pair whose key matches a glob pattern,
+// in one query.
+func (s *KVStoreService) KVEntries(pattern string) (map[string]string, error) {
+	type entry struct{ key, value string }
+	entries, err := sqliteutil.MaterializeRows(context.Background(), s.db,
+		"SELECT key, value FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
+		[]interface{}{pattern, timesvc.NowTimestamp()},
+		func(r *sql.Rows) (entry, error) {
+			var e entry
+			err := r.Scan(&e.key, &e.value)
+			return e, err
+		})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(entries))
+	for _, e := range entries {
+		out[e.key] = e.value
+	}
+	return out, nil
+}
+
 // RunMaintenance removes expired KV entries from the database.
 func (s *KVStoreService) RunMaintenance() error {
 	now := timesvc.NowTimestamp()

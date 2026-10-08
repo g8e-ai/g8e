@@ -106,7 +106,7 @@ func (p *ApprovalsChangePublisher) publish(userID string, payload models.Approva
 	if err != nil {
 		return fmt.Errorf("resolve web sessions of %s: %w", userID, err)
 	}
-	cliIDs, err := ownerCLISessionIDs(p.docStore, userID)
+	cliIDs, err := ownerConnectedCLISessionIDs(p.docStore, p.publisher, userID)
 	if err != nil {
 		p.logger.Warn("resolve cli sessions failed", "user_id", userID, "error", err)
 	}
@@ -127,22 +127,27 @@ func (p *ApprovalsChangePublisher) publish(userID string, payload models.Approva
 	return errors.Join(errs...)
 }
 
-// ownerCLISessionIDs returns the ids of userID's CLI sessions that have not
-// expired and are not terminated.
-func ownerCLISessionIDs(docStore *DocumentStoreService, userID string) ([]string, error) {
-	if docStore == nil {
+// ownerConnectedCLISessionIDs returns the ids of userID's CLI sessions that
+// have an SSE stream open, are active and have not expired. A session with no
+// open stream cannot consume a live event, and enrollment creates one CLI
+// session per worker, so addressing every session on record would make each
+// status or approvals event cost the size of the fleet. Candidates are the
+// connected streams, so the lookup is one point read per stream, and a stream
+// owned by another user is skipped.
+func ownerConnectedCLISessionIDs(docStore *DocumentStoreService, publisher *SSEEventPublisher, userID string) ([]string, error) {
+	if docStore == nil || publisher == nil {
 		return nil, nil
 	}
-	docs, err := docStore.DocQuery(marshaler.CollectionName(constants.CollectionCLISessions), []models.DocFilter{
-		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
-	}, "", 0)
-	if err != nil {
-		return nil, err
-	}
-
 	now := time.Now().UTC()
-	ids := make([]string, 0, len(docs))
-	for _, doc := range docs {
+	var ids []string
+	for _, id := range publisher.ConnectedCLISessionIDs() {
+		doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), id)
+		if err != nil {
+			return nil, err
+		}
+		if doc == nil {
+			continue
+		}
 		wire, err := json.Marshal(doc.ForWire())
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
@@ -151,10 +156,10 @@ func ownerCLISessionIDs(docStore *DocumentStoreService, userID string) ([]string
 		if err := json.Unmarshal(wire, &session); err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 		}
-		if !session.IsActive || (!session.ExpiresAt.IsZero() && now.After(session.ExpiresAt)) {
+		if session.UserID != userID || !session.IsActive || (!session.ExpiresAt.IsZero() && now.After(session.ExpiresAt)) {
 			continue
 		}
-		ids = append(ids, doc.ID)
+		ids = append(ids, id)
 	}
 	return ids, nil
 }

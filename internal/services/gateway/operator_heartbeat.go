@@ -45,11 +45,24 @@ func (s *DocumentStoreService) RecordOperatorHeartbeat(operatorID string, update
 // before telemetry left the bound document. It is a no-op for every other
 // collection.
 func (s *DocumentStoreService) overlayOperatorHeartbeats(docs ...*models.Document) {
-	for _, doc := range docs {
-		if doc.Collection != marshaler.CollectionName(constants.CollectionOperators) {
+	if len(docs) == 0 || docs[0].Collection != marshaler.CollectionName(constants.CollectionOperators) {
+		return
+	}
+	// A registry read overlays every Operator, so read all telemetry rows in
+	// one query rather than one lookup per document.
+	var all map[string]string
+	if len(docs) > 1 {
+		var err error
+		if all, err = s.kv.KVEntries(constants.OperatorHeartbeatKeyPrefix + "*"); err != nil {
+			s.logger.Warn("Operator heartbeat telemetry unreadable; ignored", "error", err)
 			return
 		}
-		raw, ok := s.kv.KVGet(operatorHeartbeatKey(doc.ID))
+	}
+	for _, doc := range docs {
+		raw, ok := all[operatorHeartbeatKey(doc.ID)]
+		if len(docs) == 1 {
+			raw, ok = s.kv.KVGet(operatorHeartbeatKey(doc.ID))
+		}
 		if !ok {
 			continue
 		}

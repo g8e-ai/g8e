@@ -402,6 +402,22 @@ func (b *GatewayWebSocketHandler) RegisterHandler(channel string, handler func(s
 	}
 }
 
+// HandlerChannelsWithPrefix returns the channels that currently have an
+// in-process handler registered and whose name starts with prefix. An SSE
+// stream registers a handler for as long as it is connected, so for the
+// "sse:cli:" prefix this is exactly the set of CLI sessions listening now.
+func (b *GatewayWebSocketHandler) HandlerChannelsWithPrefix(prefix string) []string {
+	b.handlersMu.RLock()
+	defer b.handlersMu.RUnlock()
+	var channels []string
+	for channel := range b.handlers {
+		if strings.HasPrefix(channel, prefix) {
+			channels = append(channels, channel)
+		}
+	}
+	return channels
+}
+
 // SetCommandSubscribedHandler registers a callback invoked after a worker that
 // presented HeaderDeploymentID has its cmd:<operator_id>:<session_id>
 // subscription registered and acknowledged. Replaces any prior handler.

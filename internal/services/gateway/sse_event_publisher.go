@@ -10,9 +10,13 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
+
+// sseCLIChannelPrefix prefixes the pub/sub channel of a CLI session's SSE stream.
+const sseCLIChannelPrefix = "sse:cli:"
 
 // SSEEventPublisher is the Gateway's in-process producer path for SSE events:
 // it appends a durable row to the SSE event store and then publishes the live
@@ -59,6 +63,21 @@ func (p *SSEEventPublisher) PublishEphemeral(route SSERoute, eventType string, p
 	return p.publishLive(route, 0, payloadBytes)
 }
 
+// ConnectedCLISessionIDs returns the CLI sessions that have an SSE stream open
+// right now. Only these can consume a live event, so a producer that fans out
+// to CLI sessions addresses them instead of every session on record.
+func (p *SSEEventPublisher) ConnectedCLISessionIDs() []string {
+	if p.pubsub == nil {
+		return nil
+	}
+	channels := p.pubsub.HandlerChannelsWithPrefix(sseCLIChannelPrefix)
+	ids := make([]string, len(channels))
+	for i, channel := range channels {
+		ids[i] = strings.TrimPrefix(channel, sseCLIChannelPrefix)
+	}
+	return ids
+}
+
 // buildSSEPushPayload marshals the SSEPushPayload wire shape for eventType and
 // payload addressed to route.
 func buildSSEPushPayload(route SSERoute, eventType string, payload any) ([]byte, error) {
@@ -93,7 +112,7 @@ func (p *SSEEventPublisher) publishLive(route SSERoute, rowID int64, payloadByte
 	var channel string
 	switch {
 	case route.CLISessionID != "":
-		channel = "sse:cli:" + route.CLISessionID
+		channel = sseCLIChannelPrefix + route.CLISessionID
 	case route.WebSessionID != "":
 		channel = "sse:web:" + route.WebSessionID
 	}
