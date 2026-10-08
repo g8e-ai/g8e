@@ -373,7 +373,7 @@ The L5 Actuator owns the execution boundary. It guarantees zero standing privile
 
 1. **Pre-Execution Invariants**: Verifies `ExecutionHandler` is set, `SigningKey` is present, `EventType` is non-empty, and when `SQLAuditStore` is enabled, `AuditorSigningKey` and `AuditorKeyID` are present and match.
 2. **Initial Receipt Logging**: Constructs an initial `ActionReceipt` with status `EXECUTION_STATUS_EXECUTING`, state root before, and L2/L3 status. Signs the receipt with `SigningKey` and logs it to `ConsoleAuditStore` and `SQLAuditStore`. If signing or logging fails, execution aborts immediately. Stage: `DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE`.
-3. **Commitment Append**: When `SQLAuditStore` is active, appends a signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger. The attestation binds the transaction ID, hash, prior commitment hash, state root, L2 signature digest, warden intent signature digest, human signature digest, action type, target resource, and auditor key ID. Stage: `DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND`.
+3. **Commitment Append**: When `SQLAuditStore` is active, appends a signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger in the same audit-database transaction that records the `EXECUTING` receipt (`SQLAuditStore.RecordActionReceiptWithCommitment`), so the receipt and its commitment persist or fail together. The attestation binds the transaction ID, hash, prior commitment hash, state root, L2 signature digest, warden intent signature digest, human signature digest, action type, target resource, and auditor key ID. Stage: `DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND`.
 4. **Payload Rehydration**: Rehydrates sovereignty-scrubbed tokens into execution payloads in memory via `ScrubbingService`.
 5. **JIT Capability Lifecycle**:
    - Mints a single-action capability (`MintCapability`) binding transaction hash, action type, target resource, operator ID, session ID, expiry, and an Ed25519-signed single-use token.
@@ -385,9 +385,9 @@ The L5 Actuator owns the execution boundary. It guarantees zero standing privile
    - Captures state root after execution.
    - Maps errors to typed `ReceiptFailureCode` (e.g. `RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED`, `RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT`, `RECEIPT_FAILURE_CODE_CONTEXT_OVERFLOW`, `RECEIPT_FAILURE_CODE_EXECUTION_FAILED`).
 7. **Final Persistence Attestation**:
-   - Signs the final receipt and logs it to the audit stores.
+   - Signs the final receipt.
    - Generates a `ReceiptPersistenceAttestation` containing the transaction ID, final receipt signature digest, audit record ID, signer key ID, and timestamp, signed by the Actuator's private key.
-   - Stores the attestation in `receipt.FinalPersistenceAttestation` and persists the updated record.
+   - Stores the attestation in `receipt.FinalPersistenceAttestation` and logs the receipt to the audit stores in one write. If that write fails, the attestation is cleared and execution returns `ErrL5ActuatorLogReceipt`.
 8. **Asynchronous Gateway Relay**: If a `ReceiptPublisher` is wired (outbound operator mode), publishes the signed `ActionReceipt` to the Gateway's `receipts:` pub/sub channel. Relay errors are logged as warnings and do not fail the execution; the local SQLite record remains authoritative.
 
 ### Deterministic Protocol Chain and Evidence Graph

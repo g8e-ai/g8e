@@ -147,7 +147,7 @@ Pruning deletes chained rows only after appending a `g8e.v1.platform.audit.chain
 
 #### Receipt projection
 
-The `receipts` table is a latest-stage query projection, not the audit record of record. L5 upserts one row per `transaction_id` as the receipt advances from `EXECUTING` through the signed final receipt to the receipt that carries the signed persistence attestation. Every stage write also appends a chained `g8e.v1.operator.receipt.recorded` fact whose `content_text` is the canonical protojson receipt for that stage.
+The `receipts` table is a latest-stage query projection, not the audit record of record. L5 upserts one row per `transaction_id` as the receipt advances from `EXECUTING` to the signed final receipt that carries the signed persistence attestation. The `EXECUTING` write also appends the transaction's commitment in the same transaction when the commitment ledger is configured. Every stage write also appends a chained `g8e.v1.operator.receipt.recorded` fact whose `content_text` is the canonical protojson receipt for that stage.
 
 Compliance operational export carries both the retained receipt body and the matching chained receipt facts. The evidence importer verifies the exported chain segment, cross-links matching receipt projections to their chain entries, and cross-links commitments to receipts through deterministic stage evidence.
 
