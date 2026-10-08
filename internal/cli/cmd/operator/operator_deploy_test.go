@@ -13,6 +13,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,15 +33,14 @@ import (
 )
 
 // The worker fixture exposes the same non-secret deployment-state command as
-// the installed binary. Its human output contains no IDs or readiness markers.
+// the installed binary, which deploy reads only to explain a wait that failed.
+// Staging and readiness reach deploy as Gateway events, scripted per test.
 const fakeWorkerStatePreamble = `#!/bin/sh
 state='@state@'
 id=$(printf %s "$PWD" | md5sum | cut -c1-32)
 if [ "$2" = deployment-state ]; then
   if [ ! -f "$state" ]; then printf 'null\n'; exit; fi
   cat "$state"
-  launch=$(sed -n 's/.*"launch_id":"\([^"]*\)".*/\1/p' "$state")
-  printf '{"launch_id":"%s","phase":"ready","operator_session_id":"%s-111","updated_at":"2026-10-08T00:00:00Z"}\n' "$launch" "$id" > "$state"
   exit
 fi
 for arg; do case "$arg" in --deployment-id=*) launch=${arg#*=};; esac; done
@@ -83,7 +83,14 @@ func deployedDirID(dir string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// runOperatorDeploy runs deploy against a Gateway that announces every worker
+// as staged and ready.
 func runOperatorDeploy(t *testing.T, client authcmd.APIClient, args ...string) (string, error) {
+	t.Helper()
+	return runOperatorDeployWith(t, client, scriptedConnector(true, constants.OperatorStatusActive), time.Minute, args...)
+}
+
+func runOperatorDeployWith(t *testing.T, client authcmd.APIClient, connect deploymentEventsConnector, within time.Duration, args ...string) (string, error) {
 	t.Helper()
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
@@ -92,6 +99,7 @@ func runOperatorDeploy(t *testing.T, client authcmd.APIClient, args ...string) (
 		func(string) (*config.Config, error) { return cfg, nil },
 		func(fs.RuntimeFileService, *config.Config) (authcmd.APIClient, error) { return client, nil },
 		cmdtest.FileSvcFactoryFor(fileSvc),
+		connect,
 	)
 	cmd.Flags().StringP("endpoint", "e", "", "")
 	var buf bytes.Buffer
@@ -99,7 +107,7 @@ func runOperatorDeploy(t *testing.T, client authcmd.APIClient, args ...string) (
 	cmd.SetErr(&buf)
 	cmd.SetArgs(append([]string{"--parallel", "1"}, args...))
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), within)
 	t.Cleanup(cancel)
 	err := cmd.ExecuteContext(ctx)
 	return buf.String(), err
@@ -164,8 +172,8 @@ func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing
 
 	pending := models.PlatformEnrollmentPendingResponse{}
 	response := models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "batch-receipt"}
-	for _, dir := range dirs {
-		id := deployedDirID(dir) + "-000"
+	for i := range dirs {
+		id := fmt.Sprintf("req-%d", i+1)
 		pending.Requests = append(pending.Requests, models.PlatformEnrollmentPendingRequest{RequestID: id})
 		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: id, State: models.PlatformEnrollmentStateApproved})
 	}
@@ -184,9 +192,9 @@ func TestOperatorDeployStagesFleetBeforeOneApprovalAndReportsSessions(t *testing
 	require.Equal(t, constants.APIPaths.AuthPlatformEnrollmentBatchDecision, client.PostCalls[0].Path)
 	decision := client.PostCalls[0].Body.(models.PlatformEnrollmentBatchDecisionRequest)
 	require.Len(t, decision.Requests, len(dirs))
-	for i, dir := range dirs {
-		assert.Equal(t, deployedDirID(dir)+"-000", decision.Requests[i].RequestID)
-		assert.Contains(t, out, deployedDirID(dir)+"-111")
+	for i := range dirs {
+		assert.Equal(t, fmt.Sprintf("req-%d", i+1), decision.Requests[i].RequestID)
+		assert.Contains(t, out, fmt.Sprintf("session %s", fmt.Sprintf("session-%d", i+1)))
 	}
 }
 
@@ -197,28 +205,51 @@ func TestOperatorDeployDoesNotWaitForARequestFromAnAlreadyEnrolledOperator(t *te
 	client := &cmdtest.MockAPIClient{}
 
 	start := time.Now()
-	out, err := runOperatorDeploy(t, client, "--hosts", "localhost", "--remote-dir", remoteDir,
-		"--background", "--endpoint", "localhost", "--approve")
+	out, err := runOperatorDeployWith(t, client, scriptedConnector(false, constants.OperatorStatusActive), time.Minute,
+		"--hosts", "localhost", "--remote-dir", remoteDir, "--background", "--endpoint", "localhost", "--approve")
 	require.NoError(t, err, out)
 
 	assert.Less(t, time.Since(start), operatorDeployEnrollTimeout, "must not wait out the enrollment timeout")
 	assert.Empty(t, client.GetCalls, "command readiness does not require a registry status lookup")
 	assert.Empty(t, client.PostCalls, "there is no request to approve")
 	assert.Contains(t, out, "already enrolled")
-	assert.Contains(t, out, deployedDirID(remoteDir)+"-111")
+	assert.Contains(t, out, "session-1")
 }
 
-func TestOperatorDeployGivesUpWhenEnrollmentKeepsBeingRejected(t *testing.T) {
+func TestOperatorDeployFailsWhenAWorkerIsNeverAnnouncedAndNamesItsOwnFailure(t *testing.T) {
 	useFakeSSH(t, fakeWorkerRejected)
 	remoteDir := filepath.Join(t.TempDir(), "fleet")
 	client := &cmdtest.MockAPIClient{}
+	previous := operatorDeployEnrollTimeout
+	operatorDeployEnrollTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { operatorDeployEnrollTimeout = previous })
 
-	out, err := runOperatorDeploy(t, client, "--hosts", "localhost", "--remote-dir", remoteDir,
-		"--background", "--endpoint", "localhost", "--approve")
+	out, err := runOperatorDeployWith(t, client, scriptedConnector(false, ""), time.Minute,
+		"--hosts", "localhost", "--remote-dir", remoteDir, "--background", "--endpoint", "localhost", "--approve")
 	require.Error(t, err, out)
 	assert.ErrorIs(t, err, constants.ErrOperatorDeployFailed)
-	assert.Contains(t, out, "HTTP 429", "the worker's own failure line is surfaced")
+	assert.Contains(t, err.Error()+out, "HTTP 429", "the worker's own failure is surfaced")
 	assert.Empty(t, client.PostCalls, "nothing is approved without a request ID")
+}
+
+func TestOperatorDeployDoesNotCallASubscriptionOnAStoppedOperatorReady(t *testing.T) {
+	useFakeSSH(t, fakeWorkerEnrolls)
+	remoteDir := filepath.Join(t.TempDir(), "fleet")
+	listBody, err := json.Marshal(models.PlatformEnrollmentPendingResponse{
+		Requests: []models.PlatformEnrollmentPendingRequest{{RequestID: "req-1"}},
+	})
+	require.NoError(t, err)
+	decisionBody, err := json.Marshal(models.PlatformEnrollmentBatchDecisionResponse{
+		ReceiptID: "batch-receipt",
+		Requests:  []models.PlatformEnrollmentDecisionResponse{{RequestID: "req-1", State: models.PlatformEnrollmentStateApproved}},
+	})
+	require.NoError(t, err)
+
+	out, err := runOperatorDeployWith(t, &cmdtest.MockAPIClient{GetResp: listBody, PostResp: decisionBody},
+		scriptedConnector(true, constants.OperatorStatusStopped), time.Minute,
+		"--hosts", "localhost", "--remote-dir", remoteDir, "--background", "--endpoint", "localhost", "--approve")
+	require.ErrorIs(t, err, constants.ErrOperatorDeployFailed, out)
+	assert.Contains(t, err.Error(), "stopped")
 }
 
 func TestOperatorDeployLocalBatchSharesBinaryAndPreservesEarlierBatch(t *testing.T) {
@@ -307,16 +338,21 @@ func TestOperatorDeploySeparatesOwnerAndWorkerEndpoints(t *testing.T) {
 			return &cmdtest.MockAPIClient{}, nil
 		},
 		cmdtest.FileSvcFactoryFor(fileSvc),
+		scriptedConnector(true, constants.OperatorStatusActive),
 	)
 	cmd.Flags().StringP("endpoint", "e", "", "")
 	cmd.SetArgs([]string{"--hosts", "host", "--dest-dir", root, "--background", "--approve", "--endpoint", "localhost", "--operator-endpoint", "192.168.1.2"})
-	// The fake session is not in the API response, so final online verification
-	// fails after proving both independently resolved addresses.
+	// The mock API has no pending list, so approval fails after proving both
+	// independently resolved addresses.
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	_ = cmd.ExecuteContext(ctx)
-	data, err := os.ReadFile(filepath.Join(root, "args.txt"))
-	require.NoError(t, err)
+	var data []byte
+	require.Eventually(t, func() bool {
+		var err error
+		data, err = os.ReadFile(filepath.Join(root, "args.txt"))
+		return err == nil && len(data) > 0
+	}, 5*time.Second, 20*time.Millisecond)
 	assert.Contains(t, string(data), "--endpoint\n192.168.1.2\n")
 	assert.NotContains(t, string(data), "--endpoint\nlocalhost\n")
 	assert.Contains(t, ownerURL, "localhost")
@@ -333,6 +369,7 @@ func TestOperatorDeployForwardsGatewayPortsToTheWorker(t *testing.T) {
 			return &cmdtest.MockAPIClient{}, nil
 		},
 		cmdtest.FileSvcFactoryFor(fileSvc),
+		scriptedConnector(true, constants.OperatorStatusActive),
 	)
 	cmd.Flags().StringP("endpoint", "e", "", "")
 	cmd.SetArgs([]string{"--hosts", "host", "--dest-dir", root, "--background", "--endpoint", "gateway", "--gateway-http-port", "9080", "--gateway-https-port", "9443"})
@@ -381,15 +418,13 @@ func TestOperatorDeployRejectsConflictingDockerTransportBeforeExecution(t *testi
 func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 	useFakeSSH(t, fakeWorkerEnrolls)
 	root := filepath.Join(t.TempDir(), "fleet")
-	dirs := operatorDeployDirs(root, 12)
-	expected := make(map[string]bool, len(dirs))
-	for _, dir := range dirs {
-		expected[deployedDirID(dir)+"-000"] = true
-	}
+	const workers = 12
+	expected := make(map[string]bool, workers)
 	pending := models.PlatformEnrollmentPendingResponse{Requests: []models.PlatformEnrollmentPendingRequest{{RequestID: "unrelated"}}}
 	response := models.PlatformEnrollmentBatchDecisionResponse{ReceiptID: "batch-receipt"}
-	for _, dir := range dirs {
-		id := deployedDirID(dir) + "-000"
+	for i := 1; i <= workers; i++ {
+		id := fmt.Sprintf("req-%d", i)
+		expected[id] = true
 		pending.Requests = append(pending.Requests, models.PlatformEnrollmentPendingRequest{RequestID: id})
 		response.Requests = append(response.Requests, models.PlatformEnrollmentDecisionResponse{RequestID: id, State: models.PlatformEnrollmentStateApproved})
 	}
@@ -409,7 +444,7 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 		delete(expected, decision.RequestID)
 	}
 	assert.Empty(t, expected)
-	for _, dir := range dirs {
-		assert.Contains(t, out, deployedDirID(dir)+"-111")
+	for i := 1; i <= workers; i++ {
+		assert.Contains(t, out, fmt.Sprintf("session-%d", i))
 	}
 }

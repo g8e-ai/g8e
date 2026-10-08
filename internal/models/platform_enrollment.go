@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
 type PlatformComponentKind string
@@ -64,12 +65,17 @@ func (s PlatformEnrollmentState) IsTerminal() bool {
 	return s == PlatformEnrollmentStateCompleted || s == PlatformEnrollmentStateDenied || s == PlatformEnrollmentStateExpired || s == PlatformEnrollmentStateRevoked
 }
 
+// PlatformEnrollmentCreateRequest is the body of a platform enrollment request.
+// DeploymentID is the launch identifier `operator deploy` assigns to a worker;
+// it is never persisted and only keys the pending-request event to the CLI
+// that launched the worker.
 type PlatformEnrollmentCreateRequest struct {
 	ComponentKind     PlatformComponentKind       `json:"component_kind"`
 	AppName           string                      `json:"app_name,omitempty"`
 	InstanceID        string                      `json:"instance_id"`
 	Hostname          string                      `json:"hostname"`
 	SystemFingerprint string                      `json:"system_fingerprint,omitempty"`
+	DeploymentID      string                      `json:"deployment_id,omitempty"`
 	App               *PlatformAppCSRPayload      `json:"app,omitempty"`
 	Operator          *PlatformOperatorCSRPayload `json:"operator,omitempty"`
 }
@@ -77,6 +83,11 @@ type PlatformEnrollmentCreateRequest struct {
 func (r PlatformEnrollmentCreateRequest) ValidateShape() error {
 	if _, err := r.ComponentKind.CanonicalName(r.AppName); err != nil {
 		return err
+	}
+	if r.DeploymentID != "" {
+		if _, err := uuid.Parse(r.DeploymentID); err != nil {
+			return constants.ErrPlatformEnrollmentInvalidDeploymentID
+		}
 	}
 	if r.InstanceID == "" {
 		return constants.ErrPlatformEnrollmentInstanceIDRequired

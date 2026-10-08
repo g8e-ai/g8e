@@ -17,6 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // operatorStatusProducerID is the producer_id stamped into SSE event rows the
@@ -39,29 +40,69 @@ var operatorStatusEvents = map[constants.OperatorStatus]constants.EventType{
 // OperatorStatusTransition is an Operator status change the Gateway has
 // already persisted. Status is the new status; UserID is the owner whose
 // dashboard sessions receive the event.
+//
+// DeploymentID and OperatorSessionID are set only for the readiness
+// announcement of a worker launched by `operator deploy` (see
+// OperatorCommandSubscribed); that event also goes to the owner's CLI sessions.
 type OperatorStatusTransition struct {
-	OperatorID string
-	UserID     string
-	Name       string
-	Status     constants.OperatorStatus
+	OperatorID        string
+	UserID            string
+	Name              string
+	Status            constants.OperatorStatus
+	DeploymentID      string
+	OperatorSessionID string
+}
+
+// operatorDocument loads the persisted Operator document, or returns
+// constants.ErrNotFound when no such Operator exists.
+func (s *DocumentStoreService) operatorDocument(operatorID string) (*operatorv1.OperatorDocument, error) {
+	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("%w: operator %s", constants.ErrNotFound, operatorID)
+	}
+	op, err := models.OperatorDocumentFromStore(doc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
+	}
+	return op, nil
 }
 
 // OperatorStatusTransition builds the transition of operatorID into status from
 // the persisted Operator document, for a caller that knows the Operator only by
 // id. It returns constants.ErrNotFound when no such Operator exists.
 func (s *DocumentStoreService) OperatorStatusTransition(operatorID string, status constants.OperatorStatus) (OperatorStatusTransition, error) {
-	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	op, err := s.operatorDocument(operatorID)
 	if err != nil {
 		return OperatorStatusTransition{}, err
 	}
-	if doc == nil {
-		return OperatorStatusTransition{}, fmt.Errorf("%w: operator %s", constants.ErrNotFound, operatorID)
-	}
-	op, err := models.OperatorDocumentFromStore(doc)
-	if err != nil {
-		return OperatorStatusTransition{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
-	}
 	return OperatorStatusTransition{OperatorID: operatorID, UserID: op.GetUserId(), Name: op.GetName(), Status: status}, nil
+}
+
+// OperatorCommandSubscribed announces that the Operator's command channel for
+// sessionID is established, keyed by the deploymentID the worker presented on
+// its pub/sub connection. The transition carries the document's current status,
+// so a stopped or stale Operator is reported as such rather than as ready, and
+// nothing is announced when sessionID is no longer the Operator's session.
+func (s *DocumentStoreService) OperatorCommandSubscribed(operatorID, sessionID, deploymentID string) error {
+	op, err := s.operatorDocument(operatorID)
+	if err != nil {
+		return err
+	}
+	if op.GetOperatorSessionId() != sessionID {
+		return nil
+	}
+	s.NotifyOperatorStatusChanged(OperatorStatusTransition{
+		OperatorID:        operatorID,
+		UserID:            op.GetUserId(),
+		Name:              op.GetName(),
+		Status:            constants.OperatorStatus(op.GetStatus()),
+		DeploymentID:      deploymentID,
+		OperatorSessionID: sessionID,
+	})
+	return nil
 }
 
 // OperatorStatusObserver is told about each persisted Operator status
@@ -117,16 +158,35 @@ func (p *OperatorStatusPublisher) Publish(t OperatorStatusTransition) error {
 	}
 
 	payload := models.OperatorStatusUpdatedPayload{
-		OperatorID: t.OperatorID,
-		Status:     t.Status,
-		Name:       t.Name,
-		Timestamp:  time.Now().UTC(),
+		OperatorID:        t.OperatorID,
+		Status:            t.Status,
+		Name:              t.Name,
+		DeploymentID:      t.DeploymentID,
+		OperatorSessionID: t.OperatorSessionID,
+		Timestamp:         time.Now().UTC(),
 	}
 	var errs []error
 	for _, sessionID := range sessionIDs {
 		route := SSERoute{UserID: t.UserID, WebSessionID: sessionID}
 		if err := p.publisher.Publish(route, string(eventType), payload, operatorStatusProducerID); err != nil {
 			errs = append(errs, fmt.Errorf("web session %s: %w", sessionID, err))
+		}
+	}
+	if t.DeploymentID == "" {
+		return errors.Join(errs...)
+	}
+
+	// A launch-keyed readiness event is for the CLI that launched the worker.
+	// Like every status event it is a recorded fact, so a CLI that reconnects
+	// replays it from the stream.
+	cliIDs, err := ownerCLISessionIDs(p.docStore, t.UserID)
+	if err != nil {
+		return errors.Join(append(errs, fmt.Errorf("operator status event: resolve cli sessions of %s: %w", t.UserID, err))...)
+	}
+	for _, cliID := range cliIDs {
+		route := SSERoute{UserID: t.UserID, CLISessionID: cliID}
+		if err := p.publisher.Publish(route, string(eventType), payload, operatorStatusProducerID); err != nil {
+			errs = append(errs, fmt.Errorf("cli session %s: %w", cliID, err))
 		}
 	}
 	return errors.Join(errs...)

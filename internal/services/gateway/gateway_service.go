@@ -958,6 +958,15 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		ls.handleHeartbeatPublish(channel, data)
 	})
 
+	// A deploy-launched worker's established command subscription is its
+	// readiness; announce it to the owner so the deploying CLI need not poll.
+	pubsub.SetCommandSubscribedHandler(func(operatorID, sessionID, deploymentID string) {
+		if err := ls.docStore.OperatorCommandSubscribed(operatorID, sessionID, deploymentID); err != nil {
+			ls.logger.Warn("operator command subscription not announced",
+				"operator_id", operatorID, "deployment_id", deploymentID, "error", err)
+		}
+	})
+
 	// Build a map of ports to identify port assignments.
 	// HTTP port uses plain HTTP for bootstrap and MCP routes.
 	// HTTPS port uses mTLS for all other surfaces.

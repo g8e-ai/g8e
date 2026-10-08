@@ -80,40 +80,15 @@ func decodeOperatorDeploymentState(data []byte) (*models.OperatorDeploymentState
 	return state, nil
 }
 
-func awaitDeploymentState(ctx context.Context, target deployTarget, dir string, phase models.OperatorDeploymentPhase) (*models.OperatorDeploymentState, error) {
+// awaitStaged waits for the Gateway to announce the worker's pending request.
+// It returns "" for a worker whose retained credentials were already enrolled,
+// which becomes ready without a new approval.
+func awaitStaged(ctx context.Context, watch *deploymentWatch, target deployTarget, dir string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
 	defer cancel()
-	var result *models.OperatorDeploymentState
-	err := pollUntil(ctx, func() (bool, error) {
-		state, err := target.readDeploymentState(ctx, dir)
-		if err != nil || state == nil {
-			return false, err
-		}
-		if state.Phase == models.OperatorDeploymentPhaseFailed {
-			return false, fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, state.Error)
-		}
-		done := state.Phase == phase || state.Phase == models.OperatorDeploymentPhaseReady
-		if phase == models.OperatorDeploymentPhasePendingApproval {
-			done = true // Enrolled credentials require no new approval.
-		}
-		if done {
-			result = state
-		}
-		return done, nil
-	})
+	requestID, err := watch.awaitStaged(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("await deployment phase %s in %s: %w", phase, dir, err)
+		return "", fmt.Errorf("await staged request in %s: %w", dir, explainDeployWait(target, dir, err))
 	}
-	return result, nil
-}
-
-func awaitDeploymentRequestID(ctx context.Context, target deployTarget, dir string) (string, error) {
-	state, err := awaitDeploymentState(ctx, target, dir, models.OperatorDeploymentPhasePendingApproval)
-	if err != nil {
-		return "", err
-	}
-	if state.Phase != models.OperatorDeploymentPhasePendingApproval {
-		return "", nil
-	}
-	return state.RequestID, nil
+	return requestID, nil
 }

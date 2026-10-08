@@ -52,6 +52,11 @@ type GatewayWebSocketHandler struct {
 	onHeartbeatMu sync.RWMutex
 	onHeartbeat   func(channel string, data []byte)
 
+	// onCommandSubscribed is called once a deploy-launched worker's cmd:
+	// subscription is registered and acknowledged.
+	onCommandSubscribedMu sync.RWMutex
+	onCommandSubscribed   func(operatorID, sessionID, deploymentID string)
+
 	// stateRootProvider supplies the gateway's current state Merkle root for
 	// command intent relay. Nil disables the cmd: relay path (publishes to
 	// cmd: are rejected fail-closed when the relay is not configured).
@@ -180,6 +185,10 @@ type wsSubscriber struct {
 	// mTLS identity for topic ACL enforcement (Plan §5)
 	identitySPIFFEID string // SPIFFE ID from the client certificate's URI SAN
 	operatorID       string // Extracted operator_id for channel matching
+
+	// deploymentID is the launch identifier an `operator deploy` worker
+	// presented in HeaderDeploymentID on connect; empty for every other client.
+	deploymentID string
 }
 
 // isDone reports whether shutdown has been initiated.
@@ -393,6 +402,15 @@ func (b *GatewayWebSocketHandler) RegisterHandler(channel string, handler func(s
 	}
 }
 
+// SetCommandSubscribedHandler registers a callback invoked after a worker that
+// presented HeaderDeploymentID has its cmd:<operator_id>:<session_id>
+// subscription registered and acknowledged. Replaces any prior handler.
+func (b *GatewayWebSocketHandler) SetCommandSubscribedHandler(fn func(operatorID, sessionID, deploymentID string)) {
+	b.onCommandSubscribedMu.Lock()
+	b.onCommandSubscribed = fn
+	b.onCommandSubscribedMu.Unlock()
+}
+
 // HandleWebSocket upgrades the HTTP connection and passes it to a new session handler.
 // Extracts mTLS identity for topic ACL enforcement (Plan §5).
 // @Summary		WebSocket pub/sub
@@ -421,6 +439,7 @@ func (b *GatewayWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http
 			done:             make(chan struct{}),
 			identitySPIFFEID: identitySPIFFEID,
 			operatorID:       operatorID,
+			deploymentID:     r.Header.Get(constants.HeaderDeploymentID),
 		},
 	}
 	b.mu.Lock()
@@ -485,6 +504,7 @@ func (h *pubSubSessionHandler) handleAction(msg *pubsubv1.PubSubMessage) {
 		if err := h.broker.sendAck(h.sub, msg.Channel); err != nil {
 			h.broker.logger.Warn("pubsub: failed to send subscription ack", "channel", msg.Channel, "error", err)
 		}
+		h.announceCommandSubscribed(msg.Channel)
 	case constants.PubSubActionPSubscribe:
 		// Enforce topic ACL on the pattern before registering it. The
 		// wildcard '*' is permitted only at the operator_id segment
@@ -508,6 +528,29 @@ func (h *pubSubSessionHandler) handleAction(msg *pubsubv1.PubSubMessage) {
 		h.broker.punsubscribe(msg.Channel, h.sub)
 	case constants.PubSubActionPublish:
 		h.handlePublish(msg)
+	}
+}
+
+// announceCommandSubscribed reports a deploy-launched worker's established
+// command subscription. The channel already passed the topic ACL, so its
+// operator segment is the connection's own mTLS identity.
+func (h *pubSubSessionHandler) announceCommandSubscribed(channel string) {
+	if h.sub.deploymentID == "" {
+		return
+	}
+	prefix, rest, _ := strings.Cut(channel, ":")
+	if prefix != constants.ChannelPrefixCmd {
+		return
+	}
+	operatorID, sessionID, ok := strings.Cut(rest, ":")
+	if !ok {
+		return
+	}
+	h.broker.onCommandSubscribedMu.RLock()
+	fn := h.broker.onCommandSubscribed
+	h.broker.onCommandSubscribedMu.RUnlock()
+	if fn != nil {
+		fn(operatorID, sessionID, h.sub.deploymentID)
 	}
 }
 

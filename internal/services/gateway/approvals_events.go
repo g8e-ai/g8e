@@ -45,7 +45,7 @@ func NewApprovalsChangePublisher(docStore *DocumentStoreService, userSvc *UserSe
 // TransactionsChanged announces that userID's pending suspended transactions
 // changed.
 func (p *ApprovalsChangePublisher) TransactionsChanged(userID string) {
-	if err := p.publish(userID, models.ApprovalsChangedTransactions); err != nil {
+	if err := p.publish(userID, models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedTransactions}); err != nil {
 		p.logger.Warn("approvals changed event not delivered",
 			"subject", models.ApprovalsChangedTransactions, "user_id", userID, "error", err)
 	}
@@ -55,6 +55,22 @@ func (p *ApprovalsChangePublisher) TransactionsChanged(userID string) {
 // changed. Only the platform owner reviews them, so the event goes to the
 // owner's sessions.
 func (p *ApprovalsChangePublisher) EnrollmentsChanged() {
+	p.announceEnrollments(models.ApprovalsChangedPayload{Subject: models.ApprovalsChangedEnrollments})
+}
+
+// EnrollmentRequested announces that a request became pending. When the
+// worker that created it was launched by `operator deploy`, deploymentID keys
+// the event to that launch so the deploying CLI learns requestID from the
+// event instead of polling the worker's progress file.
+func (p *ApprovalsChangePublisher) EnrollmentRequested(requestID, deploymentID string) {
+	p.announceEnrollments(models.ApprovalsChangedPayload{
+		Subject:      models.ApprovalsChangedEnrollments,
+		DeploymentID: deploymentID,
+		RequestID:    requestID,
+	})
+}
+
+func (p *ApprovalsChangePublisher) announceEnrollments(payload models.ApprovalsChangedPayload) {
 	ownerID, err := p.userSvc.FirstUserID()
 	if err != nil || ownerID == "" {
 		if err != nil {
@@ -63,7 +79,7 @@ func (p *ApprovalsChangePublisher) EnrollmentsChanged() {
 		}
 		return
 	}
-	if err := p.publish(ownerID, models.ApprovalsChangedEnrollments); err != nil {
+	if err := p.publish(ownerID, payload); err != nil {
 		p.logger.Warn("approvals changed event not delivered",
 			"subject", models.ApprovalsChangedEnrollments, "user_id", ownerID, "error", err)
 	}
@@ -82,7 +98,7 @@ func (p *ApprovalsChangePublisher) EnrollmentsDecided() {
 
 // publish emits the event to every unexpired web session and active CLI session of userID.
 // Sessions are delivered independently; the returned error joins every failure.
-func (p *ApprovalsChangePublisher) publish(userID string, subject models.ApprovalsChangedSubject) error {
+func (p *ApprovalsChangePublisher) publish(userID string, payload models.ApprovalsChangedPayload) error {
 	if userID == "" {
 		return nil
 	}
@@ -94,7 +110,7 @@ func (p *ApprovalsChangePublisher) publish(userID string, subject models.Approva
 	if err != nil {
 		p.logger.Warn("resolve cli sessions failed", "user_id", userID, "error", err)
 	}
-	payload := models.ApprovalsChangedPayload{Subject: subject, Timestamp: time.Now().UTC()}
+	payload.Timestamp = time.Now().UTC()
 	var errs []error
 	for _, sessionID := range sessionIDs {
 		route := SSERoute{UserID: userID, WebSessionID: sessionID}

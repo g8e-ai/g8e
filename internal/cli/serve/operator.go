@@ -515,7 +515,12 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	}
 
 	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig, fileSvc, func(baseURL, serverName string, logger *slog.Logger, tlsConfig *certs.TLSConfig) (pubsub.PubSubClient, error) {
-		return pubsub.NewOperatorPubSubClient(baseURL, serverName, logger, tlsConfig)
+		client, err := pubsub.NewOperatorPubSubClient(baseURL, serverName, logger, tlsConfig)
+		if err != nil {
+			return nil, err
+		}
+		client.SetDeploymentID(opts.DeploymentID)
+		return client, nil
 	})
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)

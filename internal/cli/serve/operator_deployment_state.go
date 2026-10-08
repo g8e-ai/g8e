@@ -38,6 +38,15 @@ func NewOperatorDeploymentRecorder(fileSvc fs.RuntimeFileService, launchID strin
 	return &OperatorDeploymentRecorder{fileSvc: fileSvc, launchID: launchID}, nil
 }
 
+// LaunchID returns the identifier `operator deploy` assigned to this launch,
+// or "" when the Operator was not launched by it (or r is nil).
+func (r *OperatorDeploymentRecorder) LaunchID() string {
+	if r == nil {
+		return ""
+	}
+	return r.launchID
+}
+
 func operatorDeploymentStateRelPath() string {
 	return filepath.Join(constants.DeploymentDirname, constants.DeploymentStateFileOperator)
 }

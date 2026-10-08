@@ -83,6 +83,7 @@ const (
 	HeaderContentLength                 = "Content-Length"
 	HeaderContentType                   = "Content-Type"
 	HeaderCookie                        = "Cookie"
+	HeaderDeploymentID                  = "X-G8E-Deployment-ID"
 	HeaderExecutionID                   = "X-G8E-Execution-ID"
 	HeaderInvestigationID               = "X-G8E-Investigation-ID"
 	HeaderLastEventID                   = "Last-Event-ID"

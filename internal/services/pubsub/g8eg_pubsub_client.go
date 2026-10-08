@@ -12,6 +12,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -54,6 +55,10 @@ type OperatorPubSubClient struct {
 	tlsConfig      *tls.Config      // mTLS config; always required
 	serverName     string           // TLS SNI override when endpoint is a raw IP
 	certsTLSConfig *certs.TLSConfig // DI-based TLS config
+
+	// deploymentID is the `operator deploy` launch identifier presented to the
+	// Gateway on every subscription dial; empty for workers not launched by it.
+	deploymentID string
 
 	mu     sync.Mutex
 	closed bool
@@ -101,6 +106,13 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, ce
 	}, nil
 }
 
+// SetDeploymentID makes every subscription dial present the launch identifier
+// assigned by `operator deploy`, so the Gateway can announce this worker's
+// established command subscription to the CLI that launched it.
+func (c *OperatorPubSubClient) SetDeploymentID(deploymentID string) {
+	c.deploymentID = deploymentID
+}
+
 // Subscribe subscribes to a Operator pub/sub channel and returns a channel that
 // delivers raw JSON payloads. The returned channel is closed when the
 // subscription ends (context cancelled or connection lost).
@@ -122,7 +134,11 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	if c.tlsConfig != nil {
 		dialer = *httpclient.WebSocketDialerWithTLS(c.tlsConfig)
 	}
-	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
+	var dialHeader http.Header
+	if c.deploymentID != "" {
+		dialHeader = http.Header{constants.HeaderDeploymentID: []string{c.deploymentID}}
+	}
+	ws, resp, err := dialer.DialContext(ctx, wsURL, dialHeader)
 	if err != nil {
 		if resp != nil {
 			if closeErr := resp.Body.Close(); closeErr != nil {

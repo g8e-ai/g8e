@@ -125,20 +125,33 @@ type OperatorResponse struct {
 // g8e.v1.operator.status.updated.<state> events. It carries the transition, not
 // the Operator document: the operator document stays the source of truth and
 // consumers patch the status of the Operator they already hold.
+//
+// DeploymentID and OperatorSessionID are set only when the event announces that
+// a worker launched by `operator deploy` established its command subscription;
+// DeploymentID is the launch identifier the worker presented on its pub/sub
+// connection.
 type OperatorStatusUpdatedPayload struct {
-	OperatorID string                   `json:"operator_id"`
-	Status     constants.OperatorStatus `json:"status"`
-	Name       string                   `json:"name,omitempty"`
-	Timestamp  time.Time                `json:"timestamp"`
+	OperatorID        string                   `json:"operator_id"`
+	Status            constants.OperatorStatus `json:"status"`
+	Name              string                   `json:"name,omitempty"`
+	DeploymentID      string                   `json:"deployment_id,omitempty"`
+	OperatorSessionID string                   `json:"operator_session_id,omitempty"`
+	Timestamp         time.Time                `json:"timestamp"`
 }
 
 // ApprovalsChangedPayload is the SSE payload of g8e.v1.platform.approvals.changed.
 // It announces that the owner's pending approval set (suspended L3 transactions
 // or platform enrollment requests) changed; it carries no approval content.
 // The approval stores stay the source of truth: consumers re-list on receipt.
+//
+// DeploymentID and RequestID are set only when a request created by a worker
+// launched by `operator deploy` became pending, so that CLI can learn the
+// request ID without re-listing.
 type ApprovalsChangedPayload struct {
-	Subject   ApprovalsChangedSubject `json:"subject"`
-	Timestamp time.Time               `json:"timestamp"`
+	Subject      ApprovalsChangedSubject `json:"subject"`
+	DeploymentID string                  `json:"deployment_id,omitempty"`
+	RequestID    string                  `json:"request_id,omitempty"`
+	Timestamp    time.Time               `json:"timestamp"`
 }
 
 // ApprovalsChangedSubject names which pending list an ApprovalsChangedPayload

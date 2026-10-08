@@ -41,8 +41,7 @@ const (
 	operatorDeployDirPrefix   = "op"
 	operatorDeployMaxParallel = 100
 
-	operatorDeployPollInterval      = 100 * time.Millisecond
-	operatorDeployEnrollTimeout     = 30 * time.Second
+	operatorDeployDiagnoseTimeout   = 10 * time.Second
 	operatorDeployOnlineBaseTimeout = time.Minute
 	operatorDeployOnlinePerOperator = time.Second
 
@@ -50,6 +49,10 @@ const (
 	// directory for human diagnostics. Discovery uses structured runtime state.
 	operatorDeployStartLog = "start.log"
 )
+
+// operatorDeployEnrollTimeout bounds how long deploy waits for the Gateway to
+// announce one worker's pending request. Exposed as a var so tests can shorten it.
+var operatorDeployEnrollTimeout = 30 * time.Second
 
 // operatorDeployRemoteDirPattern and operatorDeployEndpointPattern restrict the values
 // interpolated into the remote shell command; a leading ~ must stay unquoted so the
@@ -79,9 +82,9 @@ type deploySSH struct {
 type deployTarget interface {
 	name() string
 	startOperator(context.Context, string, string, ...string) error
+	// readDeploymentState reads the worker's recorded progress once. Waiting is
+	// event driven; this only explains a wait that failed.
 	readDeploymentState(context.Context, string) (*models.OperatorDeploymentState, error)
-	awaitRequestID(context.Context, string) (string, error)
-	awaitReady(context.Context, string) (string, error)
 	markReady(context.Context, string) error
 }
 
@@ -91,6 +94,7 @@ type deployedOperator struct {
 	Dir       string
 	RequestID string
 	SessionID string
+	watch     *deploymentWatch
 }
 
 type operatorDeployOptions struct {
@@ -99,16 +103,55 @@ type operatorDeployOptions struct {
 	startArgs  []string
 	// client is set only with --approve; the staged cohort is approved once.
 	client authcmd.APIClient
+	// events delivers the Gateway's staging and readiness announcements for the
+	// workers this deploy starts. It is set whenever workers are started.
+	events deploymentWatcher
+}
+
+// deploymentWatcher registers a launch to be announced by the Gateway.
+type deploymentWatcher interface {
+	watch(launchID string) *deploymentWatch
+}
+
+// deploymentEventsConnector opens the deploying CLI's event stream.
+type deploymentEventsConnector func(context.Context, fs.RuntimeFileService, *config.Config) (deploymentWatcher, func(), error)
+
+func connectGatewayDeploymentEvents(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (deploymentWatcher, func(), error) {
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
+	if err != nil || creds == nil || creds.CLISessionID == "" {
+		return nil, nil, fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
+	}
+	httpClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("operator deploy: build mTLS client: %w", err)
+	}
+	return connectDeploymentEvents(ctx, httpClient, cfg.OperatorPublicURL(), creds.CLISessionID)
+}
+
+// explainDeployWait adds what the worker itself recorded to a failed wait, so a
+// worker that exited or reported a failure is named instead of only timing out.
+func explainDeployWait(target deployTarget, dir string, waitErr error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), operatorDeployDiagnoseTimeout)
+	defer cancel()
+	state, err := target.readDeploymentState(ctx, dir)
+	switch {
+	case err != nil:
+		return fmt.Errorf("%w; worker state: %w", waitErr, err)
+	case state != nil && state.Phase == models.OperatorDeploymentPhaseFailed:
+		return fmt.Errorf("%w; worker reported: %s", waitErr, state.Error)
+	}
+	return waitErr
 }
 
 func operatorDeployCmd() *cobra.Command {
-	return operatorDeployCmdWithConfig(shared.LoadConfig, authcmd.DefaultAPIClientFactory, shared.NewFileSvc)
+	return operatorDeployCmdWithConfig(shared.LoadConfig, authcmd.DefaultAPIClientFactory, shared.NewFileSvc, connectGatewayDeploymentEvents)
 }
 
 func operatorDeployCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	clientFactory authcmd.APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	connectEvents deploymentEventsConnector,
 ) *cobra.Command {
 	var hosts string
 	var port int
@@ -215,6 +258,14 @@ every worker has established its command subscription. Without --approve, worker
 			cmd.Printf("Deploying %d operator(s) to %d target(s): %s\n", len(dirs), len(hostList), strings.Join(hostList, ","))
 
 			ctx := cmd.Context()
+			if background {
+				events, stopEvents, err := connectEvents(ctx, fileSvc, cfg)
+				if err != nil {
+					return err
+				}
+				defer stopEvents()
+				opts.events = events
+			}
 			var deployed []deployedOperator
 			var failed []string
 			if dockerContext != "" {
@@ -307,10 +358,12 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 		cmd.Printf("Operator deployed to %s:%s (use --background to auto-start)\n", s.host, absDir)
 		return op, nil
 	}
+	// Watch before starting: the stream delivers only live events.
+	op.watch = opts.events.watch(s.launchID)
 	if err := s.startOperator(ctx, absDir, opts.endpoint, opts.startArgs...); err != nil {
 		return deployedOperator{}, err
 	}
-	op.RequestID, err = s.awaitRequestID(ctx, absDir)
+	op.RequestID, err = awaitStaged(ctx, op.watch, s, absDir)
 	if err != nil {
 		return deployedOperator{}, err
 	}
@@ -365,9 +418,9 @@ func awaitOperatorsOnline(ctx context.Context, ops []deployedOperator) error {
 	defer cancel()
 
 	for i := range ops {
-		sessionID, err := ops[i].target.awaitReady(ctx, ops[i].Dir)
+		sessionID, err := ops[i].watch.awaitReady(ctx)
 		if err != nil {
-			return fmt.Errorf("%s:%s: %w", ops[i].target.name(), ops[i].Dir, err)
+			return fmt.Errorf("%s:%s: %w", ops[i].target.name(), ops[i].Dir, explainDeployWait(ops[i].target, ops[i].Dir, err))
 		}
 		ops[i].SessionID = sessionID
 		if err := ops[i].target.markReady(ctx, ops[i].Dir); err != nil {
@@ -376,25 +429,6 @@ func awaitOperatorsOnline(ctx context.Context, ops []deployedOperator) error {
 	}
 
 	return nil
-}
-
-// pollUntil calls check every operatorDeployPollInterval until it reports done,
-// returns an error, or ctx ends.
-func pollUntil(ctx context.Context, check func() (bool, error)) error {
-	for {
-		done, err := check()
-		if err != nil {
-			return err
-		}
-		if done {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("%w: %w", constants.ErrOperatorDeployFailed, ctx.Err())
-		case <-time.After(operatorDeployPollInterval):
-		}
-	}
 }
 
 func (s deploySSH) sshOptions(portFlag string) []string {
@@ -593,10 +627,6 @@ func (s deploySSH) readDeploymentState(ctx context.Context, dir string) (*models
 	return state, nil
 }
 
-func (s deploySSH) awaitRequestID(ctx context.Context, dir string) (string, error) {
-	return awaitDeploymentRequestID(ctx, s, dir)
-}
-
 // Reuse start's flag definitions so deploy and start cannot drift in types/defaults.
 var operatorDeployForwardFlags = []string{
 	"roles", "inference-enabled", "inference-ollama-endpoint", "inference-keep-alive",
@@ -703,16 +733,6 @@ func operatorDeployArgsForDir(args []string, host, dir string) []string {
 		}
 	}
 	return result
-}
-
-// A retained registry session may still be marked active from the old process.
-// Require this launch to establish its command subscription before trusting it.
-func (s deploySSH) awaitReady(ctx context.Context, dir string) (string, error) {
-	state, err := awaitDeploymentState(ctx, s, dir, models.OperatorDeploymentPhaseReady)
-	if err != nil {
-		return "", err
-	}
-	return state.OperatorSessionID, nil
 }
 
 func validateOperatorDeployFlags(

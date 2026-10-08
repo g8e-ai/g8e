@@ -114,7 +114,7 @@ func TestOperatorDeployCmdErrorPaths(t *testing.T) {
 	t.Run("deploy fails when no credentials", func(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
-		cmd := operatorDeployCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, authcmd.PanickingClientFactory(), cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd := operatorDeployCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, authcmd.PanickingClientFactory(), cmdtest.FileSvcFactoryFor(fileSvc), scriptedConnector(false, ""))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

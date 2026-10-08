@@ -358,6 +358,7 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 		InstanceID:        c.instanceID,
 		Hostname:          c.hostname,
 		SystemFingerprint: systemFingerprint,
+		DeploymentID:      c.deployment.LaunchID(),
 		Operator: &models.PlatformOperatorCSRPayload{
 			OperatorCSRPEM: operatorCSR,
 			CLICSRPEM:      cliCSR,

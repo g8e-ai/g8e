@@ -64,6 +64,10 @@
       "_go_const": "HeaderCookie",
       "value": "Cookie"
     },
+    "DeploymentID": {
+      "_go_const": "HeaderDeploymentID",
+      "value": "X-G8E-Deployment-ID"
+    },
     "ExecutionID": {
       "_go_const": "HeaderExecutionID",
       "value": "X-G8E-Execution-ID"

@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -303,6 +304,15 @@ type mockGateway struct {
 	operatorSession string
 	cliSession      string
 	posture         string
+
+	mu           sync.Mutex
+	deploymentID string
+}
+
+func (mg *mockGateway) receivedDeploymentID() string {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+	return mg.deploymentID
 }
 
 func (mg *mockGateway) handleRequest(w http.ResponseWriter, r *http.Request) {
@@ -315,6 +325,9 @@ func (mg *mockGateway) handleRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	mg.mu.Lock()
+	mg.deploymentID = req.DeploymentID
+	mg.mu.Unlock()
 	if req.ComponentKind != models.PlatformComponentOperator {
 		w.WriteHeader(http.StatusBadRequest)
 		return

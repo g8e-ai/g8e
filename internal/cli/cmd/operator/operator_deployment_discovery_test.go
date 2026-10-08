@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func TestDeploymentDiscoversPendingRequestWithoutLogs(t *testing.T) {
+func TestDeploymentReadsPendingRequestWithoutLogs(t *testing.T) {
 	dir := testutil.TempDir(t)
 	fileSvc, err := fs.NewRuntimeFileService(dir, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
@@ -32,11 +33,9 @@ func TestDeploymentDiscoversPendingRequestWithoutLogs(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.DeploymentDirname, constants.DeploymentStateFileOperator), data, constants.PermFilePrivate))
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-	defer cancel()
-	id, err := (deploySSH{local: true}).awaitRequestID(ctx, dir)
+	state, err := (deploySSH{local: true}).readDeploymentState(context.Background(), dir)
 	require.NoError(t, err)
-	require.Equal(t, "resumed-request", id)
+	require.Equal(t, "resumed-request", state.RequestID)
 }
 
 func TestDeploymentRejectsPreviousLaunchProgress(t *testing.T) {
@@ -65,26 +64,35 @@ func TestDeploymentReadsSessionAndFailureWithoutLogs(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.DeploymentDirname, constants.DeploymentStateFileOperator), data, constants.PermFilePrivate))
 			target := deploySSH{local: true, launchID: "current"}
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-			defer cancel()
-			ops := []deployedOperator{{target: target, Dir: dir, SessionID: "retained-session"}}
-			requestID, err := target.awaitRequestID(ctx, dir)
-			if phase == models.OperatorDeploymentPhaseFailed {
-				require.ErrorIs(t, err, constants.ErrOperatorDeployFailed)
-				require.ErrorContains(t, err, "startup failed")
-				require.ErrorIs(t, awaitOperatorsOnline(ctx, ops), constants.ErrOperatorDeployFailed)
-				return
-			}
+
+			state, err := target.readDeploymentState(context.Background(), dir)
 			require.NoError(t, err)
-			require.Empty(t, requestID, "completed requests must not be approved again")
-			if phase == models.OperatorDeploymentPhaseReady {
-				require.NoError(t, awaitOperatorsOnline(ctx, ops))
-				require.Equal(t, "session", ops[0].SessionID)
+			require.Equal(t, phase, state.Phase)
+			waitErr := explainDeployWait(target, dir, fmt.Errorf("%w: wait ended", constants.ErrOperatorDeployFailed))
+			require.ErrorIs(t, waitErr, constants.ErrOperatorDeployFailed)
+			if phase == models.OperatorDeploymentPhaseFailed {
+				require.ErrorContains(t, waitErr, "startup failed")
 			} else {
-				require.ErrorIs(t, awaitOperatorsOnline(ctx, ops), context.DeadlineExceeded)
+				require.NotContains(t, waitErr.Error(), "startup failed")
 			}
 		})
 	}
+}
+
+func TestAwaitOperatorsOnlineReportsEachWorkersAnnouncedSession(t *testing.T) {
+	events := newDeploymentEvents()
+	ready, unannounced := events.watch("ready"), events.watch("unannounced")
+	ready.setReadiness("session", constants.OperatorStatusActive)
+	target := deploySSH{local: true}
+
+	ops := []deployedOperator{{target: target, Dir: testutil.TempDir(t), watch: ready}}
+	require.NoError(t, awaitOperatorsOnline(context.Background(), ops))
+	require.Equal(t, "session", ops[0].SessionID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	ops = []deployedOperator{{target: target, Dir: testutil.TempDir(t), watch: unannounced}}
+	require.ErrorIs(t, awaitOperatorsOnline(ctx, ops), constants.ErrOperatorDeployFailed)
 }
 
 func TestOperatorDeploymentStateCommandReadsOnlyRequestedRuntime(t *testing.T) {

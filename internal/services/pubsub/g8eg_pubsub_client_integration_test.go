@@ -342,6 +342,58 @@ func TestSubscribe(t *testing.T) {
 	})
 }
 
+// TestSubscribe_PresentsTheDeploymentLaunchID verifies that a worker launched
+// by `operator deploy` identifies its launch on the subscription dial, which is
+// what lets the Gateway announce its established command subscription to the
+// deploying CLI, and that any other worker presents no launch header.
+func TestSubscribe_PresentsTheDeploymentLaunchID(t *testing.T) {
+	for name, launchID := range map[string]string{
+		"deploy-launched": "35fe96f6-cb3c-4e7e-a392-ed72e84ac9ad",
+		"started by hand": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := make(chan []string, 1)
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				upgrader := websocket.Upgrader{}
+				conn, err := upgrader.Upgrade(w, r, nil)
+				assert.NoError(t, err)
+				defer conn.Close()
+				got <- r.Header.Values(constants.HeaderDeploymentID)
+
+				_, data, err := conn.ReadMessage()
+				if err != nil {
+					return
+				}
+				var msg pubsubv1.PubSubMessage
+				assert.NoError(t, proto.Unmarshal(data, &msg))
+				ack, _ := proto.Marshal(&pubsubv1.PubSubEvent{Type: constants.PubSubEventSubscribed, Channel: msg.Channel})
+				_ = conn.WriteMessage(websocket.BinaryMessage, ack)
+				_, _, _ = conn.ReadMessage()
+			}))
+			defer server.Close()
+
+			client, err := NewOperatorPubSubClient(httpsToWss(server.URL), "", slog.Default(), newTestCertsTLSConfigForServer(t, server))
+			require.NoError(t, err)
+			client.SetDeploymentID(launchID)
+
+			_, err = client.Subscribe(context.Background(), "cmd:op-1:sess-1")
+			require.NoError(t, err)
+			client.Close()
+
+			select {
+			case values := <-got:
+				if launchID == "" {
+					assert.Empty(t, values)
+				} else {
+					assert.Equal(t, []string{launchID}, values)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("dial never reached the server")
+			}
+		})
+	}
+}
+
 func TestWaitForSubscribedACK(t *testing.T) {
 	logger := slog.Default()
 

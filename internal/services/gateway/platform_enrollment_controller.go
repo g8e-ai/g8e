@@ -472,6 +472,8 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidHostname):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidDeploymentID):
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentFingerprintRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidPayload):

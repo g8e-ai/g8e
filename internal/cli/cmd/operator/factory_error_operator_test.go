@@ -97,7 +97,7 @@ func TestOperatorListCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestOperatorDeployCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := cmdtest.NewCmdTestEnv(t)
-	cmd := operatorDeployCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), authcmd.PanickingClientFactory(), cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := operatorDeployCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), authcmd.PanickingClientFactory(), cmdtest.FailingFileSvcFactory(errFactory), scriptedConnector(false, ""))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

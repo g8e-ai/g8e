@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
@@ -162,7 +163,7 @@ func TestOperatorDeployDockerMountFlagPreservesCommaSeparatedSpec(t *testing.T) 
 	assert.Equal(t, []string{spec}, got)
 }
 
-func TestDockerDeploymentReportsExitedContainerImmediately(t *testing.T) {
+func TestDockerDeploymentExplainsAFailedWaitWithTheExitedContainer(t *testing.T) {
 	d := newDeployDocker("livingroom-node", "image", "/operators/fleet", nil)
 	d.imageID = "sha256:resolved"
 	dir := "/operators/fleet/op-00001"
@@ -178,7 +179,8 @@ func TestDockerDeploymentReportsExitedContainerImmediately(t *testing.T) {
 		}
 		return nil, nil
 	}}
-	_, err := d.awaitRequestID(context.Background(), dir)
+	err := explainDeployWait(d, dir, fmt.Errorf("%w: wait ended", constants.ErrOperatorDeployFailed))
+	require.ErrorIs(t, err, constants.ErrOperatorDeployFailed)
 	require.ErrorContains(t, err, "exited (17)")
 	assert.ErrorContains(t, err, "fatal configuration error")
 }
@@ -235,16 +237,16 @@ func TestDockerDeploymentDiscoversProgressWithoutReadingLogs(t *testing.T) {
 		return json.Marshal(state)
 	}}
 	d.runner = fake
-	requestID, err := d.awaitRequestID(context.Background(), dir)
+	progress, err := d.readDeploymentState(context.Background(), dir)
 	require.NoError(t, err)
-	require.Equal(t, "request", requestID)
+	require.Equal(t, "request", progress.RequestID)
 	state.Phase = models.OperatorDeploymentPhaseReady
 	state.OperatorSessionID = "session"
-	sessionID, err := d.awaitReady(context.Background(), dir)
+	progress, err = d.readDeploymentState(context.Background(), dir)
 	require.NoError(t, err)
-	require.Equal(t, "session", sessionID)
+	require.Equal(t, "session", progress.OperatorSessionID)
 	state.LaunchID = "old-launch"
-	progress, err := d.readDeploymentState(context.Background(), dir)
+	progress, err = d.readDeploymentState(context.Background(), dir)
 	require.NoError(t, err)
 	require.Nil(t, progress)
 	assert.NotContains(t, joinedDockerCalls(fake.calls), "container logs")

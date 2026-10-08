@@ -111,6 +111,37 @@ func TestOperatorEnroll_FullFlowWithApproval(t *testing.T) {
 	assert.Equal(t, testutil.FileMode(constants.PermFilePublic, bundleInfo.IsDir()), bundleInfo.Mode().Perm())
 }
 
+// TestOperatorEnroll_PresentsTheDeploymentLaunchID verifies that a worker
+// launched by `operator deploy` puts its launch ID in the create request, which
+// is what keys the Gateway's pending-request announcement to the deploying CLI,
+// and that a worker launched any other way presents none.
+func TestOperatorEnroll_PresentsTheDeploymentLaunchID(t *testing.T) {
+	for name, launchID := range map[string]string{
+		"deploy-launched": "35fe96f6-cb3c-4e7e-a392-ed72e84ac9ad",
+		"started by hand": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fileSvc := newTestFileSvc(t)
+			mg := newMockGateway(t)
+			mg.approve()
+			client, err := NewOperatorPlatformEnrollmentClient(mg.server.URL, "op-test-instance", "op-test-host", fileSvc, testLogger())
+			require.NoError(t, err)
+			if launchID != "" {
+				recorder, err := NewOperatorDeploymentRecorder(fileSvc, launchID)
+				require.NoError(t, err)
+				client.SetDeploymentRecorder(recorder)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_, err = client.Enroll(ctx)
+			require.NoError(t, err)
+
+			assert.Equal(t, launchID, mg.receivedDeploymentID())
+		})
+	}
+}
+
 // TestOperatorEnroll_ResumeFromPendingState verifies that when a
 // pending state file exists, the client resumes the same request
 // without generating new keys. This is the kill-and-restart property.

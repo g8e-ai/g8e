@@ -196,7 +196,7 @@ Internal enumeration constants, each defined as a typed string:
 HTTP header names and authentication-related constants:
 
 - Identity: `HeaderOperatorID`, `HeaderOperatorSessionID`, `HeaderWebSessionID`, `HeaderCLISessionID`, `HeaderUserID`, `HeaderOrganizationID`, `HeaderBoundOperators`
-- Context: `HeaderCaseID`, `HeaderExecutionID`, `HeaderInvestigationID`, `HeaderTaskID`
+- Context: `HeaderCaseID`, `HeaderDeploymentID` (launch identifier an `operator deploy` worker presents on its pub/sub connection), `HeaderExecutionID`, `HeaderInvestigationID`, `HeaderTaskID`
 - System: `HeaderRequestID`, `HeaderSourceComponent`, `HeaderSystemFingerprint`, `HeaderXAccelBuffering`
 - Proxy: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderProxyKeyID`, `HeaderProxyNonce`, `HeaderProxyIssuedAt`, `HeaderProxySignature`, `HeaderXRequestTimestamp`
 - Security: `HeaderXContentTypeOptions`, `HeaderXFrameOptions`, `HeaderContentSecurityPolicy`

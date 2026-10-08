@@ -330,18 +330,6 @@ func (d *deployDocker) readDeploymentState(ctx context.Context, dir string) (*mo
 	return state, nil
 }
 
-func (d *deployDocker) awaitRequestID(ctx context.Context, dir string) (string, error) {
-	return awaitDeploymentRequestID(ctx, d, dir)
-}
-
-func (d *deployDocker) awaitReady(ctx context.Context, dir string) (string, error) {
-	state, err := awaitDeploymentState(ctx, d, dir, models.OperatorDeploymentPhaseReady)
-	if err != nil {
-		return "", err
-	}
-	return state.OperatorSessionID, nil
-}
-
 func (d *deployDocker) markReady(ctx context.Context, dir string) error {
 	op, err := d.operator(dir)
 	if err != nil {
@@ -362,10 +350,12 @@ func deployDockerOperator(ctx context.Context, cmd *cobra.Command, d *deployDock
 		cmd.Printf("Operator container %s prepared on %s (use --background to start)\n", op.container, d.context)
 		return deployed, nil
 	}
+	// Watch before starting: the stream delivers only live events.
+	deployed.watch = opts.events.watch(op.launchID)
 	if err := d.startOperator(ctx, dir, opts.endpoint); err != nil {
 		return deployedOperator{}, err
 	}
-	deployed.RequestID, err = d.awaitRequestID(ctx, dir)
+	deployed.RequestID, err = awaitStaged(ctx, deployed.watch, d, dir)
 	if err != nil {
 		return deployedOperator{}, err
 	}

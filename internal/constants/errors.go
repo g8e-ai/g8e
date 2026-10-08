@@ -553,6 +553,7 @@ var (
 	ErrPlatformEnrollmentInvalidInstanceID    = errors.New("invalid platform enrollment instance_id")
 	ErrPlatformEnrollmentHostnameRequired     = errors.New("platform enrollment hostname is required")
 	ErrPlatformEnrollmentInvalidHostname      = errors.New("invalid platform enrollment hostname")
+	ErrPlatformEnrollmentInvalidDeploymentID  = errors.New("invalid platform enrollment deployment_id")
 	ErrPlatformEnrollmentFingerprintRequired  = errors.New("platform enrollment system_fingerprint is required")
 	ErrPlatformEnrollmentInvalidPayload       = errors.New("platform enrollment payload does not match component kind")
 	ErrPlatformEnrollmentInvalidCSR           = errors.New("invalid platform enrollment CSR")

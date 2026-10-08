@@ -261,6 +261,9 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		return nil, err
 	}
 	if existing != nil {
+		if req.DeploymentID != "" {
+			s.approvals.EnrollmentRequested(existing.ID, req.DeploymentID)
+		}
 		return &models.PlatformEnrollmentCreateResponse{
 			RequestID:     existing.ID,
 			ComponentKind: existing.ComponentKind,
@@ -306,7 +309,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		"component_kind", string(req.ComponentKind),
 		"instance_id", req.InstanceID,
 		"expires_at", expiresAt)
-	s.approvals.EnrollmentsChanged()
+	s.approvals.EnrollmentRequested(requestID, req.DeploymentID)
 
 	return &models.PlatformEnrollmentCreateResponse{
 		RequestID:     requestID,

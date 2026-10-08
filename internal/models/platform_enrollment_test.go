@@ -53,6 +53,35 @@ func TestPlatformEnrollmentCreateRequestValidateShape(t *testing.T) {
 			},
 		},
 		{
+			name: "operator accepts a deployment launch UUID",
+			request: PlatformEnrollmentCreateRequest{
+				ComponentKind:     PlatformComponentOperator,
+				InstanceID:        "operator-1",
+				Hostname:          "operator-host",
+				SystemFingerprint: "fingerprint",
+				DeploymentID:      "35fe96f6-cb3c-4e7e-a392-ed72e84ac9ad",
+				Operator: &PlatformOperatorCSRPayload{
+					OperatorCSRPEM: "operator-csr",
+					CLICSRPEM:      "cli-csr",
+				},
+			},
+		},
+		{
+			name: "rejects a deployment ID that is not a UUID",
+			request: PlatformEnrollmentCreateRequest{
+				ComponentKind:     PlatformComponentOperator,
+				InstanceID:        "operator-1",
+				Hostname:          "operator-host",
+				SystemFingerprint: "fingerprint",
+				DeploymentID:      "not-a-uuid",
+				Operator: &PlatformOperatorCSRPayload{
+					OperatorCSRPEM: "operator-csr",
+					CLICSRPEM:      "cli-csr",
+				},
+			},
+			wantErr: constants.ErrPlatformEnrollmentInvalidDeploymentID,
+		},
+		{
 			name: "rejects unknown component",
 			request: PlatformEnrollmentCreateRequest{
 				ComponentKind: "unknown",
