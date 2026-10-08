@@ -1549,18 +1549,11 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 	return ls.pki.RenewServiceCertWithNames(extraIPs, extraDNSNames)
 }
 
-// heartbeatUpdate is the typed patch payload for operator document heartbeat updates.
-type heartbeatUpdate struct {
-	LatestHeartbeatSnapshot json.RawMessage `json:"latest_heartbeat_snapshot"`
-	LastHeartbeatAt         time.Time       `json:"last_heartbeat_at"`
-	CurrentHostname         string          `json:"current_hostname,omitempty"`
-	UpdatedAt               time.Time       `json:"updated_at"`
-}
-
 // handleHeartbeatPublish processes a heartbeat published to the pub/sub broker,
-// updating the operator document's latest_heartbeat_snapshot and Gateway-clock
-// last_heartbeat_at in the DB. A heartbeat from an Operator previously marked
-// stale restores it to active.
+// recording the Operator's latest_heartbeat_snapshot and Gateway-clock
+// last_heartbeat_at as observed-tier telemetry (RecordOperatorHeartbeat), so the
+// bound Operator document and state root do not change. A heartbeat from an
+// Operator previously marked stale restores it to active.
 func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte) {
 	var env commonv1.GovernanceEnvelope
 	if err := protojson.Unmarshal(data, &env); err != nil {
@@ -1584,20 +1577,12 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	now := time.Now().UTC()
-	update, err := json.Marshal(heartbeatUpdate{
+	if err := ls.docStore.RecordOperatorHeartbeat(env.GetOperatorId(), heartbeatUpdate{
 		LatestHeartbeatSnapshot: snapshot,
-		LastHeartbeatAt:         now,
+		LastHeartbeatAt:         time.Now().UTC(),
 		CurrentHostname:         currentHostnameFromHeartbeat(heartbeat),
-		UpdatedAt:               now,
-	})
-	if err != nil {
-		ls.logger.Warn("heartbeat: failed to build update", "operator_id", env.GetOperatorId(), "error", err)
-		return
-	}
-
-	if _, err := ls.docStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
-		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.GetOperatorId(), "error", err)
+	}); err != nil {
+		ls.logger.Warn("heartbeat: failed to record telemetry", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}
 

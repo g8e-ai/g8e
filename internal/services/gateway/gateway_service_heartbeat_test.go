@@ -102,6 +102,32 @@ func publishTestHeartbeat(t *testing.T, ls *GatewayModeService, operatorID strin
 	ls.handleHeartbeatPublish("test-channel", wire)
 }
 
+func TestGatewayModeService_HandleHeartbeatPublish_LeavesBoundRootUnchanged(t *testing.T) {
+	ls := newTestGatewayService(t, testGatewayOpts{})
+	store := ls.GetDocStore()
+	putOperator(t, store, "op-root", remoteOperator(constants.OperatorStatusActive), time.Hour)
+	publishTestHeartbeat(t, ls, "op-root")
+
+	boundBefore, err := ls.stateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	observedBefore, err := ls.stateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+
+	publishTestHeartbeat(t, ls, "op-root")
+
+	boundAfter, err := ls.stateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	observedAfter, err := ls.stateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, boundBefore, boundAfter, "heartbeats must not move the bound root")
+	assert.NotEqual(t, observedBefore, observedAfter, "heartbeat telemetry is committed in the observed root")
+
+	doc, err := store.DocGet(operatorsCollection, "op-root")
+	require.NoError(t, err)
+	assert.Contains(t, doc.Data, "last_heartbeat_at")
+	assert.Contains(t, doc.Data, "latest_heartbeat_snapshot")
+}
+
 func TestGatewayModeService_HandleHeartbeatPublish_StampsGatewayClockAndRestoresStale(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{})
 	store := ls.GetDocStore()

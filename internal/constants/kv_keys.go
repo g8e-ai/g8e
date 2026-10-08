@@ -17,6 +17,10 @@ const (
 // SentinelKeyPrefix namespaces sentinel UEI tokens in kv_store.
 const SentinelKeyPrefix = "g8e:sentinel:"
 
+// OperatorHeartbeatKeyPrefix namespaces per-Operator heartbeat telemetry in
+// kv_store. The rows are observed-tier, so heartbeats never move the bound root.
+const OperatorHeartbeatKeyPrefix = "g8e:operator:heartbeat:"
+
 // ScrubbingTokenKeyPrefix is the key prefix for UEI token persistence in the KV store.
 // Combined with a token (e.g. "{{UEI_1}}") to form the full key passed to TokenStore.
 const ScrubbingTokenKeyPrefix = "uei_token_"

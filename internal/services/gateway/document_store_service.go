@@ -31,6 +31,10 @@ type DocumentStoreService struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
 
+	// kv holds observed-tier Operator heartbeat telemetry, which is overlaid
+	// onto Operator documents on read (operator_heartbeat.go).
+	kv *KVStoreService
+
 	// statusObserver receives Operator status transitions. It is bound once
 	// during Gateway construction; an unbound store, as in unit tests, reports
 	// to no one.
@@ -80,6 +84,7 @@ func NewDocumentStoreService(db *sqliteutil.DB, logger *slog.Logger) *DocumentSt
 	return &DocumentStoreService{
 		db:     db,
 		logger: logger,
+		kv:     NewKVStoreService(db, logger),
 	}
 }
 
@@ -129,7 +134,12 @@ func (s *DocumentStoreService) docGet(collection, id string) (*models.Document, 
 	if err != nil {
 		return nil, fmt.Errorf("gateway: document store: get: %w", err)
 	}
-	return scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr)
+	doc, err := scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr)
+	if err != nil {
+		return nil, err
+	}
+	s.overlayOperatorHeartbeats(doc)
+	return doc, nil
 }
 
 // DocCreate creates a document only if it does not already exist. data must be valid JSON.
@@ -404,6 +414,7 @@ func (s *DocumentStoreService) DocList(collection string) ([]*models.Document, e
 		}
 		results = append(results, doc)
 	}
+	s.overlayOperatorHeartbeats(results...)
 	return results, nil
 }
 
@@ -606,6 +617,7 @@ func (s *DocumentStoreService) docQuery(collection string, filters []models.DocF
 		}
 		results = append(results, doc)
 	}
+	s.overlayOperatorHeartbeats(results...)
 	return results, nil
 }
 
