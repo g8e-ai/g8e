@@ -26,14 +26,17 @@ import (
 )
 
 func TestReceiptPreparationDoesNotWaitForLedger(t *testing.T) {
-	for _, invalid := range []string{"canonical JSON", "locked vault"} {
+	for _, invalid := range []string{"canonical JSON", "locked vault", "session whitespace"} {
 		t.Run(invalid, func(t *testing.T) {
 			store := newIntegrationAuditStore(t)
 			record := sampleActionReceiptRecord(t, "session")
-			if invalid == "canonical JSON" {
+			switch invalid {
+			case "canonical JSON":
 				record.ActionReceipt.ResultSummary = string([]byte{0xff})
-			} else {
+			case "locked vault":
 				store.encryptionVault.Lock()
+			case "session whitespace":
+				record.OperatorSessionID = " session "
 			}
 			store.commitmentLedger.mu.Lock()
 			done := make(chan error, 1)
@@ -52,8 +55,11 @@ func TestReceiptPreparationDoesNotWaitForLedger(t *testing.T) {
 				t.Error("receipt preparation waited for the occupied ledger")
 			}
 			require.Error(t, err)
-			if invalid == "locked vault" {
+			switch invalid {
+			case "locked vault":
 				require.ErrorIs(t, err, constants.ErrAuditStoreVaultLocked)
+			case "session whitespace":
+				require.ErrorIs(t, err, constants.ErrAuditSessionMissing)
 			}
 			var count int
 			require.NoError(t, store.db.QueryRow("SELECT count(*) FROM receipts").Scan(&count))
@@ -196,4 +202,43 @@ func TestReceiptConcurrentStagesPreserveBothChains(t *testing.T) {
 	require.NoError(t, store.db.QueryRow("SELECT count(*) FROM events").Scan(&count))
 	require.Equal(t, writers*2, count)
 	require.NoError(t, store.VerifyChain(t.Context(), 0))
+}
+
+func TestReceiptMissingSessionFailsClosedAtomically(t *testing.T) {
+	for _, withCommitment := range []bool{false, true} {
+		t.Run(fmt.Sprintf("commitment=%t", withCommitment), func(t *testing.T) {
+			store := newIntegrationAuditStore(t)
+			// Simulate a session insert that succeeds without creating the row.
+			// Receipt/event foreign keys must enforce identity independently of
+			// application-side existence checks.
+			_, err := store.db.Exec(`CREATE TRIGGER suppress_receipt_session
+				BEFORE INSERT ON sessions BEGIN SELECT RAISE(IGNORE); END`)
+			require.NoError(t, err)
+			headSeq, headHash, err := store.GetAuditChainHead(t.Context())
+			require.NoError(t, err)
+
+			record := sampleActionReceiptRecord(t, "missing-session")
+			if withCommitment {
+				err = store.RecordActionReceiptWithCommitment(record, func(string) ([]byte, string, error) {
+					t.Error("commitment builder ran despite missing session")
+					return nil, "", constants.ErrNotFound
+				})
+			} else {
+				err = store.RecordActionReceipt(record)
+			}
+			require.ErrorIs(t, err, constants.ErrAuditStoreRecordReceiptFailed)
+			persisted, err := store.GetActionReceipt(record.TransactionID)
+			require.NoError(t, err)
+			require.Nil(t, persisted)
+			afterSeq, afterHash, err := store.GetAuditChainHead(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, headSeq, afterSeq)
+			require.Equal(t, headHash, afterHash)
+			var count int
+			require.NoError(t, store.db.QueryRow("SELECT count(*) FROM sessions").Scan(&count))
+			require.Zero(t, count)
+			require.NoError(t, store.db.QueryRow("SELECT count(*) FROM commitment_ledger").Scan(&count))
+			require.Zero(t, count)
+		})
+	}
 }

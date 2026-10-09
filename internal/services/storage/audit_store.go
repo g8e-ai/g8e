@@ -737,6 +737,9 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 	if build != nil && ass.commitmentLedger == nil {
 		return constants.ErrAuditStoreDBNotInitialized
 	}
+	if record.OperatorSessionID != "" && strings.TrimSpace(record.OperatorSessionID) != record.OperatorSessionID {
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, constants.ErrAuditSessionMissing)
+	}
 
 	ass.muWrites.Add(1)
 	defer ass.muWrites.Done()
@@ -788,11 +791,8 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 			return err
 		}
 
-		if chainEvent.OperatorSessionID != "" {
-			if err := ass.requireExistingSessionConn(conn, chainEvent); err != nil {
-				return err
-			}
-		}
+		// The session insert and receipt foreign key already establish session
+		// existence in this write transaction; the event also has a foreign key.
 		if _, _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
 			return err
 		}
