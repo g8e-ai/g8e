@@ -192,4 +192,3 @@ func TestGateway_NoPlaintextOnDiskAfterBoot(t *testing.T) {
 
 	assert.GreaterOrEqual(t, scannedFiles, 4, "expected to scan secrets and vault files")
 }
-

@@ -10,6 +10,7 @@ package models
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -532,5 +533,5 @@ func TestOperatorDocumentGoldenFixture(t *testing.T) {
 	storedData, err := os.ReadFile(fixturePath)
 	require.NoError(t, err, "failed to read golden fixture")
 
-	assert.Equal(t, string(storedData), string(prettyData), "operator document JSON should match golden fixture")
+	assert.Equal(t, strings.ReplaceAll(string(storedData), "\r\n", "\n"), strings.ReplaceAll(string(prettyData), "\r\n", "\n"), "operator document JSON should match golden fixture")
 }

@@ -12,6 +12,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -344,7 +345,7 @@ func TestPasskeyRevokeCredential(t *testing.T) {
 		err := svc.addCredential(t.Context(), user.ID, testCredential(credID))
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/"+credID, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/"+base64.RawURLEncoding.EncodeToString([]byte(credID)), nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 		svc.RevokeCredential(rr, req)

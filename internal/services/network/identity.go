@@ -641,12 +641,35 @@ type commandExecutor func(ctx context.Context, name string, args ...string) ([]b
 // defaultCommandExecutor is the default implementation using exec.CommandContext.
 // The context allows cancellation of long-running commands (e.g. systeminfo on Windows).
 func defaultCommandExecutor(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).Output()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = 2 * time.Second
+	return cmd.Output()
 }
+
+var (
+	cachedWinIDMu sync.RWMutex
+	cachedWinID   *WindowsIdentity
+)
 
 // detectWindowsIdentity detects Windows-specific network identities.
 func (d *Detector) detectWindowsIdentity(ctx context.Context) (WindowsIdentity, error) {
-	return d.detectWindowsIdentityWithExecutor(ctx, defaultCommandExecutor)
+	cachedWinIDMu.RLock()
+	if cachedWinID != nil {
+		id := *cachedWinID
+		cachedWinIDMu.RUnlock()
+		return id, nil
+	}
+	cachedWinIDMu.RUnlock()
+
+	id, err := d.detectWindowsIdentityWithExecutor(ctx, defaultCommandExecutor)
+	if err != nil {
+		return id, err
+	}
+
+	cachedWinIDMu.Lock()
+	cachedWinID = &id
+	cachedWinIDMu.Unlock()
+	return id, nil
 }
 
 // detectWindowsIdentityWithExecutor is the testable implementation that accepts a command executor.

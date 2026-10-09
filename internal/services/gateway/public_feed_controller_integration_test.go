@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
+
 func TestPublicFeedControllerHandlePublicFeedBatches_AcceptsBatch(t *testing.T) {
 	privatePort := mustFreePort(t)
 	publicPort := mustFreePort(t)

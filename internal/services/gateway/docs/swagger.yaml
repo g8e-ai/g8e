@@ -3289,6 +3289,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.PasskeyRevokeResponse'
+        "409":
+          description: Conflict — credential is the user's last passkey
+          schema:
+            type: string
       summary: Revoke passkey credential
       tags:
       - passkey

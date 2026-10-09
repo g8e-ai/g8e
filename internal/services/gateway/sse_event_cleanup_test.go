@@ -23,7 +23,7 @@ import (
 // so cleanup tests need no wall-clock gap between appends.
 func backdateSSEEvents(t *testing.T, store *SSEEventService, eventTypes ...string) {
 	t.Helper()
-	past := timesvc.FormatTimestamp(time.Now().UTC().Add(-time.Hour))
+	past := timesvc.FormatTimestamp(time.Now().UTC().Add(-2 * time.Hour))
 	for _, eventType := range eventTypes {
 		_, err := store.db.ExecWithRetry(t.Context(), "UPDATE sse_events SET created_at = ? WHERE event_type = ?", past, eventType)
 		require.NoError(t, err)

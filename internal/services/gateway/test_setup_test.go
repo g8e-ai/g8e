@@ -71,7 +71,6 @@ func newTestFileSvc(t *testing.T) fs.RuntimeFileService {
 	return svc
 }
 
-
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
 // Vault auto-initializes on first open; the keystore is for secret operations.

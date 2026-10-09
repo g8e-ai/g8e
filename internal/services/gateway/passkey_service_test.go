@@ -651,4 +651,3 @@ func TestPasskeyService_L3Proof_RejectsAssertionWithoutUV(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, protocol.ErrVerification)
 }
-

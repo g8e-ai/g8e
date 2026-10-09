@@ -15,9 +15,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
-	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
 // KeyProvider resolves Ed25519 private keys for consensus members by AppID.

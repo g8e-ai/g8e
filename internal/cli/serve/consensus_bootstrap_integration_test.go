@@ -85,7 +85,8 @@ func publicHexOfSeed(t *testing.T, seedHex string) string {
 
 func (f bootstrapFixture) memberKeySeed(t *testing.T, consensusID, appID string) string {
 	t.Helper()
-	kp := consensus.NewKeystoreKeyProvider(f.ks, consensusID)
+	kp, err := consensus.NewKeystoreKeyProvider(f.ks, consensusID)
+	require.NoError(t, err)
 	privKey, err := kp.GetMemberKey(appID)
 	require.NoError(t, err, "member key for %s must be saved for the in-process deliberator", appID)
 	return hex.EncodeToString(privKey.Seed())

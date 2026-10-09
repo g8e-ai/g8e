@@ -240,6 +240,12 @@
       "value": "G8E_DATA_HOST",
       "category": "user_endpoint",
       "description": "Host where the data Operator runs; remote hosts receive launch instructions"
+    },
+    "MasterKeyFile": {
+      "_go_const": "EnvVar.MasterKeyFile",
+      "value": "G8E_MASTER_KEY_FILE",
+      "category": "secret",
+      "description": "Path to external master key file for Docker Compose secret provisioning and e2e-docker tests"
     }
   }
 }

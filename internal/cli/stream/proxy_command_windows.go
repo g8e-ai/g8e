@@ -19,7 +19,7 @@ import (
 )
 
 func proxyCommand(ctx context.Context, command string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, filepath.Base(constants.PathBinSh), "-c", command)
+	cmd := exec.CommandContext(ctx, filepath.Base(constants.PathBinSh), "-c", command) //nolint:gosec // Windows shell proxy command requires sh invocation
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	return cmd
 }

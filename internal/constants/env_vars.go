@@ -51,6 +51,7 @@ var EnvVar = struct {
 	HarnessLLMProvider    EnvVarKey
 	HarnessLLMModel       EnvVarKey
 	TestReexec            EnvVarKey
+	MasterKeyFile         EnvVarKey
 }{
 	Hostname:              EnvVarKey("G8E_HOSTNAME"),
 	OllamaEndpoint:        EnvVarKey("G8E_OLLAMA_ENDPOINT"),
@@ -91,4 +92,5 @@ var EnvVar = struct {
 	HarnessLLMProvider:    EnvVarKey("G8E_HARNESS_LLM_PROVIDER"),
 	HarnessLLMModel:       EnvVarKey("G8E_HARNESS_LLM_MODEL"),
 	TestReexec:            EnvVarKey("G8E_TEST_REEXEC"),
+	MasterKeyFile:         EnvVarKey("G8E_MASTER_KEY_FILE"),
 }

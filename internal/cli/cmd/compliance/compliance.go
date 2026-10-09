@@ -198,7 +198,7 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keysto
 		ctx = context.Background()
 	}
 
-	deps, cleanup, ok := openEvaluatorDeps(ctx, fileSvc, ks)
+	deps, cleanup, ok := openEvaluatorDeps(fileSvc, ks)
 	if !ok {
 		slog.Default().Warn("compliance: evaluator deps unavailable")
 		return nil
@@ -225,7 +225,7 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keysto
 // openAuditStore, openCommitments, openLedger); this function composes them and
 // aggregates their cleanups so a failure in a later opener releases resources
 // acquired by earlier ones.
-func openEvaluatorDeps(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (compliance.EvaluatorDeps, func(), bool) {
+func openEvaluatorDeps(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (compliance.EvaluatorDeps, func(), bool) {
 	var cleanups []func()
 
 	v, vaultCleanup := openVault(fileSvc, ks)

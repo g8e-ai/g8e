@@ -275,7 +275,7 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 			if crossEnrollment {
 				profiles = append(profiles, constants.DockerCrossEnrollProfile)
 			}
-			if os.Getenv("G8E_MASTER_KEY_FILE") == "" {
+			if os.Getenv(string(constants.EnvVar.MasterKeyFile)) == "" {
 				if _, err := os.Stat("./secrets/g8e_master_key"); errors.Is(err, os.ErrNotExist) {
 					keyBytes := make([]byte, 32)
 					if _, err := rand.Read(keyBytes); err != nil {
@@ -292,8 +292,8 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 						return fmt.Errorf("failed to write temp master key: %w", err)
 					}
 					_ = tmpKey.Close()
-					os.Setenv("G8E_MASTER_KEY_FILE", tmpKey.Name())
-					defer os.Unsetenv("G8E_MASTER_KEY_FILE")
+					os.Setenv(string(constants.EnvVar.MasterKeyFile), tmpKey.Name())
+					defer os.Unsetenv(string(constants.EnvVar.MasterKeyFile))
 				}
 			}
 

@@ -61,7 +61,7 @@ func TestResolveRuntimeRoot(t *testing.T) {
 		t.Setenv(e2eRuntimeRootEnv, "/tmp/isolated/../isolated-root/")
 		root, err := resolveRuntimeRoot()
 		require.NoError(t, err)
-		assert.Equal(t, "/tmp/isolated-root", root)
+		assert.Equal(t, filepath.Clean("/tmp/isolated-root"), root)
 	})
 
 	t.Run("falls back to the repository root", func(t *testing.T) {

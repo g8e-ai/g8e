@@ -750,7 +750,7 @@ func TestOpenEvaluatorDeps_DatabaseError(t *testing.T) {
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.InitVault())
 
-	deps, cleanup, ok := openEvaluatorDeps(context.Background(), fileSvc, ks)
+	deps, cleanup, ok := openEvaluatorDeps(fileSvc, ks)
 	assert.False(t, ok)
 	assert.Nil(t, cleanup)
 	assert.Nil(t, deps.Audit)

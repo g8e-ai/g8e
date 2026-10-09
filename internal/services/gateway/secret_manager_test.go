@@ -156,7 +156,6 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 	assert.Equal(t, hex.EncodeToString(priv.Public().(ed25519.PublicKey)), keyID)
 }
 
-
 func TestSecretManager_InitAppSettings_CreatesDistinctAuditorIdentity(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)

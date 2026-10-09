@@ -255,7 +255,7 @@ func certFingerprint(cert *x509.Certificate) string {
 
 // bundleContainsFingerprint parses PEM certificates from data and returns true
 // if any certificate's SHA-256 fingerprint matches.
-func bundleContainsFingerprint(data []byte, fingerprint string) (bool, error) {
+func bundleContainsFingerprint(data []byte, fingerprint string) (bool, error) { //nolint:unparam // error return maintained for OS-specific caller signatures
 	certs, err := parseBundleCerts(data)
 	if err != nil {
 		//nolint:nilerr // intentional fallback: unparseable cert bundle treated as not containing fingerprint
