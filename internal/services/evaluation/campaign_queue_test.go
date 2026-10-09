@@ -9,14 +9,12 @@ package evaluation
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -182,50 +180,12 @@ func TestSaveAndLoadInitCampaignQueueRoundTrip(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-type campaignInventoryPayload struct {
-	Variants []json.RawMessage `json:"variants"`
-}
-
-func writeCampaignQueue(t *testing.T, fileSvc fs.RuntimeFileService, relPath string, queue *CampaignQueue) {
-	t.Helper()
-	require.NoError(t, SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, relPath, queue))
-}
-
-func writeQueueFrozenVariants(t *testing.T, fileSvc fs.RuntimeFileService, relPath string, variants ...*evalv1.ModelVariant) {
-	t.Helper()
-	payload := campaignInventoryPayload{Variants: make([]json.RawMessage, 0, len(variants))}
-	for _, variant := range variants {
-		body, err := protojson.Marshal(variant)
-		require.NoError(t, err)
-		payload.Variants = append(payload.Variants, body)
-	}
-	body, err := json.Marshal(payload)
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, body, constants.PermFileReadOnly))
-}
-
 func servedModelTags(variants []*evalv1.ModelVariant) []string {
 	tags := make([]string, 0, len(variants))
 	for _, variant := range variants {
 		tags = append(tags, variant.GetServedModelTag())
 	}
 	return tags
-}
-
-func variantIDs(variants []*evalv1.ModelVariant) []string {
-	ids := make([]string, 0, len(variants))
-	for _, variant := range variants {
-		ids = append(ids, variant.GetVariantId())
-	}
-	return ids
-}
-
-func queueVariantIDs(queue *CampaignQueue) []string {
-	ids := make([]string, 0, len(queue.Models))
-	for _, model := range queue.Models {
-		ids = append(ids, model.VariantID)
-	}
-	return ids
 }
 
 type campaignQueueFileService struct {

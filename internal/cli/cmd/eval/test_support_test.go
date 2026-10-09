@@ -22,7 +22,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
-	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
@@ -49,28 +48,6 @@ func writeTestFrozenInventory(t *testing.T, root string, variants ...*evalv1.Mod
 	require.NoError(t, fileSvc.WriteFile(context.Background(), evaluation.DefaultModelInventoryRelPath, payload, constants.PermFileReadOnly))
 }
 
-func writeTestRuntimeQueue(t *testing.T, root string, queue *evaluation.CampaignQueue) fs.RuntimeFileService {
-	t.Helper()
-	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
-	return fileSvc
-}
-
-// testNativeEvalDeps is the minimal dependency set for commands that only read
-// and write project files.
-func testNativeEvalDeps(root string) nativeEvalDeps {
-	return nativeEvalDeps{
-		configLoader: func(string) (*config.Config, error) { return &config.Config{ProjectRoot: root}, nil },
-		fileSvcFactory: func(string, *slog.Logger) (fs.RuntimeFileService, error) {
-			return fs.NewRuntimeFileService(root, slog.Default())
-		},
-		createRuntimeTree: func(context.Context, fs.RuntimeFileService) error { return nil },
-		runControl:        testRunControl(newFakeProcessControl()),
-	}
-}
-
 func TestModelInventoryFreezeJSON_RejectsNilFreeze(t *testing.T) {
 	_, err := modelInventoryFreezeJSON(nil)
 	require.Error(t, err)
@@ -90,12 +67,6 @@ func TestWriteModelInventoryFreezeFile_WritesJSON(t *testing.T) {
 	payload, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(payload), "eval-init-qwen3-4b")
-}
-
-func assertTestRuntimeFileExists(t *testing.T, root string, relPath string) {
-	t.Helper()
-	path := filepath.Join(root, relPath)
-	assert.FileExists(t, path)
 }
 
 // fakeBindClient stands in for the enrollment client: it reports the bound

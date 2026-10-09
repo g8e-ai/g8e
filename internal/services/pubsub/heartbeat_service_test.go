@@ -9,7 +9,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -106,26 +105,6 @@ func (m *mockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat p
 }
 
 func (m *mockResultsPublisher) PublishActionReceipt(ctx context.Context, env *commonv1.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error {
-	return nil
-}
-
-// capturingConsoleAuditStore records every receipt document passed to DocSet
-// so tests can assert on the ActionReceiptRecord fields derived from the
-// GovernanceEnvelope without requiring a real SQLite audit store. It is a
-// test-only implementation of governance.TransactionAuditStore.
-type capturingConsoleAuditStore struct {
-	mu      sync.Mutex
-	records [][]byte
-}
-
-func (c *capturingConsoleAuditStore) DocSet(_, _ string, data json.RawMessage) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.records = append(c.records, append([]byte(nil), data...))
-	return nil
-}
-
-func (c *capturingConsoleAuditStore) DocDelete(_, _ string) error {
 	return nil
 }
 

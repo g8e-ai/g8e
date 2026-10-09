@@ -1308,16 +1308,6 @@ func TestRecursiveDirectoryBudget_EnforcesDepthAndAggregateEntryLimits(t *testin
 	}
 }
 
-func assertComplianceVerificationFailure(t *testing.T, report *compliancev1.ComplianceVerificationReport, code error, subject string) {
-	t.Helper()
-	for _, failure := range report.GetFailures() {
-		if failure.GetCode() == code.Error() && failure.GetSubjectRef() == subject {
-			return
-		}
-	}
-	assert.Fail(t, "expected compliance verification failure", "code=%q subject=%q failures=%v", code.Error(), subject, report.GetFailures())
-}
-
 func requestTimestamp(value time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(value)
 }

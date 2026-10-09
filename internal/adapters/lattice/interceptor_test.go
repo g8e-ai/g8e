@@ -22,9 +22,8 @@ import (
 
 // stubInvoker returns a configurable sequence of errors and counts calls.
 type stubInvoker struct {
-	errs    []error
-	calls   atomic.Int32
-	refresh atomic.Int32
+	errs  []error
+	calls atomic.Int32
 }
 
 func (s *stubInvoker) invoker() grpc.UnaryInvoker {

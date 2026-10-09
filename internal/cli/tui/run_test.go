@@ -20,14 +20,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
 )
 
-// newTestProgram builds a headless bubbletea program (no renderer, no real
-// input/output) suitable for driving Model updates from tests.
-func newTestProgram(t *testing.T) *tea.Program {
-	t.Helper()
-	m := NewModel(Options{})
-	return tea.NewProgram(m, tea.WithoutRenderer(), tea.WithInput(nil), tea.WithOutput(io.Discard))
-}
-
 // headlessProgramOptions returns program options that allow Run to execute
 // without a real terminal. The provided input string is fed to the program;
 // "q" triggers a clean quit via the key handler.

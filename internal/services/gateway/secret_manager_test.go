@@ -88,14 +88,6 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 	}
 }
 
-// readSecretFromKeystore reads a secret directly from the keystore for testing
-func readSecretFromKeystore(t *testing.T, sm *SecretManager, name string) string {
-	t.Helper()
-	value, err := sm.keystore.DecryptSecret(name)
-	require.NoError(t, err)
-	return value
-}
-
 func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value string) {
 	t.Helper()
 	var dataJSON string

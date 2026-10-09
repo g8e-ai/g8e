@@ -22,9 +22,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/big"
-	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -109,14 +107,6 @@ func restorePorts(t *testing.T) {
 	t.Cleanup(func() {
 		constants.Ports = snapshot
 	})
-}
-
-// getServerPort extracts the TCP port from an httptest.Server listener.
-func getServerPort(t *testing.T, srv *httptest.Server) int {
-	t.Helper()
-	addr, ok := srv.Listener.Addr().(*net.TCPAddr)
-	require.True(t, ok, "expected *net.TCPAddr from httptest listener")
-	return addr.Port
 }
 
 // ---------------------------------------------------------------------------

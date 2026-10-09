@@ -101,15 +101,6 @@ func seedOperatorDoc(t *testing.T, h *HTTPHandler, opID, userID, operatorSession
 	require.NoError(t, err)
 }
 
-// seedUserDoc inserts a user document with active status into the DocStore.
-func seedUserDoc(t *testing.T, h *HTTPHandler, userID string) {
-	t.Helper()
-	userBytes, err := json.Marshal(models.User{Status: constants.UserStatusActive})
-	require.NoError(t, err)
-	err = h.dataController.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
-	require.NoError(t, err)
-}
-
 // seedCLISessionDoc inserts a CLI session document into the DocStore for test setup.
 func seedCLISessionDoc(t *testing.T, h *HTTPHandler, cliSessionID, userID, operatorSessionID string) {
 	t.Helper()

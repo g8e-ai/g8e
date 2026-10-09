@@ -34,9 +34,7 @@ package gateway
 
 import (
 	"bytes"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,20 +62,6 @@ const removedOperatorEnrollPath = "/api/v1/auth/operator/enroll"
 // enrollment route. The constant was deleted when delegated credentials
 // were consolidated into owner-approved platform application enrollment.
 const removedDelegatedAppEnrollPath = "/api/v1/pki/apps/delegated"
-
-// extractURISANs returns the URI SAN strings from a PEM-encoded certificate.
-func extractURISANs(t *testing.T, certPEM string) []string {
-	t.Helper()
-	block, _ := pem.Decode([]byte(certPEM))
-	require.NotNil(t, block, "cert PEM must decode")
-	cert, err := x509.ParseCertificate(block.Bytes)
-	require.NoError(t, err, "cert must parse")
-	uris := make([]string, 0, len(cert.URIs))
-	for _, u := range cert.URIs {
-		uris = append(uris, u.String())
-	}
-	return uris
-}
 
 // TestPlatformEnrollmentBypassClosed_AppEnrollRouteRemoved proves that the
 // unauthenticated app enrollment route is gone. The route is removed from

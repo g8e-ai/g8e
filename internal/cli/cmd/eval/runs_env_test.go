@@ -25,7 +25,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
@@ -128,16 +127,6 @@ func testRunOperators() []*operatorv1.OperatorDocument {
 			LatestHeartbeatSnapshot: &operatorv1.HeartbeatResult{Environment: &operatorv1.EnvironmentDetails{Pwd: testDataOperatorWorkingDirectory}},
 		},
 	}
-}
-
-// testDataOperatorHeartbeat is the latest heartbeat snapshot a Data Operator
-// reports, which carries the working directory campaign workspaces live under.
-func testDataOperatorHeartbeat(workingDirectory string) json.RawMessage {
-	snapshot, err := protojson.Marshal(&operatorv1.HeartbeatResult{Environment: &operatorv1.EnvironmentDetails{Pwd: workingDirectory}})
-	if err != nil {
-		panic(fmt.Sprintf("testDataOperatorHeartbeat: %v", err))
-	}
-	return snapshot
 }
 
 func writePublicationProofResponse(w http.ResponseWriter, r *http.Request) bool {

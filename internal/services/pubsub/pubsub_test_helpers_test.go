@@ -9,7 +9,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"testing"
 
@@ -19,16 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
-// mustMarshalJSON marshals v to json.RawMessage, fatally failing the test on error.
-func mustMarshalJSON(t *testing.T, v interface{}) json.RawMessage {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("mustMarshalJSON: %v", err)
-	}
-	return json.RawMessage(b)
-}
 
 // mustMarshalProto marshals a protobuf message to bytes, fatally failing the test on error.
 func mustMarshalProto(t *testing.T, msg proto.Message) []byte {

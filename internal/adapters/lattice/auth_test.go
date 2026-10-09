@@ -19,7 +19,6 @@ import (
 // newInspectOAuthServer returns a server that records request headers for inspection.
 type oauthRequestInspector struct {
 	sandboxHeader string
-	authHeader    string
 	contentType   string
 	body          string
 	requestCount  atomic.Int32

@@ -9,16 +9,6 @@ package evidence
 
 import operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 
-func nodesByType(nodes []EvidenceNode, artifactType ArtifactType) []EvidenceNode {
-	result := make([]EvidenceNode, 0)
-	for _, node := range nodes {
-		if node.ArtifactType == artifactType {
-			result = append(result, node)
-		}
-	}
-	return result
-}
-
 func newEvalVerifiedChainReceipt(signerKeyID string) *operatorv1.ActionReceipt {
 	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-1", TransactionHash: "tx-hash", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, StateRootBefore: "root-before", StateRootAfter: "root-after", SignerKeyId: signerKeyID, ExecutedAtUnixMs: 1_700_000_001_000, L2Status: operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, L3Status: operatorv1.L3Status_L3_STATUS_NOT_REQUIRED}
 	l4ID := receipt.TransactionId + ":L4"

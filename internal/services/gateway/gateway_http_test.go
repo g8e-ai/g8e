@@ -19,7 +19,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -224,54 +223,6 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 	})
 	require.NoError(t, err, "failed to create HTTP handler")
 	return h, infra.Cfg, infra
-}
-
-func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config) {
-	t.Helper()
-	infra := setupTestInfrastructure(t, true)
-
-	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:           infra.Logger,
-		Responder:        infra.Responder,
-		SuspendedStore:   infra.SuspendedStore,
-		ScrubbingService: nil,
-		ThreatScanner:    governance.NewL1Doctrine(),
-		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
-		Posture:          string(infra.Cfg.Gateway.Posture),
-		AuditStore:       mcp.NoopAuditEventRecorder{},
-	})
-	require.NoError(t, err, "failed to create MCP gateway")
-
-	infra.Cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
-
-	ls := &GatewayModeService{
-		cfg:                infra.Cfg,
-		logger:             infra.Logger,
-		db:                 infra.DB,
-		docStore:           infra.DocStore,
-		consensusStore:     infra.ConsensusStore,
-		signerStore:        infra.SignerStore,
-		auditStore:         infra.AuditStore,
-		stateRootSvc:       infra.StateRootSvc,
-		kvStore:            infra.KVStore,
-		replayStore:        infra.ReplayStore,
-		pubsub:             infra.Pubsub,
-		auth:               infra.Auth,
-		pki:                infra.PKI,
-		reg:                infra.Reg,
-		passkey:            infra.Passkey,
-		userSvc:            infra.UserSvc,
-		cliSessionSvc:      infra.CLISessionSvc,
-		operatorSessionSvc: infra.OperatorSessionSvc,
-		embeddedOperator:   infra.Embedded,
-		webSessionSvc:      infra.WebSessionSvc,
-		mcpGateway:         mcpGateway,
-		responder:          infra.Responder,
-	}
-
-	require.NoError(t, ls.initHTTPHandler())
-
-	return ls, infra.Cfg
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -573,12 +524,6 @@ func TestRemovedCLIEnrollRoute(t *testing.T) {
 	assert.NotContains(t, rr.Body.String(), "BEGIN CERTIFICATE", "enroll must not return any certificate on plain HTTP router")
 }
 
-type errorReader struct{}
-
-func (e *errorReader) Read(p []byte) (n int, err error) {
-	return 0, fmt.Errorf("forced read error")
-}
-
 // TestCLICertBoundToOperator is a regression test for the auth path used by
 // `./g8e login` clients (CLI cert + Bearer <operator_session_id> +
 // X-G8E-CLI-Session-ID). The cert URI SAN is a CLI SPIFFE ID and must be
@@ -695,28 +640,6 @@ func makeTestAppWorkloadCert(t *testing.T, appID string) *x509.Certificate {
 	tmpl := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "test-app-cert"},
-		NotBefore:    time.Now().Add(-time.Minute),
-		NotAfter:     time.Now().Add(time.Hour),
-		URIs:         []*url.URL{spiffeURI},
-	}
-	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
-	require.NoError(t, err)
-	cert, err := x509.ParseCertificate(certDER)
-	require.NoError(t, err)
-	return cert
-}
-
-// makeTestOperatorCert returns a self-signed cert with a SPIFFE URI SAN for an operator identity.
-func makeTestOperatorCert(t *testing.T, _ string) *x509.Certificate {
-	t.Helper()
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	// Use exact path /app/g8eo to test identity rejection
-	spiffeURI, err := url.Parse("spiffe://g8e.local/app/g8eo")
-	require.NoError(t, err)
-	tmpl := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "test-operator-cert"},
 		NotBefore:    time.Now().Add(-time.Minute),
 		NotAfter:     time.Now().Add(time.Hour),
 		URIs:         []*url.URL{spiffeURI},

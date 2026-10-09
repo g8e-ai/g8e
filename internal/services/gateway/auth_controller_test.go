@@ -145,15 +145,6 @@ func testInvalidJSON(t *testing.T, handler http.HandlerFunc, method, url string)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
-func testMissingUserID(t *testing.T, handler http.HandlerFunc, method, url string) {
-	t.Helper()
-	req := httptest.NewRequest(method, url, strings.NewReader(`{"not_user_id":"data"}`))
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	assert.Contains(t, rr.Body.String(), "user_id required")
-}
-
 func TestReadRequestBody(t *testing.T) {
 	t.Run("Success - reads valid JSON body", func(t *testing.T) {
 		body := `{"test":"data"}`
