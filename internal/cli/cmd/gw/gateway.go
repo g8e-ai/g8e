@@ -712,7 +712,7 @@ func printEnrollmentSummary(w io.Writer, client authcmd.APIClient) {
 		}
 		appCount, dashboardCount = strconv.Itoa(apps), strconv.Itoa(dashboards)
 	}
-	fmt.Fprintf(w, "Enrollments  users %s · pending %s · apps %s · dashboards %s\n", userCount, pendingCount, appCount, dashboardCount)
+	fmt.Fprintf(w, "Enrollments  users %s | pending %s | apps %s | dashboards %s\n", userCount, pendingCount, appCount, dashboardCount)
 }
 
 func operatorHostnameDisplay(op *operatorv1.OperatorDocument) string {

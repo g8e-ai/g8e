@@ -437,7 +437,8 @@ func TestGatewayStatusCmd_ReportsEnrollmentSections(t *testing.T) {
 	require.NoError(t, cmd.RunE(cmd, nil))
 
 	out := buf.String()
-	assert.Contains(t, out, "Enrollments  users 1 · pending 1 · apps 2 · dashboards 1")
+	assert.Contains(t, out, "Enrollments  users 1 | pending 1 | apps 2 | dashboards 1")
+	assert.NotContains(t, out, "·")
 	assert.NotContains(t, out, "revoked-app")
 	assert.NotContains(t, out, "op-inst")
 
@@ -472,7 +473,7 @@ func TestGatewayStatusCmd_ReportsEmptyEnrollmentSections(t *testing.T) {
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 	out := buf.String()
-	assert.Contains(t, out, "Enrollments  users 0 · pending 0 · apps 0 · dashboards 0")
+	assert.Contains(t, out, "Enrollments  users 0 | pending 0 | apps 0 | dashboards 0")
 	assert.Contains(t, out, "Operators  none")
 }
 
@@ -499,7 +500,7 @@ func TestGatewayStatusCmd_EnrollmentListUnavailable(t *testing.T) {
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 	out := buf.String()
-	assert.Contains(t, out, "Enrollments  users ? · pending ? · apps ? · dashboards ?")
+	assert.Contains(t, out, "Enrollments  users ? | pending ? | apps ? | dashboards ?")
 
 }
 

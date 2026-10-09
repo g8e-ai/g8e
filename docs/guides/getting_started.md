@@ -306,7 +306,7 @@ Operator flags
   embedded-operator  provenance  --provenance-operator-id         (default)
   embedded-operator  observer    --provider-boundary-observer-id  (default)
 
-Enrollments  users 1 · pending 0 · apps 0 · dashboards 0
+Enrollments  users 1 | pending 0 | apps 0 | dashboards 0
 
 Console  https://localhost:8443/console/
 ```
