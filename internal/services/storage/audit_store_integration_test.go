@@ -494,3 +494,56 @@ func TestSQLAuditStore_VerifyChain_SurvivesVaultRekey(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ass2.VerifyChain(context.Background(), 0))
 }
+
+// TestSQLAuditStore_CloseDrainsInFlightWritersWithoutClosingDB verifies that
+// Close() waits for in-flight writers to finish before returning, and does NOT
+// close the caller's injected database connection pool.
+func TestSQLAuditStore_CloseDrainsInFlightWritersWithoutClosingDB(t *testing.T) {
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := CreateTestVault(t, fileSvc, privKey)
+
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	config := DefaultAuditStoreConfig()
+	config.EncryptionVault = testVault
+
+	ass, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
+	require.NoError(t, err)
+
+	// Simulate an in-flight writer registered with muWrites.
+	ass.muWrites.Add(1)
+
+	closed := make(chan error, 1)
+	go func() {
+		closed <- ass.Close()
+	}()
+
+	// Verify that Close() blocks while the writer is in-flight.
+	select {
+	case <-closed:
+		t.Fatal("Close() returned while an in-flight writer was active")
+	case <-time.After(50 * time.Millisecond):
+		// Expected: Close() is waiting on ass.Wait() / muWrites.Wait().
+	}
+
+	// Release the in-flight writer.
+	ass.muWrites.Done()
+
+	// Now Close() should unblock promptly.
+	select {
+	case err := <-closed:
+		require.NoError(t, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for Close() to finish after in-flight writer completed")
+	}
+
+	// Crucial contract: The injected db MUST still be open and usable!
+	var one int
+	require.NoError(t, db.QueryRowWithRetry(context.Background(), "SELECT 1").Scan(&one))
+	assert.Equal(t, 1, one, "injected database must remain open and queryable after auditStore.Close()")
+}
