@@ -36,6 +36,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -138,7 +139,8 @@ def _write_existing_identity(
 
 
 def _patch_httpx_with_mock_transport(
-    monkeypatch: pytest.MonkeyPatch, handler: Callable[[httpx.Request], httpx.Response]
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Any,
 ) -> None:
     """Replace httpx.AsyncClient in the enrollment service module with a
     subclass that injects a MockTransport.
@@ -196,9 +198,6 @@ def _mock_platform_enrollment_handler(
             return "denied"
         if expire:
             return "expired"
-        # First poll: pending; subsequent: approved (or the specified state).
-        if captured["poll_count"] < 2:
-            return "pending"
         return state
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -226,6 +225,8 @@ def _mock_platform_enrollment_handler(
 
         if path == "/api/v1/auth/platform-enrollments/status":
             captured["poll_count"] += 1
+            assert request.url.params.get("wait") == "true"
+            assert request.headers.get("Cache-Control") == "no-store"
             return httpx.Response(
                 200,
                 json={
@@ -597,9 +598,10 @@ class TestEnrollPlatformEnrollment:
 
         cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
         pending_path_str = str(pki_dir / "pending-enrollment" / "g8ee.json")
-        poll_event = asyncio.Event()
+        status_called_event = asyncio.Event()
+        approval_release_event = asyncio.Event()
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        async def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             if (discovery := _bootstrapped_discovery_route(path)) is not None:
                 return discovery
@@ -618,21 +620,10 @@ class TestEnrollPlatformEnrollment:
                     },
                 )
             if path == "/api/v1/auth/platform-enrollments/status":
-                # Signal that the pending state should now exist on disk.
-                if not poll_event.is_set():
-                    poll_event.set()
-                    # Return pending so the flow continues.
-                    return httpx.Response(
-                        200,
-                        json={
-                            "request_id": "test-req-pending",
-                            "component_kind": "ensemble",
-                            "state": "pending",
-                            "expires_at": (
-                                _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)
-                            ).isoformat(),
-                        },
-                    )
+                assert request.url.params.get("wait") == "true"
+                assert request.headers.get("Cache-Control") == "no-store"
+                status_called_event.set()
+                await approval_release_event.wait()
                 return httpx.Response(
                     200,
                     json={
@@ -669,10 +660,10 @@ class TestEnrollPlatformEnrollment:
         service = AppEnrollmentService(instance_id="ensemble-pending-test", hostname="test.local")
 
         # Start enrollment in a task so we can inspect the pending file
-        # after the first poll but before completion.
+        # while the status request is held before completion.
         enroll_task = asyncio.create_task(service.enroll())
-        # Wait for the first poll to fire (pending state should be on disk).
-        await asyncio.wait_for(poll_event.wait(), timeout=5.0)
+        # Wait for the status request to arrive (pending state should be on disk).
+        await asyncio.wait_for(status_called_event.wait(), timeout=5.0)
         # Give the filesystem a moment to settle.
         await asyncio.sleep(0.05)
 
@@ -681,6 +672,9 @@ class TestEnrollPlatformEnrollment:
         )
         if sys.platform != "win32":
             assert _file_mode(pending_path_str) == 0o600
+
+        # Release the held status request.
+        approval_release_event.set()
 
         # Let enrollment complete.
         identity = await asyncio.wait_for(enroll_task, timeout=10.0)
@@ -974,3 +968,255 @@ class TestResolveGatewayHttpUrl:
             service._resolve_gateway_http_url()
             == f"http://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests: approval wait behavior
+# ---------------------------------------------------------------------------
+
+
+class TestAwaitApproval:
+    """Tests for AppEnrollmentService._await_approval (single held status request)."""
+
+    async def test_await_approval_sends_wait_true_and_token(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+        recorded_requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            recorded_requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "request_id": "test-req-1",
+                    "state": "approved",
+                },
+            )
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            data = await service._await_approval(
+                client, "http://g8e.local:8080", "token-xyz", deadline
+            )
+
+        assert data["state"] == "approved"
+        assert len(recorded_requests) == 1
+        req = recorded_requests[0]
+        assert req.url.path == "/api/v1/auth/platform-enrollments/status"
+        assert req.url.params["wait"] == "true"
+        assert req.url.params["token"] == "token-xyz"
+        assert req.headers["cache-control"] == "no-store"
+
+    async def test_await_approval_returns_data_on_completed_state(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"request_id": "test-req-2", "state": "completed"},
+            )
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            data = await service._await_approval(
+                client, "http://g8e.local:8080", "token-xyz", deadline
+            )
+
+        assert data["state"] == "completed"
+
+    async def test_await_approval_denied_raises_configuration_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"request_id": "test-req-3", "state": "denied"},
+            )
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(ConfigurationError, match="denied by the owner"):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+    async def test_await_approval_expired_state_raises_and_removes_pending(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+        pending_path = Path(service._resolve_pending_path())
+        await asyncio.to_thread(pending_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(pending_path.write_text, '{"token": "xyz"}', encoding="utf-8")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"request_id": "test-req-4", "state": "expired"},
+            )
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(ConfigurationError, match="enrollment request has expired"):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+        assert not await asyncio.to_thread(pending_path.exists)
+
+    async def test_await_approval_http_410_raises_and_removes_pending(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+        pending_path = Path(service._resolve_pending_path())
+        await asyncio.to_thread(pending_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(pending_path.write_text, '{"token": "xyz"}', encoding="utf-8")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(410, json={"error": "request expired"})
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="enrollment request has expired \\(HTTP 410\\)"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+        assert not await asyncio.to_thread(pending_path.exists)
+
+    async def test_await_approval_timeout_raises_and_removes_pending(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+        pending_path = Path(service._resolve_pending_path())
+        await asyncio.to_thread(pending_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(pending_path.write_text, '{"token": "xyz"}', encoding="utf-8")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ReadTimeout("timed out waiting for response")
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="approval deadline reached before approval"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+        assert not await asyncio.to_thread(pending_path.exists)
+
+    async def test_await_approval_deadline_passed_before_request(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+        pending_path = Path(service._resolve_pending_path())
+        await asyncio.to_thread(pending_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(pending_path.write_text, '{"token": "xyz"}', encoding="utf-8")
+
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(200, json={"state": "approved"})
+
+        past_deadline = _dt.datetime.now(_dt.UTC) - _dt.timedelta(seconds=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="approval deadline reached before approval"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", past_deadline
+                )
+
+        assert call_count == 0
+        assert not await asyncio.to_thread(pending_path.exists)
+
+    async def test_await_approval_unexpected_state_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"request_id": "test-req-5", "state": "pending"},
+            )
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="unexpected approval state: pending"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+    async def test_await_approval_non_200_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(502, json={"error": "bad gateway upstream"})
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="status query failed: bad gateway upstream"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+    async def test_await_approval_non_json_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, text="<html>502 Bad Gateway</html>")
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="status response is not JSON"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )
+
+    async def test_await_approval_network_error_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        service = AppEnrollmentService()
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        deadline = _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=5)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(
+                ConfigurationError, match="await approval: connection refused"
+            ):
+                await service._await_approval(
+                    client, "http://g8e.local:8080", "token-xyz", deadline
+                )

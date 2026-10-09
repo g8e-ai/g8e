@@ -200,7 +200,7 @@ sequenceDiagram
     Main->>Enroll: Phase 0.25: load_identity()
     alt Identity missing or near expiry
         Enroll->>GW: POST /api/v1/auth/platform-enrollments/request (P-256 CSR)
-        Enroll->>GW: Poll status until approved in Console
+        Enroll->>GW: Hold status request (?wait=true) until approved in Console
         Enroll->>GW: POST /api/v1/auth/platform-enrollments/complete (signed transcript)
         Enroll-->>Main: Install cert, key, CA bundle atomically
     end
@@ -219,10 +219,10 @@ If the certificate and key are present but the CA bundle is missing, startup fir
 
 Platform enrollment (`AppEnrollmentService`) follows a 9-step resumable sequence:
 1. Inspects existing credentials in `/root/.g8e`. If valid, not expired, and beyond the 1-day renewal threshold (`_RENEWAL_THRESHOLD_DAYS = 1`), loads them immediately.
-2. If an unexpired pending attempt exists on disk, resumes polling.
+2. If an unexpired pending attempt exists on disk, resumes waiting for approval.
 3. Otherwise, generates an ECDSA P-256 private key and CSR for component `g8ee` and kind `ensemble`, submits to Gateway discovery endpoint `POST /api/v1/auth/platform-enrollments/request` over plain HTTP, and writes pending state to disk with 0600 permissions.
 4. Logs non-secret approval instructions (request ID, approval URL `/console/`, CSR fingerprint).
-5. Polls enrollment status with bounded exponential backoff (2s to 30s) and jitter.
+5. Holds a single status request with `?wait=true` until owner approval (or expiry, denial, or deadline).
 6. Upon approval, signs the canonical `PlatformEnrollmentCompletionTranscript` protobuf bytes with the P-256 private key and posts to `/api/v1/auth/platform-enrollments/complete`.
 7. Validates the issued certificate against the pinned CA bundle, expected SPIFFE URI SAN `spiffe://g8e.local/app/g8ee`, public key, and component kind.
 8. Writes certificate, key, and CA bundle atomically using temp-file-plus-rename, then removes pending state.

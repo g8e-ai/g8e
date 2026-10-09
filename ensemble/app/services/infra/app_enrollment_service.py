@@ -26,8 +26,8 @@ implements the resumable nine-step platform enrollment sequence:
    CSR and token hash. Persist the request ID and expiry after the response.
 4. Print the non-secret approval instructions (request ID, approval URL,
    fingerprints).
-5. Poll status with bounded exponential backoff, jitter, an overall deadline
-   derived from server expiry, and correct handling of 429 and Retry-After.
+5. Hold status request with wait=true until owner approval (or expiry, denial,
+   or deadline).
 6. After approval, sign the canonical completion transcript with the private
    key and call completion.
 7. Validate the response against the pinned trust bundle, expected SANs,
@@ -54,14 +54,12 @@ not-ready while approval is pending.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import contextlib
 import hashlib
 import json
 import logging
 import os
-import random
 import secrets
 import socket
 import tempfile
@@ -90,10 +88,6 @@ _COMPONENT_KIND = "ensemble"
 _COMPONENT_NAME = "g8ee"
 # HTTP timeout for the discovery surface (plain HTTP, no TLS).
 _HTTP_TIMEOUT_SECONDS = 10.0
-# Polling configuration.
-_POLL_INITIAL_DELAY_SECONDS = 2.0
-_POLL_MAX_DELAY_SECONDS = 30.0
-_POLL_JITTER_SECONDS = 0.5
 # Protocol version for the completion transcript.
 _PROTOCOL_VERSION = "1"
 # PlatformComponentKind enum values (match common.proto).
@@ -441,79 +435,76 @@ class AppEnrollmentService:
         )
         resp.raise_for_status()
 
-    async def _poll_until_approved(
+    async def _await_approval(
         self,
         client: httpx.AsyncClient,
         base_url: str,
         token: str,
         deadline: datetime,
     ) -> dict[str, Any]:
-        """Poll the enrollment status endpoint until approved, denied, expired, or deadline.
+        """Hold the enrollment status request with wait=true until approved, denied, expired, or deadline.
 
-        Uses bounded exponential backoff with jitter. Honors ``Retry-After``
-        headers on 429 responses. Returns the final status response on
-        approval. Raises ``ConfigurationError`` on denial, expiry, or deadline.
+        Returns the final status response on approval. Raises ``ConfigurationError``
+        on denial, expiry, or deadline.
         """
-        delay = _POLL_INITIAL_DELAY_SECONDS
+        remaining = (deadline - datetime.now(UTC)).total_seconds()
+        if remaining <= 0:
+            self._remove_pending_state(self._resolve_pending_path())
+            raise ConfigurationError(
+                "AppEnrollmentService: approval deadline reached before approval"
+            )
+
         url = base_url + _ENROLLMENT_STATUS_PATH
+        try:
+            resp = await client.get(
+                url,
+                params={"wait": "true", "token": token},
+                headers={"Cache-Control": "no-store"},
+                timeout=httpx.Timeout(_HTTP_TIMEOUT_SECONDS, read=remaining),
+            )
+        except httpx.TimeoutException as exc:
+            self._remove_pending_state(self._resolve_pending_path())
+            raise ConfigurationError(
+                "AppEnrollmentService: approval deadline reached before approval"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ConfigurationError(
+                f"AppEnrollmentService: await approval: {exc}"
+            ) from exc
 
-        while True:
-            if datetime.now(UTC) >= deadline:
-                raise ConfigurationError(
-                    "AppEnrollmentService: polling deadline reached before approval"
-                )
+        if resp.status_code == 410:
+            self._remove_pending_state(self._resolve_pending_path())
+            raise ConfigurationError(
+                "AppEnrollmentService: enrollment request has expired (HTTP 410)"
+            )
 
-            try:
-                resp = await client.get(
-                    url,
-                    params={"token": token},
-                    headers={"Cache-Control": "no-store"},
-                )
-            except httpx.HTTPError:
-                # Network error: back off and retry.
-                await self._sleep(delay)
-                delay = min(delay * 2, _POLL_MAX_DELAY_SECONDS)
-                continue
+        try:
+            data = resp.json()
+        except Exception as exc:
+            raise ConfigurationError(
+                f"AppEnrollmentService: status response is not JSON (HTTP {resp.status_code})"
+            ) from exc
 
-            if resp.status_code == 429:
-                retry_after = int(resp.headers.get("Retry-After", "0") or "0")
-                wait = float(retry_after) if retry_after > 0 else delay
-                await self._sleep(wait)
-                delay = min(delay * 2, _POLL_MAX_DELAY_SECONDS)
-                continue
+        if not resp.is_success:
+            err_msg = (
+                data.get("error", f"HTTP {resp.status_code}")
+                if isinstance(data, dict)
+                else f"HTTP {resp.status_code}"
+            )
+            raise ConfigurationError(f"AppEnrollmentService: status query failed: {err_msg}")
 
-            try:
-                data = resp.json()
-            except Exception as exc:
-                raise ConfigurationError(
-                    f"AppEnrollmentService: status response is not JSON (HTTP {resp.status_code})"
-                ) from exc
+        state = data.get("state")
+        if state in ("approved", "completed"):
+            return data
+        if state == "denied":
+            raise ConfigurationError(
+                "AppEnrollmentService: enrollment request was denied by the owner"
+            )
+        if state == "expired":
+            self._remove_pending_state(self._resolve_pending_path())
+            raise ConfigurationError("AppEnrollmentService: enrollment request has expired")
 
-            if not resp.is_success:
-                err_msg = data.get("error", f"HTTP {resp.status_code}")
-                raise ConfigurationError(f"AppEnrollmentService: status query failed: {err_msg}")
-
-            state = data.get("state")
-            if state == "approved":
-                return data
-            if state == "denied":
-                raise ConfigurationError(
-                    "AppEnrollmentService: enrollment request was denied by the owner"
-                )
-            if state == "expired":
-                raise ConfigurationError("AppEnrollmentService: enrollment request has expired")
-            if state == "completed":
-                # Already completed (e.g. by a prior completion attempt).
-                # The caller should proceed to completion, which will return
-                # the stored response idempotently.
-                return data
-
-            # Pending or issuing: honor Retry-After if present, otherwise use
-            # the computed backoff.
-            retry_after = int(resp.headers.get("Retry-After", "0") or "0")
-            wait = float(retry_after) if retry_after > 0 else delay
-            await self._sleep(wait)
-            delay = min(delay * 2, _POLL_MAX_DELAY_SECONDS)
+        raise ConfigurationError(f"AppEnrollmentService: unexpected approval state: {state}")
 
     async def _submit_completion(
         self, client: httpx.AsyncClient, base_url: str, token: str, proof: str
@@ -620,18 +611,12 @@ class AppEnrollmentService:
         with contextlib.suppress(Exception):
             Path(pending_path).unlink(missing_ok=True)
 
-    @staticmethod
-    async def _sleep(base_seconds: float) -> None:
-        """Sleep for a given duration with jitter."""
-        jitter = random.uniform(0, _POLL_JITTER_SECONDS)
-        await asyncio.sleep(base_seconds + jitter)
-
     async def enroll(self) -> AppIdentity:
         """Enroll with the gateway via the owner-approved platform enrollment protocol.
 
         This is the write path. It performs the full nine-step sequence:
         generate keys, submit request, persist pending state, print approval
-        instructions, poll until approved, sign the completion transcript,
+        instructions, hold status request until approved, sign the completion transcript,
         submit completion, validate the response, write credentials
         atomically, and remove the pending state. If a resumable pending
         attempt exists on disk, it resumes from that state rather than
@@ -655,13 +640,13 @@ class AppEnrollmentService:
             pending = await self._submit_pending_attempt(base_url, pending_path, pending)
         attempt = self._resume_pending_attempt(pending)
 
-        # Step 5: Poll status until approved.
+        # Step 5: Hold status request with wait=true until approved.
         if pending and pending.get("expires_at"):
             deadline = _parse_iso_deadline(pending["expires_at"])
         else:
             deadline = datetime.now(UTC) + timedelta(minutes=30)
 
-        # Steps 5-6: Poll, sign the completion transcript and call completion.
+        # Steps 5-6: Await approval, sign the completion transcript and call completion.
         completion_resp = await self._complete_enrollment_attempt(base_url, attempt, deadline)
 
         # Step 7: Validate the response.
@@ -794,9 +779,9 @@ class AppEnrollmentService:
     async def _complete_enrollment_attempt(
         self, base_url: str, attempt: _EnrollmentAttempt, deadline: datetime
     ) -> dict[str, Any]:
-        """Poll until approved, then sign the completion transcript and submit it."""
+        """Await approval, then sign the completion transcript and submit it."""
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-            await self._poll_until_approved(client, base_url, attempt.token, deadline)
+            await self._await_approval(client, base_url, attempt.token, deadline)
 
             # Step 6: Sign the completion transcript and call completion.
             token_hash = self._token_hash(attempt.token)

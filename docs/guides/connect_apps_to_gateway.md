@@ -555,7 +555,7 @@ curl -X POST https://localhost:8443/mcp \
 The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot be registered as custom applications; `g8ee` and `g8eo` are the ensemble and operator platform components, and `g8ed` stays reserved for the `dashboard` component kind that the protocol still defines after the g8ed dashboard was removed in v2.3.0 (the Gateway serves the console instead). Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`. The enrollment flow:
 
 1. **Request submission** (`POST /api/v1/auth/platform-enrollments/request`) — token-scoped, plain HTTP or HTTPS, available before owner bootstrap
-2. **Status polling** (`GET /api/v1/auth/platform-enrollments/status?token=<token>`) — token-scoped, plain HTTP or HTTPS; the client polls with bounded backoff
+2. **Status query** (`GET /api/v1/auth/platform-enrollments/status?token=<token>&wait=true`) — token-scoped, plain HTTP or HTTPS; the client holds a single status request until an owner decision is reached or the request expires
 3. **Completion** (`POST /api/v1/auth/platform-enrollments/complete`) — token-scoped, plain HTTP or HTTPS, requires a proof-of-possession signature over the canonical completion transcript
 4. **Pending list** (`GET /api/v1/auth/platform-enrollments/pending`) — owner-only (mTLS or web session), HTTPS only
 5. **Enrolled list** (`GET /api/v1/auth/platform-enrollments/enrolled`) — owner-only (mTLS or web session), HTTPS only
@@ -564,7 +564,7 @@ The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot be registered a
 
 The enrolled owner reviews requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. Use `g8e auth enroll list` to review completed or revoked enrollments and obtain request IDs for `g8e auth enroll revoke <request-id>`.
 
-The resumable client generates a P-256 key and CSR, submits a request (persisting the token and private key), polls status with bounded backoff, waits for owner approval, signs the canonical completion transcript with the private key, submits completion, validates the certificate against the pinned trust bundle and expected SPIFFE URI, and writes credentials atomically (temp-file-plus-rename).
+The resumable client generates a P-256 key and CSR, submits a request (persisting the token and private key), holds a status request with `?wait=true` until owner approval, signs the canonical completion transcript with the private key, submits completion, validates the certificate against the pinned trust bundle and expected SPIFFE URI, and writes credentials atomically (temp-file-plus-rename).
 
 The in-tree Ensemble (`g8ee`) client and the Operator implement that reserved-component flow during startup and load-or-enroll on ready. See [Authentication Architecture](../architecture/auth.md) and [Ensemble Architecture](../architecture/ensemble.md) (§ Startup Sequence and App Identity Enrollment) for their component-specific behavior.
 
