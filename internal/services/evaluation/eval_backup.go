@@ -258,6 +258,12 @@ func storeEvalBackupObject(backupDir string, file EvalBackupFile, data []byte) e
 	}
 	if err != nil {
 		_ = os.Remove(tempName)
+		// Windows does not replace an existing file with Rename. Another
+		// concurrent snapshot may have published this content-addressed object
+		// after our initial Stat; in that case the desired result already exists.
+		if info, statErr := os.Stat(target); statErr == nil && info.Size() == file.Size {
+			return nil
+		}
 		return fmt.Errorf("evaluation: backup: store %s: %w", file.Path, err)
 	}
 	return nil

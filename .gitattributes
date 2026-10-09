@@ -6,3 +6,6 @@ Makefile        text eol=lf
 *.go            text eol=lf
 *.mod           text eol=lf
 *.sum           text eol=lf
+
+# Authenticated artifacts: line-ending conversion changes the pinned bytes.
+protocol/schemas/oscal/v1.1.2/*.json text eol=lf

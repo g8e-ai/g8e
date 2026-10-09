@@ -14,6 +14,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -857,6 +858,7 @@ func (avs *TestSQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *mo
 		signature = excluded.signature,
 		receipt_json = excluded.receipt_json,
 		timestamp = excluded.timestamp
+	WHERE CAST(excluded.status AS INTEGER) NOT IN (?, ?) OR CAST(receipts.status AS INTEGER) IN (?, ?)
 	`
 
 	_, err := conn.ExecContext(context.Background(), query,
@@ -879,9 +881,42 @@ func (avs *TestSQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *mo
 		record.Signature,
 		receiptJSON,
 		timesvc.FormatTimestamp(timestamp),
+		// Keep the fake's projection semantics aligned with production: a
+		// replayed non-terminal stage remains in the audit chain but cannot
+		// replace a terminal receipt projection.
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED,
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED,
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 	)
 	if err != nil {
 		return fmt.Errorf("audit vault: upsert receipt projection: %w", err)
+	}
+	return nil
+}
+
+// receiptSelectColumns is kept in sync with storage.receiptSelectColumns.
+// Legacy rows can contain NULL in columns added after the initial schema and
+// in optional projection columns, while ActionReceiptRecord uses strings.
+const receiptSelectColumns = `transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
+		COALESCE(requestor_user_id, ''), COALESCE(acting_app_id, ''), COALESCE(event_type, ''),
+		action_type, COALESCE(target_resource, ''), status, COALESCE(result_summary, ''),
+		COALESCE(state_root_before, ''), COALESCE(state_root_after, ''), executed_at_ms,
+		signer_key_id, signature, receipt_json, timestamp`
+
+// hydrateReceiptRecord restores fields derived from the canonical receipt in
+// the same way as the production audit store read paths.
+func hydrateReceiptRecord(r *models.ActionReceiptRecord, executedAtMs int64, timestampStr string, receiptJSON sql.NullString) error {
+	r.ExecutedAt = time.UnixMilli(executedAtMs)
+	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
+	receipt, err := parseStoredActionReceipt(receiptJSON)
+	if err != nil {
+		return err
+	}
+	r.ActionReceipt = receipt
+	if receipt != nil {
+		r.L2Valid = receipt.GetL2Status() == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
+		r.L3Valid = receipt.GetL3Status() == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
 	}
 	return nil
 }
@@ -893,11 +928,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	}
 
 	query := `
-	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id, event_type,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
+	SELECT ` + receiptSelectColumns + `
 	FROM receipts
 	WHERE transaction_id = ?
 	`
@@ -917,17 +948,14 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	)
 	r.InvestigationID = investigationID.String
 	r.OperatorSessionID = sessionID.String
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreGetReceiptFailed, err)
 	}
 
-	r.ExecutedAt = time.UnixMilli(executedAtMs)
-	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
-	r.ActionReceipt, err = parseStoredActionReceipt(receiptJSON)
-	if err != nil {
+	if err := hydrateReceiptRecord(&r, executedAtMs, timestampStr, receiptJSON); err != nil {
 		return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreGetReceiptFailed, err)
 	}
 
@@ -978,11 +1006,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 
 	var query strings.Builder
 	query.WriteString(`
-	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id, event_type,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
+	SELECT ` + receiptSelectColumns + `
 	FROM receipts
 	`)
 
@@ -1023,10 +1047,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 
 	var results []*models.ActionReceiptRecord
 	for _, row := range rows {
-		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
-		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
-		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
-		if err != nil {
+		if err := hydrateReceiptRecord(&row.record, row.executedAtMs, row.timestampStr, row.receiptJSON); err != nil {
 			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsFailed, err)
 		}
 		results = append(results, &row.record)
@@ -1046,11 +1067,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 	}
 
 	query := `
-	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id, event_type,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
+	SELECT ` + receiptSelectColumns + `
 	FROM receipts
 	WHERE timestamp > ?
 	ORDER BY timestamp ASC
@@ -1085,10 +1102,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 
 	var results []*models.ActionReceiptRecord
 	for _, row := range rows {
-		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
-		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
-		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
-		if err != nil {
+		if err := hydrateReceiptRecord(&row.record, row.executedAtMs, row.timestampStr, row.receiptJSON); err != nil {
 			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsSinceFailed, err)
 		}
 		results = append(results, &row.record)
