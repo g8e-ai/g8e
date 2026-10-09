@@ -342,7 +342,9 @@ func runFleetFanOut(t *testing.T, bin string, concurrency, size int, sessions []
 
 	ctx, cancel := context.WithTimeout(context.Background(), (fleetFanOutTimeoutSecs+30)*time.Second)
 	defer cancel()
-	args := []string{"operator", "run"}
+	endpointArgs, err := e2eGatewayEndpointArgs()
+	require.NoError(t, err)
+	args := append([]string{"operator", "run"}, endpointArgs...)
 	if len(sessions) == 0 {
 		args = append(args, "--all-active")
 	} else {

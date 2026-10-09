@@ -8,6 +8,7 @@
 package testcmd
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -104,7 +105,7 @@ func TestScaleBatches_SplitsCountIntoAppendingStartIndexes(t *testing.T) {
 func TestScaleScenarioEnv_SetsFleetContract(t *testing.T) {
 	cfg := validScaleConfig()
 	layout := newScaleLayout("root")
-	env := scaleScenarioEnv([]string{"A=1"}, layout, cfg, "bin")
+	env := scaleScenarioEnv([]string{"A=1"}, layout, cfg, "bin", scalePorts{HTTP: 18080, HTTPS: 18443})
 	assert.Equal(t, []string{
 		"A=1",
 		scaleEnvRuntimeRoot + "=" + layout.Run,
@@ -113,5 +114,14 @@ func TestScaleScenarioEnv_SetsFleetContract(t *testing.T) {
 		scaleEnvFleetSoak + "=1m0s",
 		scaleEnvFleetConcurrency + "=16,64",
 		scaleEnvFleetRounds + "=1",
+		scaleEnvGatewayHTTPPort + "=18080",
+		scaleEnvGatewayHTTPSPort + "=18443",
 	}, env)
+}
+
+func TestDefaultScaleRoot_IsUnderLocalDevNeverTemp(t *testing.T) {
+	now := time.Date(2026, 10, 9, 14, 5, 6, 0, time.FixedZone("x", 3600))
+	root := defaultScaleRoot(now)
+	assert.Equal(t, filepath.Join(".local.dev", "scale", "2026-10-09T13-05-06Z"), root)
+	assert.False(t, filepath.IsAbs(root), "the default is relative to the working directory, not the OS temp directory")
 }

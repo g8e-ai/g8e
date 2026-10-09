@@ -9,10 +9,12 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
@@ -47,6 +49,48 @@ func resolveRuntimeRoot() (string, error) {
 		return filepath.Clean(root), nil
 	}
 	return resolveRepoRoot()
+}
+
+// Scenarios whose isolated Gateway listens on non-default ports (g8e test
+// scale) name them here; the suite and the CLI processes it starts then dial
+// those ports on localhost instead of the defaults.
+const (
+	e2eGatewayHTTPPortEnv  = "G8E_E2E_GATEWAY_HTTP_PORT"
+	e2eGatewayHTTPSPortEnv = "G8E_E2E_GATEWAY_HTTPS_PORT"
+)
+
+// e2eGatewayPorts returns the Gateway ports named by the environment, or
+// zeros when neither is set. Setting only one of them is an error.
+func e2eGatewayPorts() (httpPort, httpsPort int, err error) {
+	rawHTTP := strings.TrimSpace(os.Getenv(e2eGatewayHTTPPortEnv))
+	rawHTTPS := strings.TrimSpace(os.Getenv(e2eGatewayHTTPSPortEnv))
+	if rawHTTP == "" && rawHTTPS == "" {
+		return 0, 0, nil
+	}
+	parse := func(name, raw string) (int, error) {
+		port, err := strconv.Atoi(raw)
+		if err != nil || port < 1 || port > 65535 {
+			return 0, fmt.Errorf("%s must be a TCP port, got %q", name, raw)
+		}
+		return port, nil
+	}
+	if httpPort, err = parse(e2eGatewayHTTPPortEnv, rawHTTP); err != nil {
+		return 0, 0, err
+	}
+	if httpsPort, err = parse(e2eGatewayHTTPSPortEnv, rawHTTPS); err != nil {
+		return 0, 0, err
+	}
+	return httpPort, httpsPort, nil
+}
+
+// e2eGatewayEndpointArgs returns the global CLI flags that point a child g8e
+// process at the environment's Gateway ports, or nil for the defaults.
+func e2eGatewayEndpointArgs() ([]string, error) {
+	httpPort, httpsPort, err := e2eGatewayPorts()
+	if err != nil || httpPort == 0 {
+		return nil, err
+	}
+	return []string{"-e", net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpPort)), "-p", strconv.Itoa(httpsPort)}, nil
 }
 
 // replacePort parses a URL, replaces its port, and returns the reconstructed

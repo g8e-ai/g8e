@@ -11,7 +11,9 @@ package testcmd
 
 import (
 	"context"
+	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,18 +23,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/netutil"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 // fakeScaleDeps records every child process and teardown call without
 // starting a Gateway or Operator.
 type fakeScaleDeps struct {
-	calls     []scaleProcess
-	failOn    string // fail the first call whose argv contains this substring
-	stopped   []string
-	portInUse int
+	calls       []scaleProcess
+	failOn      string // fail the first call whose argv contains this substring
+	stopped     []string
+	portsErr    error
+	verifyErr   error
+	verifyCalls []string
 }
+
+// fakeScalePorts are deliberately not the default Gateway ports.
+var fakeScalePorts = scalePorts{HTTP: 18080, HTTPS: 18443}
 
 func (f *fakeScaleDeps) deps() scaleDeps {
 	return scaleDeps{
@@ -44,11 +55,15 @@ func (f *fakeScaleDeps) deps() scaleDeps {
 			}
 			return 0, nil
 		},
-		checkPort: func(port int) error {
-			if port == f.portInUse {
-				return constants.ErrScaleTestFailed
+		reservePorts: func() (scalePorts, error) {
+			if f.portsErr != nil {
+				return scalePorts{}, f.portsErr
 			}
-			return nil
+			return fakeScalePorts, nil
+		},
+		verifyGateway: func(runDir string, ports scalePorts) error {
+			f.verifyCalls = append(f.verifyCalls, runDir)
+			return f.verifyErr
 		},
 		stopWorkers: func(_ context.Context, fleetDir string) (int, error) {
 			f.stopped = append(f.stopped, fleetDir)
@@ -92,8 +107,11 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 	argvs := fake.argvs()
 	require.Len(t, argvs, 7)
 	assert.True(t, strings.HasPrefix(argvs[0], "gw start --cert-mode localhost --posture doctrine"))
-	assert.Equal(t, "auth enroll user -e localhost --headless", argvs[1])
+	assert.Contains(t, argvs[0], "--http-port 18080 --https-port 18443")
+	assert.NotContains(t, argvs[0], "--quiet", "gw start output must be logged for diagnostics")
+	assert.Equal(t, "auth enroll user -e localhost:18080 -p 18443 --headless", argvs[1])
 	assert.Contains(t, argvs[2], "operator deploy --local")
+	assert.Contains(t, argvs[2], "-e localhost --gateway-http-port 18080 --gateway-https-port 18443")
 	assert.Contains(t, argvs[2], "--count 100 --start-index 1 ")
 	assert.Contains(t, argvs[3], "--count 50 --start-index 101 ")
 	assert.Contains(t, argvs[3], "--parallel 25")
@@ -102,11 +120,14 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 	assert.Equal(t, "gw stop", argvs[6])
 
 	layout := newScaleLayout(cfg.Root)
+	assert.Equal(t, []string{layout.Run}, fake.verifyCalls, "gateway ownership must be verified in layout.Run before enrollment")
 	assert.Equal(t, []string{layout.Fleet}, fake.stopped)
 	assert.Equal(t, "go", fake.calls[4].Name)
 	assert.Contains(t, fake.calls[4].Env, scaleEnvRuntimeRoot+"="+layout.Run)
 	assert.Contains(t, fake.calls[4].Env, "HOME="+layout.Home)
 	assert.Contains(t, fake.calls[4].Env, "USERPROFILE="+layout.Home)
+	assert.Contains(t, fake.calls[4].Env, scaleEnvGatewayHTTPPort+"=18080")
+	assert.Contains(t, fake.calls[4].Env, scaleEnvGatewayHTTPSPort+"=18443")
 	assert.Contains(t, fake.calls[5].Env, scaleEnvFleetRestartReport+"="+filepath.Join(layout.Out, "restart-report.json"))
 	assert.FileExists(t, filepath.Join(layout.Out, "scale-summary.json"))
 }
@@ -139,14 +160,27 @@ func TestRunScale_SkipRestartOmitsRestartScenario(t *testing.T) {
 	}
 }
 
-func TestRunScale_RefusesOccupiedGatewayPortBeforeStartingAnything(t *testing.T) {
+func TestRunScale_FailedPortReservationStartsNothing(t *testing.T) {
 	cfg := scaleTestConfig(t)
-	fake := &fakeScaleDeps{portInUse: constants.Ports.OperatorHttps}
+	fake := &fakeScaleDeps{portsErr: constants.ErrPortUnavailable}
 
-	require.ErrorIs(t, runScale(context.Background(), cfg, fake.deps()), constants.ErrScaleTestFailed)
+	err := runScale(context.Background(), cfg, fake.deps())
+	require.ErrorIs(t, err, constants.ErrScaleTestFailed)
+	require.ErrorIs(t, err, constants.ErrPortUnavailable)
 	assert.Empty(t, fake.calls)
 	assert.Empty(t, fake.stopped)
-	assert.NoDirExists(t, cfg.Root, "no scratch root is created while a port is occupied")
+	assert.NoDirExists(t, cfg.Root, "no scratch root is created without Gateway ports")
+}
+
+func TestReserveScalePorts_ReturnsDistinctNonDefaultPorts(t *testing.T) {
+	ports, err := reserveScalePorts()
+	require.NoError(t, err)
+	assert.NotEqual(t, ports.HTTP, ports.HTTPS)
+	for _, port := range []int{ports.HTTP, ports.HTTPS} {
+		assert.Positive(t, port)
+		assert.NotContains(t, constants.GatewayReservedLoopbackPorts, port)
+		require.NoError(t, netutil.CheckTCPPortAvailable(port), "reserved ports are released before return")
+	}
 }
 
 func TestPrepareScaleRoot_RefusesNonEmptyRootUnlessClean(t *testing.T) {
@@ -183,3 +217,69 @@ func TestScaleWorkerPIDs_ReadsOnlyRecordedFleetPIDs(t *testing.T) {
 	_, err = scaleWorkerPIDs(fleet)
 	assert.Error(t, err, "a corrupt PID file must be reported, not ignored")
 }
+
+func TestRunScale_GatewayOwnershipFailureAbortsBeforeAuthEnrollAndDoesNotStopForeignGateway(t *testing.T) {
+	cfg := scaleTestConfig(t)
+	fake := &fakeScaleDeps{verifyErr: errors.New("foreign gateway detected")}
+
+	err := runScale(context.Background(), cfg, fake.deps())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "verify gateway ownership: foreign gateway detected")
+
+	argvs := fake.argvs()
+	require.Len(t, argvs, 1, "gw start was called, but failure aborted before auth enroll or scenarios")
+	assert.True(t, strings.HasPrefix(argvs[0], "gw start"))
+	for _, argv := range argvs {
+		assert.NotEqual(t, "gw stop", argv, "teardown must not stop a gateway whose ownership was not verified")
+	}
+}
+
+func TestVerifyScaleGatewayOwnership(t *testing.T) {
+	root := testutil.TempDir(t)
+	runDir := filepath.Join(root, "run")
+	require.NoError(t, os.MkdirAll(runDir, 0o700))
+
+	ports := scalePorts{HTTP: 18080, HTTPS: 18443}
+
+	// Case 1: no runtime files -> fails on missing PID
+	err := verifyScaleGatewayOwnership(runDir, ports)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read gateway pid")
+
+	// Case 2: valid PID file with current process PID, but missing launch profile
+	fileSvc, err := fs.NewRuntimeFileService(runDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+	pm, err := platform.NewProcessManager(fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, pm.WritePIDFile(constants.OperatorPIDFilename, os.Getpid()))
+
+	err = verifyScaleGatewayOwnership(runDir, ports)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read gateway launch profile")
+
+	// Case 3: launch profile with mismatched ports
+	mismatchedCfg := serve.GatewayConfig{
+		HTTPPort:  19080,
+		HTTPSPort: 19443,
+		Posture:   constants.PostureDoctrine,
+	}
+	require.NoError(t, serve.WriteLaunchProfile(fileSvc, mismatchedCfg))
+
+	err = verifyScaleGatewayOwnership(runDir, ports)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not match reserved port")
+
+	// Case 4: launch profile matching reserved ports
+	matchingCfg := serve.GatewayConfig{
+		HTTPPort:  ports.HTTP,
+		HTTPSPort: ports.HTTPS,
+		Posture:   constants.PostureDoctrine,
+	}
+	require.NoError(t, serve.WriteLaunchProfile(fileSvc, matchingCfg))
+
+	err = verifyScaleGatewayOwnership(runDir, ports)
+	require.NoError(t, err)
+}
+

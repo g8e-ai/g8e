@@ -171,7 +171,7 @@ make test-scale SCALE_COUNT=1000 SCALE_ARGS='--soak 10m --fan-out-concurrency 64
 
 `./g8e test chaos` generates a realistic distribution of governance events (70% valid good actor intent, 20% L1 forbidden command prompt injection, 10% corrupted transaction hash MitM) directly in-process through `TransactionVerifier` and `Actuator`, bypassing network and TLS layers. Results persist to SQLite databases under `.g8e/test-vault/<timestamp>-chaos-test/`. `./g8e test summary` aggregates outcomes across all runs in the test vault directory.
 
-`./g8e test scale` is the only supported way to run a fleet scale test; it is never part of `make test`. It refuses to start while anything listens on the default Gateway ports (Operators always dial them) and refuses a non-empty `--root` unless `--clean` is passed. In a fresh scratch root (default: a new temporary directory) it:
+`./g8e test scale` is the only supported way to run a fleet scale test; it is never part of `make test`. Its Gateway listens on two free ports reserved for the run, never the defaults, so it runs alongside a Gateway already on 8080/8443; the CLI owner, every Operator (`--gateway-http-port`/`--gateway-https-port`), and the scenarios (`G8E_E2E_GATEWAY_HTTP_PORT`/`G8E_E2E_GATEWAY_HTTPS_PORT`) dial those ports, and `scale-summary.json` records them. It refuses a non-empty `--root` unless `--clean` is passed. In a fresh scratch root (default: `.local.dev/scale/<UTC timestamp>` under the working directory; it never uses the OS temporary directory) it:
 
 1. Starts a doctrine Gateway in `<root>/run` and enrolls a headless CLI owner. Every child process gets `HOME` and `USERPROFILE` set to `<root>/home`; the Go caches are kept.
 2. Deploys `--count` Operators with `operator deploy --local --background --approve`. By default the whole fleet goes in one invocation, staged all at once (`--parallel` defaults to the Gateway's live Operator request quota, 2048). `--batch-size` splits it into appending invocations (`--start-index`). A failed batch stops the run.
@@ -294,7 +294,7 @@ Tests that open localhost listeners, including `httptest.NewServer`, `httptest.N
 
 ### Scale-test cohorts
 
-`./g8e test scale` sets the fleet scenario inputs (`G8E_E2E_RUNTIME_ROOT`, `G8E_E2E_FLEET_*`). `TestOperatorFleet_HoldsUnderFanOut` also accepts `G8E_E2E_FLEET_SESSIONS`, a
+`./g8e test scale` sets the fleet scenario inputs (`G8E_E2E_RUNTIME_ROOT`, `G8E_E2E_GATEWAY_HTTP_PORT`, `G8E_E2E_GATEWAY_HTTPS_PORT`, `G8E_E2E_FLEET_*`). `TestOperatorFleet_HoldsUnderFanOut` also accepts `G8E_E2E_FLEET_SESSIONS`, a
 comma-separated list of owner Operator session UUIDs. Its length must match
 `G8E_E2E_FLEET_SIZE`. With a cohort, registry health checks and governed CLI
 fan-out target exactly those remote sessions; the embedded Operator is excluded.

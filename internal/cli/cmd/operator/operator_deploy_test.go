@@ -392,6 +392,36 @@ func TestOperatorDeployForwardsGatewayPortsToTheWorker(t *testing.T) {
 	assert.Contains(t, string(data), "--gateway-https-port=9443\n")
 }
 
+func TestOperatorDeployApprovalClientDialsTheWorkerGatewayPorts(t *testing.T) {
+	t.Cleanup(func() { config.SetEndpointOverride("") })
+	cfg := &config.Config{}
+	tests := []struct {
+		name      string
+		args      []string
+		wantHTTP  string
+		wantHTTPS string
+	}{
+		{"defaults untouched", []string{"--endpoint", "localhost"}, "http://localhost:8080", "https://localhost:8443"},
+		{"endpoint host with ports", []string{"--endpoint", "localhost", "--gateway-http-port", "18080", "--gateway-https-port", "18443"}, "http://localhost:18080", "https://localhost:18443"},
+		{"endpoint port replaced", []string{"--endpoint", "gw.example:9080", "--gateway-https-port", "9443"}, "http://gw.example:9080", "https://gw.example:9443"},
+		{"no owner endpoint", []string{"--gateway-https-port", "9443"}, "http://localhost:8080", "https://localhost:9443"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config.SetEndpointOverride("")
+			cmd := operatorDeployCmdWithConfig(nil, nil, nil, nil)
+			cmd.Flags().StringP("endpoint", "e", "", "")
+			require.NoError(t, cmd.ParseFlags(tt.args))
+			if endpoint, _ := cmd.Flags().GetString("endpoint"); endpoint != "" {
+				config.SetEndpointOverride(endpoint) // as the root PersistentPreRunE does without -p
+			}
+			useDeployGatewayPorts(cmd)
+			assert.Equal(t, tt.wantHTTP, cfg.OperatorDiscoveryURL())
+			assert.Equal(t, tt.wantHTTPS, cfg.OperatorHTTPURL())
+		})
+	}
+}
+
 func TestOperatorDeployStopsBeforeStartingWorkersWhenTheGatewayIsUnreachable(t *testing.T) {
 	// The preflight runs from the shared binary in <dest-dir>/.deploy-bin.
 	useFakeSSH(t, `#!/bin/sh

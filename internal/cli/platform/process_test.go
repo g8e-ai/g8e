@@ -333,20 +333,21 @@ func TestStopOperator(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	// Test stopping when no PID file exists and no process found
-	pm.findOperatorProcessFn = func() int { return 0 }
+	// Test stopping when no PID file exists: StopOperator must succeed (noop)
+	// and never fall back to killing arbitrary processes (INV-CODE-04).
+	fallbackCalled := false
+	pm.findOperatorProcessFn = func() int {
+		fallbackCalled = true
+		return 999998
+	}
 	if err := pm.StopOperator(); err != nil {
 		t.Errorf("StopOperator should not error when no PID file exists: %v", err)
 	}
-
-	// Test stopping when no PID file exists but process is found via fallback
-	// Mock findOperatorProcess to return a non-existent PID (simulating stale process)
-	pm.findOperatorProcessFn = func() int { return 999998 }
-	if err := pm.StopOperator(); err != nil {
-		t.Errorf("StopOperator with fallback should attempt to stop process: %v", err)
+	if fallbackCalled {
+		t.Errorf("StopOperator must not invoke fallback discovery when PID file is missing")
 	}
 	// Reset mock
-	pm.findOperatorProcessFn = func() int { return 0 }
+	pm.findOperatorProcessFn = nil
 
 	// Test stopping non-existent process with PID file
 	if err := pm.writePID(constants.OperatorPIDFilename, 999999); err != nil {

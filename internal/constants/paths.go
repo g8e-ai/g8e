@@ -894,11 +894,26 @@ const (
 	SupervisorStateFilename  = "state.json"
 )
 
+// Scale test scratch root constants. `g8e test scale` without --root writes
+// each run under <working dir>/.local.dev/scale/<UTC timestamp>, never under
+// the OS temporary directory.
+const (
+	ScaleRunsDirPath        = ".local.dev/scale"
+	ScaleRunTimestampFormat = "2006-01-02T15-04-05Z"
+)
+
+// Public loop test scratch root constants. `g8e test public-loop` writes
+// each run under <working dir>/.local.dev/public-loop/<UTC timestamp>, never under
+// the OS temporary directory.
+const (
+	PublicLoopRunsDirPath        = ".local.dev/public-loop"
+	PublicLoopRunTimestampFormat = "2006-01-02T15-04-05Z"
+)
+
 // Public feed runtime path constants (O3-public-feed: outbound publisher,
 // signed append-only batches, ordered outbox, and content-addressed proof
 // packages).
 const (
-	PublicLoopTempPrefix                     = "g8e-public-loop-"
 	PublicFeedDirname                        = "public-feed"
 	PublicFeedOutboxFilename                 = "outbox.jsonl"
 	PublicFeedOutboxPath                     = "public-feed/outbox.jsonl"

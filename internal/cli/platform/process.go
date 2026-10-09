@@ -598,21 +598,13 @@ func (pm *ProcessManager) StopOperator() error {
 	}
 
 	if pid != 0 && !pm.isProcessRunning(pid) {
-		// Stale PID file - clean it up and fall through to process discovery
+		// Stale PID file - clean it up
 		_ = pm.deletePID(constants.OperatorPIDFilename)
 		pid = 0
 	}
 
 	if pid == 0 {
-		// PID file missing or stale, try to find process via discovery
-		if pm.findOperatorProcessFn != nil {
-			pid = pm.findOperatorProcessFn()
-		} else {
-			pid = pm.findOperatorProcess()
-		}
-		if pid == 0 {
-			return nil
-		}
+		return nil
 	}
 
 	if err := pm.stopProcess(pid, "operator"); err != nil {

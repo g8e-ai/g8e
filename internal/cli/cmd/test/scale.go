@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -27,8 +29,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/netutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -43,6 +46,8 @@ const (
 	scaleEnvFleetRounds        = "G8E_E2E_FLEET_ROUNDS"
 	scaleEnvFleetReport        = "G8E_E2E_FLEET_REPORT"
 	scaleEnvFleetRestartReport = "G8E_E2E_FLEET_RESTART_REPORT"
+	scaleEnvGatewayHTTPPort    = "G8E_E2E_GATEWAY_HTTP_PORT"
+	scaleEnvGatewayHTTPSPort   = "G8E_E2E_GATEWAY_HTTPS_PORT"
 )
 
 const (
@@ -105,14 +110,23 @@ type scaleProcess struct {
 
 type scaleRunner func(ctx context.Context, p scaleProcess) (int, error)
 
+// scalePorts are the Gateway listener ports of one run. Every child that dials
+// the Gateway is given them explicitly, so the run never depends on, or
+// collides with, a Gateway already listening on the default ports.
+type scalePorts struct {
+	HTTP  int
+	HTTPS int
+}
+
 // scaleDeps holds the side effects of a scale run so Tier 1 tests can verify
 // the orchestration without starting a Gateway or Operator processes.
 type scaleDeps struct {
-	run         scaleRunner
-	checkPort   func(port int) error
-	stopWorkers func(ctx context.Context, fleetDir string) (int, error)
-	sample      func(ctx context.Context, layout scaleLayout, interval time.Duration)
-	stdout      io.Writer
+	run           scaleRunner
+	reservePorts  func() (scalePorts, error)
+	verifyGateway func(runDir string, ports scalePorts) error
+	stopWorkers   func(ctx context.Context, fleetDir string) (int, error)
+	sample        func(ctx context.Context, layout scaleLayout, interval time.Duration)
+	stdout        io.Writer
 }
 
 // scaleBatch is one `operator deploy` invocation.
@@ -132,26 +146,29 @@ type scalePhase struct {
 // scaleSummary is the machine-readable result of a scale run. It carries no
 // identifiers, keys, or tokens.
 type scaleSummary struct {
-	Count       int          `json:"count"`
-	BatchSize   int          `json:"batch_size"`
-	Parallel    int          `json:"parallel"`
-	Binary      string       `json:"binary"`
-	OS          string       `json:"os"`
-	Batches     []scaleBatch `json:"batches"`
-	Phases      []scalePhase `json:"phases"`
-	StoppedPIDs int          `json:"stopped_workers"`
-	Passed      bool         `json:"passed"`
-	StartedAt   time.Time    `json:"started_at"`
-	FinishedAt  time.Time    `json:"finished_at"`
+	Count            int          `json:"count"`
+	BatchSize        int          `json:"batch_size"`
+	Parallel         int          `json:"parallel"`
+	Binary           string       `json:"binary"`
+	OS               string       `json:"os"`
+	GatewayHTTPPort  int          `json:"gateway_http_port"`
+	GatewayHTTPSPort int          `json:"gateway_https_port"`
+	Batches          []scaleBatch `json:"batches"`
+	Phases           []scalePhase `json:"phases"`
+	StoppedPIDs      int          `json:"stopped_workers"`
+	Passed           bool         `json:"passed"`
+	StartedAt        time.Time    `json:"started_at"`
+	FinishedAt       time.Time    `json:"finished_at"`
 }
 
 func scaleCmd() *cobra.Command {
 	return scaleCmdWithDeps(scaleDeps{
-		run:         realScaleRunner(os.Stdout, os.Stderr),
-		checkPort:   netutil.CheckTCPPortAvailable,
-		stopWorkers: stopScaleWorkers,
-		sample:      sampleScaleResources,
-		stdout:      os.Stdout,
+		run:           realScaleRunner(os.Stdout, os.Stderr),
+		reservePorts:  reserveScalePorts,
+		verifyGateway: verifyScaleGatewayOwnership,
+		stopWorkers:   stopScaleWorkers,
+		sample:        sampleScaleResources,
+		stdout:        os.Stdout,
 	})
 }
 
@@ -183,8 +200,9 @@ other platforms record database sizes only). Teardown always stops all of this
 run's workers at once by their recorded PIDs, then stops the Gateway. It never
 touches processes outside the scratch root.
 
-Operators dial the default Gateway ports, so the run refuses to start while
-anything listens on them. Evidence (logs, CSVs, fleet-report.json,
+The Gateway listens on two free ports chosen for the run, never the defaults,
+so it runs alongside any other Gateway on the host; the Operators, the CLI
+owner, and the scenarios are all pointed at those ports. Evidence (logs, CSVs, fleet-report.json,
 restart-report.json, scale-summary.json) is kept under <root>/out.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -205,7 +223,7 @@ restart-report.json, scale-summary.json) is kept under <root>/out.`,
 	cmd.Flags().IntVar(&cfg.Rounds, "rounds", 1, "Fan-out rounds per concurrency level")
 	cmd.Flags().DurationVar(&cfg.ScenarioTimeout, "timeout", 0, "Time limit for each Tier 3 scenario (default: soak plus 20m)")
 	cmd.Flags().DurationVar(&cfg.SampleInterval, "sample-interval", 10*time.Second, "Resource sampling interval")
-	cmd.Flags().StringVar(&cfg.Root, "root", "", "Scratch and evidence root (default: a new temporary directory)")
+	cmd.Flags().StringVar(&cfg.Root, "root", "", "Scratch and evidence root (default: .local.dev/scale/<UTC timestamp> under the working directory)")
 	cmd.Flags().StringVar(&cfg.Binary, "binary", "", "g8e binary for the Gateway and Operators (default: this executable)")
 	cmd.Flags().BoolVar(&cfg.Clean, "clean", false, "Remove an existing non-empty --root before the run")
 	cmd.Flags().BoolVar(&cfg.SkipRestart, "skip-restart", false, "Skip the Gateway restart recovery scenario")
@@ -264,12 +282,11 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 	if err != nil {
 		return err
 	}
-	for _, port := range []int{constants.Ports.OperatorHttp, constants.Ports.OperatorHttps} {
-		if err := deps.checkPort(port); err != nil {
-			return fmt.Errorf("%w: port %d is in use; Operators always dial the default Gateway ports, so stop the listener first: %w",
-				constants.ErrScaleTestFailed, port, err)
-		}
+	ports, err := deps.reservePorts()
+	if err != nil {
+		return fmt.Errorf("%w: reserve Gateway ports: %w", constants.ErrScaleTestFailed, err)
 	}
+	httpPort, httpsPort := strconv.Itoa(ports.HTTP), strconv.Itoa(ports.HTTPS)
 	layout, err := prepareScaleRoot(cfg.Root, cfg.Clean)
 	if err != nil {
 		return err
@@ -281,9 +298,11 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 	}
 	summary := scaleSummary{
 		Count: cfg.Count, BatchSize: cfg.BatchSize, Parallel: cfg.Parallel,
-		Binary: bin, OS: runtime.GOOS, StartedAt: time.Now().UTC(),
+		Binary: bin, OS: runtime.GOOS, GatewayHTTPPort: ports.HTTP, GatewayHTTPSPort: ports.HTTPS,
+		StartedAt: time.Now().UTC(),
 	}
 	fmt.Fprintf(deps.stdout, "Scale run root: %s\n", layout.Root)
+	fmt.Fprintf(deps.stdout, "Scale Gateway ports: http=%d https=%d\n", ports.HTTP, ports.HTTPS)
 
 	sampleCtx, stopSampling := context.WithCancel(context.Background())
 	var sampling sync.WaitGroup
@@ -334,12 +353,18 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 	}
 
 	if err := phase("gateway", func() error {
-		gatewayStarted = true
 		if err := child("gateway-start.log", "gw", "start", "--cert-mode", "localhost", "--posture", "doctrine",
-			"--public-spectator=false", "--rate-limit-rps", "0", "--log", "info", "--quiet"); err != nil {
+			"--http-port", httpPort, "--https-port", httpsPort,
+			"--public-spectator=false", "--rate-limit-rps", "0", "--log", "info"); err != nil {
 			return fmt.Errorf("gw start: %w", err)
 		}
-		if err := child("auth-enroll.log", "auth", "enroll", "user", "-e", "localhost", "--headless"); err != nil {
+		if deps.verifyGateway != nil {
+			if err := deps.verifyGateway(layout.Run, ports); err != nil {
+				return fmt.Errorf("verify gateway ownership: %w", err)
+			}
+		}
+		gatewayStarted = true
+		if err := child("auth-enroll.log", "auth", "enroll", "user", "-e", "localhost:"+httpPort, "-p", httpsPort, "--headless"); err != nil {
 			return fmt.Errorf("auth enroll user: %w", err)
 		}
 		return nil
@@ -358,7 +383,7 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 			started := time.Now()
 			runErr := child(fmt.Sprintf("deploy-%03d.log", i+1), "operator", "deploy", "--local",
 				"--dest-dir", layout.Fleet, "--count", strconv.Itoa(batch.Count), "--start-index", strconv.Itoa(batch.StartIndex),
-				"--roles", "data", "-e", "localhost", "--background", "--approve", "--parallel", strconv.Itoa(cfg.Parallel), "--log", "info")
+				"--roles", "data", "-e", "localhost", "--gateway-http-port", httpPort, "--gateway-https-port", httpsPort, "--background", "--approve", "--parallel", strconv.Itoa(cfg.Parallel), "--log", "info")
 			batch.Seconds = time.Since(started).Seconds()
 			summary.Batches = append(summary.Batches, batch)
 			fmt.Fprintf(deps.stdout, "batch %d: op-%05d..op-%05d in %.1fs\n", i+1, batch.StartIndex, batch.StartIndex+batch.Count-1, batch.Seconds)
@@ -371,7 +396,7 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 		return err
 	}
 
-	scenarioEnv := append(scaleScenarioEnv(env, layout, cfg, bin), scaleEnvFleetReport+"="+filepath.Join(layout.Out, "fleet-report.json"))
+	scenarioEnv := append(scaleScenarioEnv(env, layout, cfg, bin, ports), scaleEnvFleetReport+"="+filepath.Join(layout.Out, "fleet-report.json"))
 	if err := phase("steady state, soak, and fan-out", func() error {
 		return scaleScenario(ctx, deps, scenarioEnv, layout, cfg, scaleFanOutScenario, "scenario-fan-out.log")
 	}); err != nil {
@@ -403,7 +428,7 @@ func scaleScenario(ctx context.Context, deps scaleDeps, env []string, layout sca
 	return exitError(code, runErr)
 }
 
-func scaleScenarioEnv(env []string, layout scaleLayout, cfg scaleConfig, bin string) []string {
+func scaleScenarioEnv(env []string, layout scaleLayout, cfg scaleConfig, bin string, ports scalePorts) []string {
 	return append(append([]string(nil), env...),
 		scaleEnvRuntimeRoot+"="+layout.Run,
 		scaleEnvFleetSize+"="+strconv.Itoa(cfg.Count),
@@ -411,8 +436,72 @@ func scaleScenarioEnv(env []string, layout scaleLayout, cfg scaleConfig, bin str
 		scaleEnvFleetSoak+"="+cfg.Soak.String(),
 		scaleEnvFleetConcurrency+"="+cfg.FanOutConcurrency,
 		scaleEnvFleetRounds+"="+strconv.Itoa(cfg.Rounds),
+		scaleEnvGatewayHTTPPort+"="+strconv.Itoa(ports.HTTP),
+		scaleEnvGatewayHTTPSPort+"="+strconv.Itoa(ports.HTTPS),
 	)
 }
+
+// reserveScalePorts asks the OS for two distinct free TCP ports on the
+// wildcard address the Gateway binds, skipping the Gateway's own auxiliary
+// listener ports. The ports are released before return, so the Gateway bind
+// can still race another process; a Gateway that then falls back to other
+// ports fails the deploy preflight, which dials exactly these.
+func reserveScalePorts() (scalePorts, error) {
+	var ports []int
+	var listeners []net.Listener
+	defer func() {
+		for _, l := range listeners {
+			_ = l.Close()
+		}
+	}()
+	for len(ports) < 2 {
+		l, err := net.Listen("tcp", ":0")
+		if err != nil {
+			return scalePorts{}, fmt.Errorf("%w: %w", constants.ErrPortUnavailable, err)
+		}
+		listeners = append(listeners, l)
+		port := l.Addr().(*net.TCPAddr).Port
+		if _, reserved := constants.GatewayReservedLoopbackPorts[port]; !reserved {
+			ports = append(ports, port)
+		}
+	}
+	return scalePorts{HTTP: ports[0], HTTPS: ports[1]}, nil
+}
+
+// verifyScaleGatewayOwnership asserts that the Gateway running in runDir was
+// started by this scale run and bound to the reserved ports.
+func verifyScaleGatewayOwnership(runDir string, ports scalePorts) error {
+	fileSvc, err := fs.NewRuntimeFileService(runDir, slog.Default())
+	if err != nil {
+		return fmt.Errorf("create runtime file service: %w", err)
+	}
+	pm, err := platform.NewProcessManager(fileSvc)
+	if err != nil {
+		return fmt.Errorf("create process manager: %w", err)
+	}
+	pid, err := pm.ReadPIDFile(constants.OperatorPIDFilename)
+	if err != nil {
+		return fmt.Errorf("read gateway pid: %w", err)
+	}
+	if pid == 0 {
+		return fmt.Errorf("gateway pid file missing or empty in %s", runDir)
+	}
+	if !pm.IsProcessRunning(pid) {
+		return fmt.Errorf("gateway process (pid %d) is not running", pid)
+	}
+	profile, err := serve.ReadLaunchProfile(fileSvc)
+	if err != nil {
+		return fmt.Errorf("read gateway launch profile: %w", err)
+	}
+	if profile.Config.HTTPPort != ports.HTTP {
+		return fmt.Errorf("gateway launch profile http port %d does not match reserved port %d", profile.Config.HTTPPort, ports.HTTP)
+	}
+	if profile.Config.HTTPSPort != ports.HTTPS {
+		return fmt.Errorf("gateway launch profile https port %d does not match reserved port %d", profile.Config.HTTPSPort, ports.HTTPS)
+	}
+	return nil
+}
+
 
 // scaleChildEnv isolates HOME and USERPROFILE from the developer's while
 // keeping the Go caches, so the scenario neither recompiles everything nor
@@ -437,6 +526,7 @@ func scaleChildEnv(layout scaleLayout) ([]string, error) {
 		case "HOME", "USERPROFILE", "GOCACHE", "GOMODCACHE", "GOPATH",
 			scaleEnvRuntimeRoot, scaleEnvFleetSize, scaleEnvFleetBin, scaleEnvFleetSoak,
 			scaleEnvFleetConcurrency, scaleEnvFleetRounds, scaleEnvFleetReport, scaleEnvFleetRestartReport,
+			scaleEnvGatewayHTTPPort, scaleEnvGatewayHTTPSPort,
 			string(constants.EnvVar.E2EFleetSessions):
 			continue
 		}
@@ -467,16 +557,18 @@ func resolveScaleBinary(binary string) (string, error) {
 	return abs, nil
 }
 
+// defaultScaleRoot is the per-run root under the working directory's
+// .local.dev/scale, named by the UTC start time.
+func defaultScaleRoot(now time.Time) string {
+	return filepath.Join(filepath.FromSlash(constants.ScaleRunsDirPath), now.UTC().Format(constants.ScaleRunTimestampFormat))
+}
+
 // prepareScaleRoot creates a fresh scratch root. An existing non-empty root is
 // refused unless clean is set, so a run never mixes with an earlier Gateway's
 // registry or Operator identities.
 func prepareScaleRoot(root string, clean bool) (scaleLayout, error) {
 	if root == "" {
-		dir, err := os.MkdirTemp("", "g8e-scale-*")
-		if err != nil {
-			return scaleLayout{}, fmt.Errorf("%w: create scratch root: %w", constants.ErrScaleTestFailed, err)
-		}
-		root = dir
+		root = defaultScaleRoot(time.Now())
 	}
 	root, err := filepath.Abs(root)
 	if err != nil {

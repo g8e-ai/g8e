@@ -95,21 +95,31 @@ func publicLoopCmdWithRunner(runner publicLoopRunner) *cobra.Command {
 	return cmd
 }
 
+// defaultPublicLoopRoot returns the per-run root under the working directory's
+// .local.dev/public-loop, named by the UTC start time.
+func defaultPublicLoopRoot(now time.Time) string {
+	return filepath.Join(filepath.FromSlash(constants.PublicLoopRunsDirPath), now.UTC().Format(constants.PublicLoopRunTimestampFormat))
+}
+
 func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error {
 	candidate, err := readPublicLoopCandidate(candidatePath)
 	if err != nil {
 		return err
 	}
-	tempDir, err := os.MkdirTemp("", constants.PublicLoopTempPrefix)
+	runDir := defaultPublicLoopRoot(time.Now())
+	runDir, err = filepath.Abs(runDir)
 	if err != nil {
+		return fmt.Errorf("resolve isolated runtime: %w", err)
+	}
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return fmt.Errorf("create isolated runtime: %w", err)
 	}
 	defer func() {
-		if cleanupErr := os.RemoveAll(tempDir); cleanupErr != nil {
+		if cleanupErr := os.RemoveAll(runDir); cleanupErr != nil {
 			slog.Error("public loop: remove isolated runtime", "error", cleanupErr)
 		}
 	}()
-	fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+	fileSvc, err := fs.NewRuntimeFileService(runDir, slog.Default())
 	if err != nil {
 		return fmt.Errorf("create runtime file service: %w", err)
 	}

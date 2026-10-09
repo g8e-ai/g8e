@@ -12,10 +12,13 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
@@ -72,6 +75,15 @@ func loadE2EConfig() (*e2eConfig, error) {
 	}
 	if err := validateCredentials(creds); err != nil {
 		return nil, fmt.Errorf("e2e: %w", err)
+	}
+
+	httpPort, httpsPort, err := e2eGatewayPorts()
+	if err != nil {
+		return nil, fmt.Errorf("e2e: %w", err)
+	}
+	if httpPort != 0 {
+		config.SetHTTPEndpointOverride(net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpPort)))
+		config.SetHTTPSEndpointOverride(net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpsPort)))
 	}
 
 	gatewayHTTPURL := cfg.OperatorDiscoveryURL()

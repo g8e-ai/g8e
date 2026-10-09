@@ -12,9 +12,7 @@ package platform
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -132,50 +130,12 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 	return 0
 }
 
-// findOperatorProcess finds the PID of the running g8e operator process using tasklist.
-// This is used as a fallback when the PID file is missing or stale.
-// It excludes the current process's own PID to avoid detecting the CLI itself.
+// findOperatorProcess returns 0 on Windows.
+// Process discovery via unscoped image-name scanning (e.g. tasklist) violates
+// runtime root isolation (INV-CODE-04) by finding foreign g8e.exe processes
+// belonging to other runtime roots. The PID file in the root's runtime directory
+// is the sole authoritative record of an active Gateway for this root.
 func (pm *ProcessManager) findOperatorProcess() int {
-	var executor CommandExecutor
-	if pm.commandExecutor != nil {
-		executor = pm.commandExecutor
-	} else {
-		executor = realCommandExecutor{}
-	}
-
-	// Derive the actual image name from the running executable so that
-	// renamed binaries (e.g. g8e-windows-amd64.exe) are found correctly.
-	imageName := constants.BinaryImageNameWindows
-	if exePath, err := os.Executable(); err == nil {
-		imageName = filepath.Base(exePath)
-	}
-
-	ownPID := os.Getpid()
-	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", imageName), "/FO", "CSV")
-	output, err := executor.Output(cmd)
-	if err != nil {
-		return 0
-	}
-
-	lines := strings.Split(string(output), "\n")
-	for i, line := range lines {
-		if i == 0 { // Skip header line
-			continue
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		fields := strings.Split(line, ",")
-		if len(fields) >= 2 {
-			pidStr := strings.Trim(fields[1], "\"")
-			var pid int
-			if _, err := fmt.Sscanf(pidStr, "%d", &pid); err == nil && pid != ownPID {
-				return pid
-			}
-		}
-	}
-
 	return 0
 }
 

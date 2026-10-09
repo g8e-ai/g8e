@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -231,6 +232,7 @@ every worker has established its command subscription. Without --approve, worker
 				opts.preflight = operatorDeployPreflightArgs(cmd, workerEndpoint)
 			}
 			if approve {
+				useDeployGatewayPorts(cmd)
 				opts.client, err = clientFactory(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("operator deploy: create API client: %w", err)
@@ -710,6 +712,30 @@ func operatorDeployPreflightArgs(cmd *cobra.Command, endpoint string) []string {
 		}
 	}
 	return args
+}
+
+// useDeployGatewayPorts points this CLI's own Gateway calls (cohort approval)
+// at the Gateway ports the workers dial. Deploy's SSH --port shadows the root
+// -p flag, so --gateway-http-port and --gateway-https-port are the only way to
+// name a non-default Gateway port here. An explicit URL endpoint is kept.
+func useDeployGatewayPorts(cmd *cobra.Command) {
+	endpoint, _ := cmd.Flags().GetString("endpoint")
+	host := strings.TrimSpace(endpoint)
+	if strings.Contains(host, "://") {
+		return
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if host == "" {
+		host = constants.LocalhostHostname
+	}
+	if flag := cmd.Flags().Lookup("gateway-http-port"); flag.Changed {
+		config.SetHTTPEndpointOverride(net.JoinHostPort(host, flag.Value.String()))
+	}
+	if flag := cmd.Flags().Lookup("gateway-https-port"); flag.Changed {
+		config.SetHTTPSEndpointOverride(net.JoinHostPort(host, flag.Value.String()))
+	}
 }
 
 // gatewayPreflightError names the likely cause of a failed preflight: the

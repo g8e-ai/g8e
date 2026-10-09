@@ -12,16 +12,14 @@ package platform
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 // mockWindowsProcessChecker is a mock implementation for testing
@@ -309,143 +307,30 @@ func TestFindProcessOnPort_CommandArguments(t *testing.T) {
 	assert.Contains(t, call.args, "-ano")
 }
 
-func TestFindOperatorProcess_TasklistFails(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return nil, errors.New("tasklist failed")
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 0, result, "findOperatorProcess should return 0 when tasklist fails")
-}
-
-func TestFindOperatorProcess_NoG8eProcess(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("INFO: No tasks are running which match the specified criteria."), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 0, result, "findOperatorProcess should return 0 when no g8e.exe process found")
-}
-
-func TestFindOperatorProcess_ProcessFound(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			// CSV format with header and data
-			return []byte("\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\"\n\"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 1234, result, "findOperatorProcess should return correct PID")
-}
-
-func TestFindOperatorProcess_ExcludesOwnPID(t *testing.T) {
-	ownPID := os.Getpid()
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			// Include current process PID
-			return []byte(fmt.Sprintf("\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\"\n\"g8e.exe\",\"%d\",\"Console\",\"1\",\"5,234 K\"", ownPID)), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 0, result, "findOperatorProcess should exclude current process PID")
-}
-
-func TestFindOperatorProcess_MultipleProcesses(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			// Multiple g8e.exe processes
-			return []byte("\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\"\n\"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\"\n\"g8e.exe\",\"5678\",\"Console\",\"1\",\"6,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 1234, result, "findOperatorProcess should return first matching PID")
-}
-
-func TestFindOperatorProcess_EmptyLines(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\"\n\n\"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 1234, result, "findOperatorProcess should handle empty lines")
-}
-
-func TestFindOperatorProcess_InvalidPID(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\"\n\"g8e.exe\",\"invalid\",\"Console\",\"1\",\"5,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 0, result, "findOperatorProcess should return 0 when PID is invalid")
-}
-
-func TestFindOperatorProcess_InsufficientFields(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\"\n\"g8e.exe\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.findOperatorProcess()
-	assert.Equal(t, 0, result, "findOperatorProcess should return 0 when line has insufficient fields")
-}
-
-func TestFindOperatorProcess_CommandArguments(t *testing.T) {
+func TestFindOperatorProcess_ReturnsZeroOnWindows(t *testing.T) {
 	mockExecutor := &mockCommandExecutor{}
 	pm := &ProcessManager{
 		commandExecutor: mockExecutor,
 	}
 
-	pm.findOperatorProcess()
-
-	// The image name is derived from os.Executable() at runtime, falling
-	// back to the constant only if that fails.
-	expectedImage := constants.BinaryImageNameWindows
-	if exePath, err := os.Executable(); err == nil {
-		expectedImage = filepath.Base(exePath)
-	}
-
-	require.Len(t, mockExecutor.commandCalls, 1, "Command should be called once")
-	call := mockExecutor.commandCalls[0]
-	assert.Equal(t, "tasklist", call.name)
-	assert.Contains(t, call.args, "/FI", fmt.Sprintf("IMAGENAME eq %s", expectedImage))
-	assert.Contains(t, call.args, "/FO", "CSV")
+	result := pm.findOperatorProcess()
+	assert.Equal(t, 0, result, "findOperatorProcess should always return 0 on Windows to prevent cross-root termination")
+	assert.Empty(t, mockExecutor.commandCalls, "findOperatorProcess must not execute external commands")
 }
+
+func TestStopOperator_NoPIDFileSignalsNothing(t *testing.T) {
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	mockExecutor := &mockCommandExecutor{}
+	pm, err := NewProcessManager(fileSvc)
+	require.NoError(t, err)
+	pm.commandExecutor = mockExecutor
+
+	err = pm.StopOperator()
+	assert.NoError(t, err, "StopOperator should return nil when no PID file exists")
+	assert.Empty(t, mockExecutor.commandCalls, "StopOperator must not execute kill commands when no PID file exists")
+}
+
 
 func TestStopProcess_ZeroPID(t *testing.T) {
 	pm := &ProcessManager{}
