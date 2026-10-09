@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 func TestValidatePublicFeedSourceID_RejectsPathComponents(t *testing.T) {
@@ -32,8 +33,9 @@ func TestValidatePublicFeedSourceID_RejectsPathComponents(t *testing.T) {
 
 func TestTransitionLocalPublicFeed_ArchivesPublisherStateAndStartsFreshSource(t *testing.T) {
 	fileSvc := newProducerFileSvc(t)
+	ks := newTestKeystore(t, fileSvc, testutil.NewTestLogger())
 	ctx := context.Background()
-	oldConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-old", "http://127.0.0.1:8081")
+	oldConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, ks, "source-old", "http://127.0.0.1:8081")
 	require.NoError(t, err)
 	oldKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedSigningKeyPath)
 	require.NoError(t, err)
@@ -42,7 +44,7 @@ func TestTransitionLocalPublicFeed_ArchivesPublisherStateAndStartsFreshSource(t 
 	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedOutboxPath, []byte("old-outbox\n"), constants.PermFilePrivate))
 	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedSnapshotPath, []byte("old-snapshot\n"), constants.PermFilePrivate))
 
-	newConfig, err := TransitionLocalPublicFeed(ctx, fileSvc, "source-new")
+	newConfig, err := TransitionLocalPublicFeed(ctx, fileSvc, ks, "source-new")
 	require.NoError(t, err)
 	assert.Equal(t, "source-new", newConfig.SourceID)
 	assert.Equal(t, oldConfig.MirrorOrigin, newConfig.MirrorOrigin)
@@ -84,8 +86,9 @@ func TestTransitionLocalPublicFeed_ArchivesPublisherStateAndStartsFreshSource(t 
 
 func TestTransitionLocalPublicFeed_MigratesLegacyArchiveWithoutDiscardingIt(t *testing.T) {
 	fileSvc := newProducerFileSvc(t)
+	ks := newTestKeystore(t, fileSvc, testutil.NewTestLogger())
 	ctx := context.Background()
-	activeConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-current", "http://127.0.0.1:8081")
+	activeConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, ks, "source-current", "http://127.0.0.1:8081")
 	require.NoError(t, err)
 	legacyConfig := activeConfig
 	legacyConfig.SourceID = "source-legacy"
@@ -99,7 +102,7 @@ func TestTransitionLocalPublicFeed_MigratesLegacyArchiveWithoutDiscardingIt(t *t
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedLegacyArchiveIngestTokenPath, activeToken, constants.PermFilePrivate))
 
-	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-next")
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, ks, "source-next")
 	require.NoError(t, err)
 	legacyPaths, err := PublicFeedArchivePathsFor("source-legacy")
 	require.NoError(t, err)
@@ -114,18 +117,19 @@ func TestTransitionLocalPublicFeed_MigratesLegacyArchiveWithoutDiscardingIt(t *t
 
 func TestTransitionLocalPublicFeed_PreservesEveryImmutableGeneration(t *testing.T) {
 	fileSvc := newProducerFileSvc(t)
+	ks := newTestKeystore(t, fileSvc, testutil.NewTestLogger())
 	ctx := context.Background()
-	_, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-one", "http://127.0.0.1:8081")
+	_, err := EnsureLocalPublicFeed(ctx, fileSvc, ks, "source-one", "http://127.0.0.1:8081")
 	require.NoError(t, err)
 
-	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-two")
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, ks, "source-two")
 	require.NoError(t, err)
 	firstGeneration, err := PublicFeedArchivePathsFor("source-one")
 	require.NoError(t, err)
 	firstConfig, err := fileSvc.ReadFile(ctx, firstGeneration.ExportConfig)
 	require.NoError(t, err)
 
-	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-three")
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, ks, "source-three")
 	require.NoError(t, err)
 	secondGeneration, err := PublicFeedArchivePathsFor("source-two")
 	require.NoError(t, err)
@@ -135,7 +139,7 @@ func TestTransitionLocalPublicFeed_PreservesEveryImmutableGeneration(t *testing.
 	assert.NotEmpty(t, firstConfig)
 	assert.NotEmpty(t, secondConfig)
 	assert.NotEqual(t, firstGeneration.Root, secondGeneration.Root)
-	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-one")
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, ks, "source-one")
 	assert.ErrorIs(t, err, constants.ErrPublicFeedArchiveGenerationExists)
 }
 

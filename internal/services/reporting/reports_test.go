@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/csv"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,6 +22,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -540,7 +541,7 @@ func TestReportLedgerCommits_NilLedger(t *testing.T) {
 // openVault
 // ---------------------------------------------------------------------------
 
-func TestOpenVault_NoKeyPath_ReturnsLockedVault(t *testing.T) {
+func TestOpenVault_NoKeyProvided_ReturnsLockedVault(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 	fileSvc := newReportingTestFileSvc(t, tempDir)
 
@@ -550,13 +551,13 @@ func TestOpenVault_NoKeyPath_ReturnsLockedVault(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, header.Save(fileSvc))
 
-	v, unlocked := openVault(fileSvc, "", testutil.NewTestLogger())
+	v, unlocked := openVault(fileSvc, nil, testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.False(t, unlocked)
 	t.Cleanup(func() { v.Close() })
 }
 
-func TestOpenVault_KeyFileNotFound(t *testing.T) {
+func TestOpenVault_VaultKeyNotFound(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 	fileSvc := newReportingTestFileSvc(t, tempDir)
 
@@ -566,13 +567,17 @@ func TestOpenVault_KeyFileNotFound(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, header.Save(fileSvc))
 
-	v, unlocked := openVault(fileSvc, filepath.Join(tempDir, "nonexistent.key"), testutil.NewTestLogger())
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
+	v, unlocked := openVault(fileSvc, ks, testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.False(t, unlocked)
 	t.Cleanup(func() { v.Close() })
 }
 
-func TestOpenVault_InvalidKeyEncoding(t *testing.T) {
+func TestOpenVault_UnlockFailed(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 	fileSvc := newReportingTestFileSvc(t, tempDir)
 
@@ -582,10 +587,15 @@ func TestOpenVault_InvalidKeyEncoding(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, header.Save(fileSvc))
 
-	keyPath := filepath.Join(tempDir, "bad.key")
-	require.NoError(t, os.WriteFile(keyPath, []byte("not-valid-hex\n"), 0600))
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
 
-	v, unlocked := openVault(fileSvc, keyPath, testutil.NewTestLogger())
+	wrongKey := make([]byte, vault.KeySize)
+	wrongKey[0] = 0x42
+	require.NoError(t, ks.StoreKeyMaterial(constants.SecretsFileVaultKey, wrongKey))
+
+	v, unlocked := openVault(fileSvc, ks, testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.False(t, unlocked)
 	t.Cleanup(func() { v.Close() })
@@ -595,17 +605,12 @@ func TestOpenVault_ValidKey(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 	fileSvc := newReportingTestFileSvc(t, tempDir)
 
-	_, privKey, err := ed25519.GenerateKey(nil)
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
 	require.NoError(t, err)
-	header, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, header.Save(fileSvc))
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.InitVault())
 
-	keyHex := hex.EncodeToString(privKey)
-	keyPath := filepath.Join(tempDir, "vault.key")
-	require.NoError(t, os.WriteFile(keyPath, []byte(keyHex), 0600))
-
-	v, unlocked := openVault(fileSvc, keyPath, testutil.NewTestLogger())
+	v, unlocked := openVault(fileSvc, ks, testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.True(t, unlocked)
 	t.Cleanup(func() { v.Close() })

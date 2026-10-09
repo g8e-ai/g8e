@@ -21,8 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway/embedded"
-	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
-	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
@@ -73,20 +71,6 @@ func newTestFileSvc(t *testing.T) fs.RuntimeFileService {
 	return svc
 }
 
-// newTestKeystore creates an initialized keystore using an in-memory keyring.
-func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.Logger) *keystore.Keystore {
-	tb.Helper()
-	return newTestKeystoreWithKeyring(tb, fileSvc, logger, keystoretest.NewMemoryKeyring())
-}
-
-func newTestKeystoreWithKeyring(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.Logger, keyring keystore.Keyring) *keystore.Keystore {
-	tb.Helper()
-	ks, err := keystore.NewWithKeyringAndFS(logger, keyring, fileSvc)
-	require.NoError(tb, err)
-	require.NoError(tb, ks.Initialize())
-	require.NoError(tb, ks.EnforcePermissions())
-	return ks
-}
 
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
@@ -94,7 +78,7 @@ func newTestKeystoreWithKeyring(tb testing.TB, fileSvc fs.RuntimeFileService, lo
 func openTestDB(t *testing.T, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
-	return OpenCanonicalDBService(logger, "", ks, fileSvc)
+	return OpenCanonicalDBService(logger, ks, fileSvc)
 }
 
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
@@ -109,7 +93,7 @@ func setupTestInfrastructure(t *testing.T, _ bool) *TestInfrastructure {
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

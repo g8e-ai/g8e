@@ -178,11 +178,15 @@ Suspended L3 governance transactions can be approved via CLI using `g8e auth app
 
 ### Browser passkey authentication
 
-The Console uses WebAuthn passkeys for authentication. Platform authenticators (Windows Hello, Touch ID), roaming security keys, and synced passkeys satisfy the ceremony when they meet relying-party policy. The Gateway's login assertion requests user verification as preferred rather than universally required.
+The Console uses WebAuthn passkeys for authentication. Platform authenticators (Windows Hello, Touch ID), roaming security keys, and synced passkeys satisfy the ceremony when they meet relying-party policy. User verification (`VerificationRequired`) is mandatory across registration, login, and L3 passkey verification ceremonies.
+
+Following successful authentication or L3 assertion verification, the gateway records credential usage, updating the persisted sign counter and last-used timestamp. If an authenticator reports a non-increasing counter (`CloneWarning`), the assertion is rejected with `ErrPasskeyCloneDetected`.
+
+Revocation protection prevents accidental lockout: attempting to revoke the user's sole remaining passkey returns HTTP 409 Conflict (`ErrLastPasskeyRevoke`).
 
 The browser flow is:
 1. Register a passkey during CLI enrollment or through the first-passkey bootstrap flow.
-2. On later visits, enter the user identity and complete a WebAuthn assertion.
+2. On later visits, enter the user identity and complete a WebAuthn assertion with user verification.
 3. The gateway creates a 24-hour browser session (`WebSessionTTL`) and sets the HTTP-only `g8e_web_session_cookie`.
 4. Use the authenticated Console to review approvals, manage passkeys, inspect sessions, and review platform enrollment requests.
 5. Log out through the Console or `/api/v1/auth/logout` to delete the current browser session and clear the cookie. `g8e logout` and `g8e logout web` delete every browser session of the user instead.

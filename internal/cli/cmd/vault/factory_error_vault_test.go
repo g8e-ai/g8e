@@ -17,12 +17,27 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-var errFactory = fmt.Errorf("factory boom")
+var (
+	errFactory         = fmt.Errorf("factory boom")
+	errKeystoreFactory = fmt.Errorf("keystore factory boom")
+)
+
+func failingKeystoreFactory(_ fs.RuntimeFileService, _ keystore.Options, _ bool) (*keystore.Keystore, error) {
+	return nil, errKeystoreFactory
+}
+
+func dummyKeystoreFactory(_ fs.RuntimeFileService, _ keystore.Options, _ bool) (*keystore.Keystore, error) {
+	return nil, nil
+}
 
 func TestVaultInitCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := vaultInitCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := vaultInitCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory), dummyKeystoreFactory)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -33,7 +48,7 @@ func TestVaultInitCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 }
 
 func TestVaultUnlockCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := vaultUnlockCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := vaultUnlockCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory), dummyKeystoreFactory)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -44,7 +59,7 @@ func TestVaultUnlockCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 }
 
 func TestVaultRekeyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := vaultRekeyCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory))
+	cmd := vaultRekeyCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory), dummyKeystoreFactory)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -77,24 +92,45 @@ func TestVaultResetCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-func TestVaultExportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := vaultExportCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory))
+func TestVaultInitCmdWithConfig_KeystoreFactoryError(t *testing.T) {
+	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	cmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), failingKeystoreFactory)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
+	assert.ErrorIs(t, err, errKeystoreFactory)
 }
 
-func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := vaultImportCmdWithConfig(cmdtest.FailingFileSvcFactory(errFactory))
+func TestVaultUnlockCmdWithConfig_KeystoreFactoryError(t *testing.T) {
+	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	realKS, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, realKS.Initialize())
+	require.NoError(t, realKS.InitVault())
+
+	cmd := vaultUnlockCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), failingKeystoreFactory)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	err := cmd.RunE(cmd, nil)
+	err = cmd.RunE(cmd, nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
+	assert.ErrorIs(t, err, errKeystoreFactory)
+}
+
+func TestVaultRekeyCmdWithConfig_KeystoreFactoryError(t *testing.T) {
+	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	realKS, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, realKS.Initialize())
+	require.NoError(t, realKS.InitVault())
+
+	cmd := vaultRekeyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc), failingKeystoreFactory)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err = cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errKeystoreFactory)
 }

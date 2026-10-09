@@ -24,8 +24,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +33,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 type publicFailOnceFileSvc struct {
@@ -53,6 +54,22 @@ func (s *publicFailOnceFileSvc) WriteFile(ctx context.Context, relPath string, d
 
 func validPublicProjectionBytes(campaignID string) string {
 	return fmt.Sprintf(`{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"%s","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z"}`, campaignID)
+}
+
+func useTestKeystore(t *testing.T, fileSvc fs.RuntimeFileService) *keystore.Keystore {
+	t.Helper()
+	keyring := keystoretest.NewMemoryKeyring()
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keyring, fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	original := openPublicKeystore
+	openPublicKeystore = func(_ fs.RuntimeFileService, _ keystore.Options) (*keystore.Keystore, error) {
+		return ks, nil
+	}
+	t.Cleanup(func() {
+		openPublicKeystore = original
+	})
+	return ks
 }
 
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
@@ -82,6 +99,7 @@ func TestPublicRepairOutboxCmd_UsesGatewayOwnedStateWhenHostConfigIsAbsent(t *te
 
 func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	ks := useTestKeystore(t, fileSvc)
 	cmd := publicInitCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
 	cmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
 
@@ -96,17 +114,22 @@ func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {
 	assert.Equal(t, "https://mirror.example", exportConfig.MirrorOrigin)
 	assert.NotEmpty(t, exportConfig.SigningKeyID)
 
-	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	keyBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	require.NoError(t, err)
-	decodedKey, err := hex.DecodeString(string(keyBytes))
-	require.NoError(t, err)
-	assert.Len(t, decodedKey, ed25519.PrivateKeySize)
+	assert.Len(t, keyBytes, ed25519.PrivateKeySize)
 
-	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	tokenBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	require.NoError(t, err)
-	decodedToken, err := hex.DecodeString(string(tokenBytes))
+	assert.Len(t, tokenBytes, constants.PublicFeedIngestTokenBytes)
+
+	// Ensure secrets on disk are sealed and not stored in the clear
+	rawKey, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
 	require.NoError(t, err)
-	assert.Len(t, decodedToken, constants.PublicFeedIngestTokenBytes)
+	assert.NotEqual(t, hex.EncodeToString(keyBytes), string(rawKey))
+
+	rawToken, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, hex.EncodeToString(tokenBytes), string(rawToken))
 
 	for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
 		info, statErr := fileSvc.Stat(context.Background(), relPath)
@@ -117,11 +140,12 @@ func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {
 
 func TestPublicPublishAndRotateKeyCommands_DeriveDurableSequenceAndAuthenticateMirror(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	ks := useTestKeystore(t, fileSvc)
 	var received []models.PublicFeedBatch
 	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+		tokenBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 		assert.NoError(t, err)
-		assert.Equal(t, "Bearer "+string(token), r.Header.Get("Authorization"))
+		assert.Equal(t, "Bearer "+hex.EncodeToString(tokenBytes), r.Header.Get("Authorization"))
 		if r.URL.Path == "/keys/register" {
 			assert.NoError(t, json.NewEncoder(w).Encode(models.PublicKeyRegistrationResponse{Accepted: true}))
 			return
@@ -194,6 +218,7 @@ func TestPublicPublishAndRotateKeyCommands_DeriveDurableSequenceAndAuthenticateM
 
 func TestPublicSourceTransitionCmd_RequiresConfirmationAndArchivesOldSource(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	_ = useTestKeystore(t, fileSvc)
 	initCmd := publicInitCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
 	initCmd.SetArgs([]string{"--source-id", "deployment-old", "--mirror-origin", "https://mirror.example"})
 	require.NoError(t, initCmd.Execute())
@@ -228,6 +253,7 @@ func TestPublicSourceTransitionCmd_RequiresConfirmationAndArchivesOldSource(t *t
 
 func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	ks := useTestKeystore(t, fileSvc)
 	initCmd := publicInitCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
 	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
 	require.NoError(t, initCmd.Execute())
@@ -236,16 +262,14 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 	require.NoError(t, err)
 	var oldConfig models.PublicExportConfig
 	require.NoError(t, json.Unmarshal(configBytes, &oldConfig))
-	oldKeyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	oldPrivateKeyBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	require.NoError(t, err)
-	oldPrivateKeyBytes, err := hex.DecodeString(string(oldKeyBytes))
-	require.NoError(t, err)
-	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	tokenBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	require.NoError(t, err)
 
 	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc), gateway.PublicMirrorConfig{})
 	require.NoError(t, err)
-	mirror.SetIngestAuthToken(string(tokenBytes))
+	mirror.SetIngestAuthToken(hex.EncodeToString(tokenBytes))
 	require.NoError(t, mirror.RegisterSourceKey(context.Background(), oldConfig.SourceID, oldConfig.SigningKeyID, ed25519.PrivateKey(oldPrivateKeyBytes).Public().(ed25519.PublicKey)))
 	server := httptest.NewServer(mirror.Handler())
 
@@ -273,7 +297,7 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 
 	restartedMirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc), gateway.PublicMirrorConfig{})
 	require.NoError(t, err)
-	restartedMirror.SetIngestAuthToken(string(tokenBytes))
+	restartedMirror.SetIngestAuthToken(hex.EncodeToString(tokenBytes))
 	restartedServer := httptest.NewServer(restartedMirror.Handler())
 	t.Cleanup(restartedServer.Close)
 	setCmd = publicConfigSetCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
@@ -290,7 +314,7 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 	oldFileSvc, _ := cmdtest.NewCmdTestEnv(t)
 	oldConfig.MirrorOrigin = restartedServer.URL
 	oldPublisher := gateway.NewPublicPublisherService(nil, oldFileSvc, slog.Default(), oldConfig, ed25519.PrivateKey(oldPrivateKeyBytes), oldConfig.SigningKeyID)
-	oldPublisher.SetIngestAuthToken(string(tokenBytes))
+	oldPublisher.SetIngestAuthToken(hex.EncodeToString(tokenBytes))
 	oldRecordBytes := validPublicProjectionBytes("old-key")
 	oldRecordHash := sha256.Sum256([]byte(oldRecordBytes))
 	err = oldPublisher.ExportBatch(context.Background(), []models.PublicFeedRecord{{
@@ -305,6 +329,7 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 
 func TestPublicInitCmd_RollsBackPartialSecretStateWhenConfigurationWriteFails(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	_ = useTestKeystore(t, fileSvc)
 	failingFileSvc := &publicFailOnceFileSvc{RuntimeFileService: fileSvc, path: constants.PublicFeedExportConfigPath, remaining: 1}
 	cmd := publicInitCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(failingFileSvc))
 	cmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
@@ -320,6 +345,7 @@ func TestPublicInitCmd_RollsBackPartialSecretStateWhenConfigurationWriteFails(t 
 
 func TestPublicRotateKeyCmd_RecoversAfterLocalConfigurationPersistenceFailure(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	ks := useTestKeystore(t, fileSvc)
 	initCmd := publicInitCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
 	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
 	require.NoError(t, initCmd.Execute())
@@ -327,15 +353,13 @@ func TestPublicRotateKeyCmd_RecoversAfterLocalConfigurationPersistenceFailure(t 
 	require.NoError(t, err)
 	var oldConfig models.PublicExportConfig
 	require.NoError(t, json.Unmarshal(configBytes, &oldConfig))
-	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	privateKeyBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	require.NoError(t, err)
-	privateKeyBytes, err := hex.DecodeString(string(keyBytes))
-	require.NoError(t, err)
-	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	tokenBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	require.NoError(t, err)
 	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc), gateway.PublicMirrorConfig{})
 	require.NoError(t, err)
-	mirror.SetIngestAuthToken(string(tokenBytes))
+	mirror.SetIngestAuthToken(hex.EncodeToString(tokenBytes))
 	require.NoError(t, mirror.RegisterSourceKey(context.Background(), oldConfig.SourceID, oldConfig.SigningKeyID, ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)))
 	server := httptest.NewServer(mirror.Handler())
 	t.Cleanup(server.Close)
@@ -350,6 +374,18 @@ func TestPublicRotateKeyCmd_RecoversAfterLocalConfigurationPersistenceFailure(t 
 	exists, err := fileSvc.FileExists(context.Background(), constants.PublicFeedKeyRotationPath)
 	require.NoError(t, err)
 	assert.True(t, exists)
+
+	// Assert rotation state on disk has SealedNewPrivateKey and does not contain raw key hex
+	rotationBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedKeyRotationPath)
+	require.NoError(t, err)
+	var rotationState models.PublicKeyRotationState
+	require.NoError(t, json.Unmarshal(rotationBytes, &rotationState))
+	assert.NotEmpty(t, rotationState.SealedNewPrivateKey)
+	unsealedHex, err := ks.Decrypt(rotationState.SealedNewPrivateKey)
+	require.NoError(t, err)
+	assert.NotEmpty(t, unsealedHex)
+	assert.NotContains(t, string(rotationBytes), unsealedHex)
+
 	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
 	require.NoError(t, err)
 	require.Len(t, state.Sources[oldConfig.SourceID].Batches, 1)
@@ -403,6 +439,7 @@ func TestPublicCommands_RejectMalformedTrailingUnknownAndInvalidConfiguration(t 
 
 func TestPublicPushCmd_RetriesDurableOutboxAfterCommandRestart(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	ks := useTestKeystore(t, fileSvc)
 	failedMirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	}))
@@ -425,15 +462,13 @@ func TestPublicPushCmd_RetriesDurableOutboxAfterCommandRestart(t *testing.T) {
 	require.Error(t, publishCmd.Execute())
 	failedMirror.Close()
 
-	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	privateKeyBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	require.NoError(t, err)
-	privateKeyBytes, err := hex.DecodeString(string(keyBytes))
-	require.NoError(t, err)
-	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	tokenBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	require.NoError(t, err)
 	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc), gateway.PublicMirrorConfig{})
 	require.NoError(t, err)
-	mirror.SetIngestAuthToken(string(tokenBytes))
+	mirror.SetIngestAuthToken(hex.EncodeToString(tokenBytes))
 	require.NoError(t, mirror.RegisterSourceKey(context.Background(), exportConfig.SourceID, exportConfig.SigningKeyID, ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)))
 	server := httptest.NewServer(mirror.Handler())
 	t.Cleanup(server.Close)
@@ -450,26 +485,26 @@ func TestPublicPushCmd_RetriesDurableOutboxAfterCommandRestart(t *testing.T) {
 
 func TestPublicPushCmd_AuthenticatesAndPublishesProofPackage(t *testing.T) {
 	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	ks := useTestKeystore(t, fileSvc)
 	initCmd := publicInitCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
 	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
 	require.NoError(t, initCmd.Execute())
 	exportConfig, err := readPublicExportConfig(context.Background(), fileSvc)
 	require.NoError(t, err)
-	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	privateKeyBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	require.NoError(t, err)
-	privateKeyBytes, err := hex.DecodeString(string(keyBytes))
-	require.NoError(t, err)
-	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	tokenBytes, err := gateway.ReadPublicSecret(context.Background(), fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	require.NoError(t, err)
 	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc), gateway.PublicMirrorConfig{})
 	require.NoError(t, err)
-	mirror.SetIngestAuthToken(string(tokenBytes))
+	mirror.SetIngestAuthToken(hex.EncodeToString(tokenBytes))
 	require.NoError(t, mirror.RegisterSourceKey(context.Background(), exportConfig.SourceID, exportConfig.SigningKeyID, ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)))
 	server := httptest.NewServer(mirror.Handler())
 	t.Cleanup(server.Close)
 	exportConfig.MirrorOrigin = server.URL
 	require.NoError(t, writePublicExportConfig(context.Background(), fileSvc, exportConfig))
-	publisher, err := newPublicPublisherForCommand(context.Background(), fileSvc, exportConfig)
+	pushCmd := publicPushCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
+	publisher, err := newPublicPublisherForCommand(pushCmd, fileSvc, exportConfig)
 	require.NoError(t, err)
 	_, err = publisher.BuildProofPackage(context.Background(), "campaign-a", "revision-a", "verified-index-hash-a", true, []gateway.ProofArtifactInput{{
 		Filename:   "proof-a.json",
@@ -485,7 +520,6 @@ func TestPublicPushCmd_AuthenticatesAndPublishesProofPackage(t *testing.T) {
 		CampaignID: "campaign-b",
 	}})
 	require.NoError(t, err)
-	pushCmd := publicPushCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
 	require.NoError(t, pushCmd.Execute())
 	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
 	require.NoError(t, err)

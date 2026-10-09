@@ -26,20 +26,21 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
-
 func TestPublicFeedControllerHandlePublicFeedBatches_AcceptsBatch(t *testing.T) {
 	privatePort := mustFreePort(t)
 	publicPort := mustFreePort(t)
+	fileSvc := newProducerFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
 	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
 		Enabled:              true,
 		PrivateListenAddress: "127.0.0.1:" + privatePort,
 		PublicListenAddress:  "127.0.0.1:" + publicPort,
 		SourceID:             "test-source",
-	}, newProducerFileSvc(t), testutil.NewTestLogger())
+	}, fileSvc, ks, logger)
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(t.Context()))
 
-	logger := testutil.NewTestLogger()
 	controller := newPublicFeedController(PublicFeedControllerDeps{
 		Logger:    logger,
 		Responder: response.NewWriter(logger),
@@ -73,12 +74,15 @@ func TestPublicFeedControllerHandlePublicFeedBatches_AcceptsBatch(t *testing.T) 
 func TestPublicFeedControllerHandlePublicFeedBatches_RejectsUnknownEventKind(t *testing.T) {
 	privatePort := mustFreePort(t)
 	publicPort := mustFreePort(t)
+	fileSvc := newProducerFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
 	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
 		Enabled:              true,
 		PrivateListenAddress: "127.0.0.1:" + privatePort,
 		PublicListenAddress:  "127.0.0.1:" + publicPort,
 		SourceID:             "test-source",
-	}, newProducerFileSvc(t), testutil.NewTestLogger())
+	}, fileSvc, ks, logger)
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(t.Context()))
 
@@ -108,16 +112,18 @@ func TestPublicFeedControllerHandlePublicFeedBatches_RejectsUnknownEventKind(t *
 func TestPublicFeedControllerHandlePublicFeedSnapshot_ReturnsHighWater(t *testing.T) {
 	privatePort := mustFreePort(t)
 	publicPort := mustFreePort(t)
+	fileSvc := newProducerFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
 	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
 		Enabled:              true,
 		PrivateListenAddress: "127.0.0.1:" + privatePort,
 		PublicListenAddress:  "127.0.0.1:" + publicPort,
 		SourceID:             "test-source",
-	}, newProducerFileSvc(t), testutil.NewTestLogger())
+	}, fileSvc, ks, logger)
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(t.Context()))
 
-	logger := testutil.NewTestLogger()
 	controller := newPublicFeedController(PublicFeedControllerDeps{
 		Logger:    logger,
 		Responder: response.NewWriter(logger),

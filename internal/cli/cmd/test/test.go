@@ -9,7 +9,10 @@ package testcmd
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -272,6 +275,28 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 			if crossEnrollment {
 				profiles = append(profiles, constants.DockerCrossEnrollProfile)
 			}
+			if os.Getenv("G8E_MASTER_KEY_FILE") == "" {
+				if _, err := os.Stat("./secrets/g8e_master_key"); errors.Is(err, os.ErrNotExist) {
+					keyBytes := make([]byte, 32)
+					if _, err := rand.Read(keyBytes); err != nil {
+						return fmt.Errorf("failed to generate master key for e2e-docker: %w", err)
+					}
+					tmpKey, err := os.CreateTemp("", "g8e-master-key-*")
+					if err != nil {
+						return fmt.Errorf("failed to create temp master key file: %w", err)
+					}
+					defer os.Remove(tmpKey.Name())
+					encoded := base64.StdEncoding.EncodeToString(keyBytes)
+					if _, err := tmpKey.WriteString(encoded + "\n"); err != nil {
+						_ = tmpKey.Close()
+						return fmt.Errorf("failed to write temp master key: %w", err)
+					}
+					_ = tmpKey.Close()
+					os.Setenv("G8E_MASTER_KEY_FILE", tmpKey.Name())
+					defer os.Unsetenv("G8E_MASTER_KEY_FILE")
+				}
+			}
+
 			fmt.Printf("Starting unified Docker Compose stack (profiles: %s)...\n", strings.Join(profiles, ", "))
 			if err := docker.RunDockerCompose([]string{"up", "-d"}, profiles...); err != nil {
 				return fmt.Errorf("%w: docker compose up failed: %w", constants.ErrE2ETestsFailed, err)

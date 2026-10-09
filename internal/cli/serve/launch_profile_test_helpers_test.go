@@ -24,7 +24,7 @@ func validTestGatewayConfig() GatewayConfig {
 		PKIDir:              "/pki",
 		SecretsDir:          "/secrets",
 		VaultDir:            "/vault",
-		VaultKeyPath:        "/vault/key",
+		MasterKeyFile:       "/run/secrets/key",
 		PasskeyRpID:         "your-app.lovable.app",
 		PasskeyRpName:       "g8e",
 		PasskeyRpOrigins:    []string{"https://your-app.lovable.app"},

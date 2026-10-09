@@ -209,22 +209,20 @@ The reference Operator creates and uses these runtime areas below `.g8e/`:
 
 - `pki/` for the Operator certificate, key, trust bundle, trusted L2 signers, and enrollment state.
 - `data/` for the canonical SQLite database, replay store, suspended transactions, execution vault, audit receipts, and commitment chain.
-- `vault/` for the encryption vault header and key.
+- `vault/` for the encryption vault header.
 - `data/ledger/` for git-backed file history when Git integration is enabled.
 
-The canonical runtime file service creates the tree at startup. The canonical database service auto-initializes the vault on first use, writes `.g8e/vault/key`, and unlocks the vault before opening encrypted stores. Startup fails if an existing key cannot be read or cannot unlock the vault. A separate `g8e vault init` or `g8e vault unlock` step is not required before `operator start`.
+The canonical runtime file service creates the tree at startup. The canonical database service auto-initializes the vault on first use, seals the vault key in the platform keystore under `.g8e/secrets/vault_key`, and unlocks the vault before opening encrypted stores. Startup fails if an existing key cannot be decrypted or cannot unlock the vault. A separate `g8e vault init` or `g8e vault unlock` step is not required before `operator start`.
 
 The `g8e vault` commands provide explicit administration:
 
-- `g8e vault init [--vault-dir <dir>] [--key-path <path>]`
-- `g8e vault unlock [--vault-dir <dir>] [--key-path <path>]`
-- `g8e vault status [--vault-dir <dir>]`
-- `g8e vault rekey [--vault-dir <dir>] [--key-path <path>] [--new-key-path <path>]`
-- `g8e vault export [--key-path <path>]`
-- `g8e vault import [--key-path <path>] [--key-hex <hex>]`
-- `g8e vault reset [--vault-dir <dir>] [--confirm]`
+- `g8e vault init [--master-key-file <path>]`
+- `g8e vault unlock [--master-key-file <path>]`
+- `g8e vault status`
+- `g8e vault rekey [--master-key-file <path>]`
+- `g8e vault reset [--confirm]`
 
-`vault unlock` validates that a key opens the vault in that process; it does not leave a daemon or persistent unlocked process behind. `operator start` opens and unlocks its own vault instance.
+`vault unlock` validates that the key in the keystore opens the vault in that process; it does not leave a daemon or persistent unlocked process behind. `operator start` opens and unlocks its own vault instance.
 
 #### Running Multiple Operators on the Same System
 

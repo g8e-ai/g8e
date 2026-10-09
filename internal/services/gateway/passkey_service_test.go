@@ -12,6 +12,7 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"net/http"
 	"strings"
@@ -458,6 +459,9 @@ func (m *mockWebauthnClient) FinishLogin(user webauthn.User, session webauthn.Se
 }
 
 func (m *mockWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, error) {
+	if session.UserVerification == protocol.VerificationRequired && !parsedResponse.Response.AuthenticatorData.Flags.UserVerified() {
+		return nil, protocol.ErrVerification
+	}
 	return m.credential, nil
 }
 
@@ -555,3 +559,96 @@ func TestPasskeyService_getWebAuthnSession(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func makeTestL3Proof(credID []byte, txHash string, userVerified bool) *commonv1.L3Proof {
+	authData := make([]byte, 37)
+	// byte 0..31: RPIDHash
+	// byte 32: flags (0x05 for UP | UV, 0x01 for UP)
+	if userVerified {
+		authData[32] = 0x05
+	} else {
+		authData[32] = 0x01
+	}
+	// byte 33..36: sign count
+	binary.BigEndian.PutUint32(authData[33:37], 1)
+
+	clientDataJSON := fmt.Sprintf(`{"type":"webauthn.get","challenge":"%s","origin":"localhost"}`,
+		base64.RawURLEncoding.EncodeToString([]byte(txHash)))
+
+	return &commonv1.L3Proof{
+		CredentialId:      base64.RawURLEncoding.EncodeToString(credID),
+		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(clientDataJSON)),
+		AuthenticatorData: base64.RawURLEncoding.EncodeToString(authData),
+		Signature:         base64.RawURLEncoding.EncodeToString([]byte("signature")),
+	}
+}
+
+func TestPasskeyService_Login_RejectsCloneWarning(t *testing.T) {
+	svc, user := newPasskeyServiceWithMock(t)
+
+	err := svc.addCredential(t.Context(), user.ID, testCredential("mock-cred-id"))
+	require.NoError(t, err)
+
+	_, err = svc.GenerateAuthenticationChallenge(t.Context(), user.ID)
+	require.NoError(t, err)
+
+	mockClient := svc.webauthn.(*mockWebauthnClient)
+	mockClient.credential.Authenticator.CloneWarning = true
+
+	_, err = svc.VerifyAuthentication(t.Context(), user.ID, []byte("{}"))
+	require.ErrorIs(t, err, constants.ErrPasskeyCloneDetected)
+}
+
+func TestPasskeyService_L3Proof_RejectsCloneWarning(t *testing.T) {
+	svc, user := newPasskeyServiceWithMock(t)
+
+	err := svc.addCredential(t.Context(), user.ID, testCredential("mock-cred-id"))
+	require.NoError(t, err)
+
+	mockClient := svc.webauthn.(*mockWebauthnClient)
+	mockClient.credential.Authenticator.CloneWarning = true
+
+	proof := makeTestL3Proof([]byte("mock-cred-id"), "tx-hash-clone-test", true)
+
+	ok, err := svc.VerifyPasskeyProof(t.Context(), user.ID, "tx-hash-clone-test", "", proof)
+	assert.False(t, ok)
+	require.ErrorIs(t, err, constants.ErrPasskeyCloneDetected)
+}
+
+func TestPasskeyService_L3Proof_SavesSignCount(t *testing.T) {
+	svc, user := newPasskeyServiceWithMock(t)
+
+	err := svc.addCredential(t.Context(), user.ID, testCredential("mock-cred-id"))
+	require.NoError(t, err)
+
+	mockClient := svc.webauthn.(*mockWebauthnClient)
+	mockClient.credential.Authenticator.CloneWarning = false
+	mockClient.credential.Authenticator.SignCount = 42
+
+	proof := makeTestL3Proof([]byte("mock-cred-id"), "tx-hash-sign-count-test", true)
+
+	ok, err := svc.VerifyPasskeyProof(t.Context(), user.ID, "tx-hash-sign-count-test", "", proof)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	creds, err := svc.listCredentials(t.Context(), user.ID)
+	require.NoError(t, err)
+	require.Len(t, creds, 1)
+	assert.Equal(t, uint32(42), creds[0].Authenticator.SignCount)
+	assert.NotZero(t, creds[0].LastUsedAtUnixMs)
+}
+
+func TestPasskeyService_L3Proof_RejectsAssertionWithoutUV(t *testing.T) {
+	svc, user := newPasskeyServiceWithMock(t)
+
+	err := svc.addCredential(t.Context(), user.ID, testCredential("mock-cred-id"))
+	require.NoError(t, err)
+
+	proof := makeTestL3Proof([]byte("mock-cred-id"), "tx-hash-uv-test", false)
+
+	ok, err := svc.VerifyPasskeyProof(t.Context(), user.ID, "tx-hash-uv-test", "", proof)
+	assert.False(t, ok)
+	require.Error(t, err)
+	require.ErrorIs(t, err, protocol.ErrVerification)
+}
+

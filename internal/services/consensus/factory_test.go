@@ -8,11 +8,11 @@
 package consensus
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"path/filepath"
-	"runtime"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,6 +20,8 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -32,20 +34,29 @@ func newConsensusTestFileService(t *testing.T) fs.RuntimeFileService {
 	return fileSvc
 }
 
-func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
+func newConsensusTestKeystore(t *testing.T, fileSvc fs.RuntimeFileService) *keystore.Keystore {
+	t.Helper()
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	return ks
+}
+
+func TestKeystoreKeyProvider_GetMemberKey_Success(t *testing.T) {
 	t.Parallel()
 
 	fileSvc := newConsensusTestFileService(t)
+	ks := newConsensusTestKeystore(t, fileSvc)
 	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	err = SaveMemberKey(fileSvc, consensusID, memberAppID, priv)
+	err = SaveMemberKey(ks, consensusID, memberAppID, priv)
 	require.NoError(t, err)
 
-	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	provider, err := NewKeystoreKeyProvider(ks, consensusID)
 	require.NoError(t, err)
 	loadedKey, err := provider.GetMemberKey(memberAppID)
 	require.NoError(t, err)
@@ -54,94 +65,62 @@ func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 	assert.Equal(t, pub, loadedKey.Public().(ed25519.PublicKey), "public key should match")
 }
 
-func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
+func TestKeystoreKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 	t.Parallel()
 
 	fileSvc := newConsensusTestFileService(t)
+	ks := newConsensusTestKeystore(t, fileSvc)
 	consensusID := "test-consensus"
 
-	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	provider, err := NewKeystoreKeyProvider(ks, consensusID)
 	require.NoError(t, err)
 	_, err = provider.GetMemberKey("nonexistent-member")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "key file not found")
 }
 
-func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
+func TestKeystoreKeyProvider_GetMemberKey_WrongSeedLength(t *testing.T) {
 	t.Parallel()
 
 	fileSvc := newConsensusTestFileService(t)
+	ks := newConsensusTestKeystore(t, fileSvc)
 	consensusID := "test-consensus"
 	memberAppID := "member-bad"
 
-	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
-	keyPath := filepath.Join(constants.SecretsDirname, filename)
-	err := fileSvc.WriteFile(context.Background(), keyPath, []byte(hex.EncodeToString([]byte("too-short"))), constants.PermFilePrivate)
+	secretName := fmt.Sprintf("%s%s_%s.key", constants.SecretsFileConsensusMemberKeyPrefix, consensusID, memberAppID)
+	err := ks.StoreKeyMaterial(secretName, []byte("too-short"))
 	require.NoError(t, err)
 
-	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	provider, err := NewKeystoreKeyProvider(ks, consensusID)
 	require.NoError(t, err)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid seed length")
+	assert.ErrorIs(t, err, constants.ErrKeyStoreInvalidKeyLength)
 }
 
-func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
+func TestKeystoreKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 	t.Parallel()
 
 	fileSvc := newConsensusTestFileService(t)
+	ks := newConsensusTestKeystore(t, fileSvc)
 	consensusID := "test-consensus"
 	memberAppID := "member-bad-hex"
 
-	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
-	keyPath := filepath.Join(constants.SecretsDirname, filename)
-	err := fileSvc.WriteFile(context.Background(), keyPath, []byte("not-valid-hex!!"), constants.PermFilePrivate)
+	secretName := fmt.Sprintf("%s%s_%s.key", constants.SecretsFileConsensusMemberKeyPrefix, consensusID, memberAppID)
+	err := ks.EncryptSecret(secretName, "not-valid-hex!!")
 	require.NoError(t, err)
 
-	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	provider, err := NewKeystoreKeyProvider(ks, consensusID)
 	require.NoError(t, err)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "decode seed")
+	assert.ErrorIs(t, err, constants.ErrKeyStoreDecodeFailed)
 }
 
-func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
+func TestKeystoreKeyProvider_MultipleMembers(t *testing.T) {
 	t.Parallel()
 
 	fileSvc := newConsensusTestFileService(t)
-	consensusID := "test-consensus"
-	memberAppID := "member-1"
-
-	_, priv, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-
-	err = SaveMemberKey(fileSvc, consensusID, memberAppID, priv)
-	require.NoError(t, err)
-
-	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
-	keyPath := filepath.Join(constants.SecretsDirname, filename)
-
-	info, err := fileSvc.Stat(context.Background(), keyPath)
-	require.NoError(t, err)
-	if runtime.GOOS != "windows" {
-		assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "key file should have private permissions")
-	}
-
-	seedHex, err := fileSvc.ReadFile(context.Background(), keyPath)
-	require.NoError(t, err)
-
-	seed, err := hex.DecodeString(string(seedHex))
-	require.NoError(t, err)
-	assert.Len(t, seed, ed25519.SeedSize)
-
-	loadedPriv := ed25519.NewKeyFromSeed(seed)
-	assert.Equal(t, priv, loadedPriv, "loaded key should match saved key")
-}
-
-func TestFileKeyProvider_MultipleMembers(t *testing.T) {
-	t.Parallel()
-
-	fileSvc := newConsensusTestFileService(t)
+	ks := newConsensusTestKeystore(t, fileSvc)
 	consensusID := "multi-consensus"
 
 	members := []string{"member-0", "member-1", "member-2"}
@@ -151,16 +130,50 @@ func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = SaveMemberKey(fileSvc, consensusID, appID, priv)
+		err = SaveMemberKey(ks, consensusID, appID, priv)
 		require.NoError(t, err)
 		savedKeys[appID] = priv
 	}
 
-	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	provider, err := NewKeystoreKeyProvider(ks, consensusID)
 	require.NoError(t, err)
 	for _, appID := range members {
 		loadedKey, err := provider.GetMemberKey(appID)
 		require.NoError(t, err)
 		assert.Equal(t, savedKeys[appID], loadedKey, "key for %s should match", appID)
+	}
+}
+
+func TestSaveMemberKey_NoPlaintextOnDisk(t *testing.T) {
+	t.Parallel()
+
+	fileSvc := newConsensusTestFileService(t)
+	ks := newConsensusTestKeystore(t, fileSvc)
+	consensusID := "test-consensus"
+	memberAppID := "member-secret"
+
+	_, priv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+
+	err = SaveMemberKey(ks, consensusID, memberAppID, priv)
+	require.NoError(t, err)
+
+	seed := priv.Seed()
+	seedHex := hex.EncodeToString(seed)
+
+	entries, err := fileSvc.ReadDir(context.Background(), constants.SecretsDirname)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries, "secrets directory should have entries")
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		content, err := fileSvc.ReadFile(context.Background(), constants.SecretsDirname+"/"+entry.Name())
+		require.NoError(t, err)
+		assert.False(t, bytes.Contains(content, []byte(seedHex)),
+			"file %s contains plaintext hex seed", entry.Name())
+		assert.False(t, bytes.Contains(content, seed),
+			"file %s contains raw seed bytes", entry.Name())
 	}
 }

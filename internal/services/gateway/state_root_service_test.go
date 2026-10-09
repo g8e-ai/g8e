@@ -325,7 +325,7 @@ func TestStateRootService_LegacyDatabaseIsRebuiltOnOpen(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "legacy", "d1", json.RawMessage(`{"v":1}`)))
 	require.NoError(t, db.GetKVStore().KVSet(t.Context(), "legacy:k", "v", 0))
@@ -345,7 +345,7 @@ func TestStateRootService_LegacyDatabaseIsRebuiltOnOpen(t *testing.T) {
 	}
 	db.Close()
 
-	reopened, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	reopened, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { reopened.Close() })
 
@@ -381,7 +381,7 @@ func TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	for _, stmt := range []string{
 		"CREATE TRIGGER trg_documents_insert_kv AFTER INSERT ON documents BEGIN DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*'; END",
@@ -394,7 +394,7 @@ func TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen(t *testing.T) {
 	require.NoError(t, db.GetKVStore().KVSet(t.Context(), "authoritative:key", "value", 0))
 	db.Close()
 
-	reopened, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	reopened, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { reopened.Close() })
 

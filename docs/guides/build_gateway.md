@@ -175,7 +175,7 @@ Use `./g8e gw start --help` for the current startup flags and defaults. The comm
 
 The root command also displays global `-e, --endpoint` and `-p, --port` flags. Those flags select the remote HTTP discovery and HTTPS/mTLS endpoints for enrollment and client commands; they do not configure the gateway's listening ports. Use `--http-port` and `--https-port` for the listeners.
 
-When their corresponding flags are absent, the gateway reads vault, consensus, public base URL, passkey, CORS, and doctrine values from the `G8E_VAULT_DIR`, `G8E_VAULT_KEY`, `G8E_CONSENSUS_ID`, `G8E_CONSENSUS_URL`, `G8E_CONSENSUS_BOOTSTRAP`, `G8E_PUBLIC_BASE_URL`, `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS`, `G8E_ALLOWED_ORIGINS`, and `G8E_DOCTRINE_DIR` environment variables. The origins variables accept comma-separated values.
+When their corresponding flags are absent, the gateway reads vault directory, consensus, public base URL, passkey, CORS, and doctrine values from the `G8E_VAULT_DIR`, `G8E_CONSENSUS_ID`, `G8E_CONSENSUS_URL`, `G8E_CONSENSUS_BOOTSTRAP`, `G8E_PUBLIC_BASE_URL`, `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS`, `G8E_ALLOWED_ORIGINS`, and `G8E_DOCTRINE_DIR` environment variables. The origins variables accept comma-separated values. The vault key is sealed under the platform keystore master key; in headless or container environments without an OS keyring, pass `--master-key-file <path>`. Upgrading an existing deployment from legacy unsealed/file layouts requires `g8e gw clean`.
 
 ---
 

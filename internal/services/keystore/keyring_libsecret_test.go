@@ -10,131 +10,183 @@
 package keystore
 
 import (
-	"os"
+	"bytes"
+	"encoding/base64"
+	"errors"
+	"io"
 	"os/exec"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestNewLibsecretKeyring(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret keyring test")
-	}
-
-	keyring, err := newLibsecretKeyring()
-	require.NoError(t, err)
-	assert.Equal(t, "libsecret", keyring.Name())
+type recordedCall struct {
+	args  []string
+	stdin []byte
 }
 
-func TestLibsecretKeyring_StoreRetrieveDelete(t *testing.T) {
+func TestLibsecretKeyring_StoreMasterKey_KeyOnStdinNeverArgv(t *testing.T) {
 	t.Parallel()
 
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret keyring test")
+	var calls []recordedCall
+	fakeRunner := func(stdin io.Reader, args ...string) ([]byte, []byte, error) {
+		var inBytes []byte
+		if stdin != nil {
+			var buf bytes.Buffer
+			_, _ = io.Copy(&buf, stdin)
+			inBytes = buf.Bytes()
+		}
+		calls = append(calls, recordedCall{args: args, stdin: inBytes})
+		return nil, nil, nil
 	}
 
-	keyring, err := newLibsecretKeyring()
+	kr := &libsecretKeyring{run: fakeRunner}
+	assert.Equal(t, "libsecret", kr.Name())
+
+	testKey := make([]byte, vault.KeySize)
+	for i := range testKey {
+		testKey[i] = byte(i + 1)
+	}
+	encodedKey := base64.StdEncoding.EncodeToString(testKey)
+
+	err := kr.StoreMasterKey(testKey)
 	require.NoError(t, err)
+	require.Len(t, calls, 1)
+
+	call := calls[0]
+	// Assert key is on stdin
+	assert.Equal(t, encodedKey, string(call.stdin), "expected base64 master key on stdin")
+
+	// Assert key is NEVER in argv (neither raw bytes nor base64)
+	for _, arg := range call.args {
+		assert.False(t, strings.Contains(arg, encodedKey), "master key base64 leaked in argv: %s", arg)
+		assert.False(t, strings.Contains(arg, string(testKey)), "raw master key leaked in argv: %s", arg)
+	}
+
+	// Assert store args are attribute/value pairs
+	// Expected: store --label=g8e-platform <attr1> <val1>
+	require.GreaterOrEqual(t, len(call.args), 3)
+	assert.Equal(t, "store", call.args[0])
+	assert.Equal(t, "--label="+keyStoreName, call.args[1])
+
+	// The remaining args after options must be paired attribute/value
+	attrArgs := call.args[2:]
+	require.Equal(t, 0, len(attrArgs)%2, "attributes and values must be in pairs, got %d items", len(attrArgs))
+	assert.Equal(t, keyStoreName, attrArgs[0])
+	assert.Equal(t, masterKeyName, attrArgs[1])
+}
+
+func TestLibsecretKeyring_RetrieveMasterKey_Success(t *testing.T) {
+	t.Parallel()
+
+	testKey := make([]byte, vault.KeySize)
+	for i := range testKey {
+		testKey[i] = byte(i + 10)
+	}
+	encodedKey := base64.StdEncoding.EncodeToString(testKey)
+
+	var calls []recordedCall
+	fakeRunner := func(stdin io.Reader, args ...string) ([]byte, []byte, error) {
+		calls = append(calls, recordedCall{args: args})
+		return []byte(encodedKey + "\n"), nil, nil
+	}
+
+	kr := &libsecretKeyring{run: fakeRunner}
+	retrieved, err := kr.RetrieveMasterKey()
+	require.NoError(t, err)
+	assert.Equal(t, testKey, retrieved)
+
+	require.Len(t, calls, 1)
+	assert.Equal(t, []string{"lookup", keyStoreName, masterKeyName}, calls[0].args)
+}
+
+func TestLibsecretKeyring_RetrieveMasterKey_NotFound(t *testing.T) {
+	t.Parallel()
+
+	fakeRunner := func(stdin io.Reader, args ...string) ([]byte, []byte, error) {
+		// secret-tool exits with code 1 and no stderr when not found
+		return nil, nil, fakeExitError(1)
+	}
+
+	kr := &libsecretKeyring{run: fakeRunner}
+	_, err := kr.RetrieveMasterKey()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKeyStoreKeyNotFound)
+}
+
+func TestLibsecretKeyring_RetrieveMasterKey_ServiceDown(t *testing.T) {
+	t.Parallel()
+
+	fakeRunner := func(stdin io.Reader, args ...string) ([]byte, []byte, error) {
+		// secret-tool exits with diagnostic on stderr when service is down
+		return nil, []byte("Cannot autolaunch D-Bus without X11 $DISPLAY"), fakeExitError(1)
+	}
+
+	kr := &libsecretKeyring{run: fakeRunner}
+	_, err := kr.RetrieveMasterKey()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKeyStoreSecretServiceDown)
+}
+
+func TestLibsecretKeyring_DeleteMasterKey_Success(t *testing.T) {
+	t.Parallel()
+
+	var calls []recordedCall
+	fakeRunner := func(stdin io.Reader, args ...string) ([]byte, []byte, error) {
+		calls = append(calls, recordedCall{args: args})
+		return nil, nil, nil
+	}
+
+	kr := &libsecretKeyring{run: fakeRunner}
+	err := kr.DeleteMasterKey()
+	require.NoError(t, err)
+
+	require.Len(t, calls, 1)
+	assert.Equal(t, []string{"clear", keyStoreName, masterKeyName}, calls[0].args)
+}
+
+func fakeExitError(exitCode int) error {
+	// exec.Command("sh", "-c", "exit 1").Run() gives a real exec.ExitError
+	cmd := exec.Command("sh", "-c", "exit 1")
+	return cmd.Run()
+}
+
+// TestLibsecretKeyring_RealSecretTool performs a real round trip against secret-tool
+// and skips only when secret-tool or D-Bus / Secret Service is absent.
+func TestLibsecretKeyring_RealSecretTool(t *testing.T) {
+	if _, err := exec.LookPath("secret-tool"); err != nil {
+		t.Skip("secret-tool not available, skipping real libsecret test")
+	}
+
+	kr, err := newLibsecretKeyring(runSecretTool)
+	if err != nil {
+		if errors.Is(err, constants.ErrKeyStoreSecretServiceDown) {
+			t.Skipf("Secret Service/D-Bus not available: %v", err)
+		}
+		require.NoError(t, err)
+	}
 
 	testKey := make([]byte, vault.KeySize)
 	for i := range testKey {
 		testKey[i] = byte(i)
 	}
 
-	tests := []struct {
-		name string
-		fn   func(t *testing.T)
-	}{
-		{
-			name: "store",
-			fn: func(t *testing.T) {
-				err := keyring.StoreMasterKey(testKey)
-				require.NoError(t, err)
-			},
-		},
-		{
-			name: "retrieve",
-			fn: func(t *testing.T) {
-				retrievedKey, err := keyring.RetrieveMasterKey()
-				require.NoError(t, err)
-				assert.Equal(t, testKey, retrievedKey)
-			},
-		},
-		{
-			name: "delete",
-			fn: func(t *testing.T) {
-				err := keyring.DeleteMasterKey()
-				require.NoError(t, err)
-			},
-		},
-		{
-			name: "retrieve after delete",
-			fn: func(t *testing.T) {
-				_, err := keyring.RetrieveMasterKey()
-				require.Error(t, err)
-				assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, tt.fn)
-	}
-}
-
-func TestLibsecretKeyring_RetrieveNotFound(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret keyring test")
-	}
-
-	keyring, err := newLibsecretKeyring()
+	err = kr.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
-	// Ensure key doesn't exist
-	err = keyring.DeleteMasterKey()
+	retrieved, err := kr.RetrieveMasterKey()
+	require.NoError(t, err)
+	assert.Equal(t, testKey, retrieved)
+
+	err = kr.DeleteMasterKey()
 	require.NoError(t, err)
 
-	_, err = keyring.RetrieveMasterKey()
+	_, err = kr.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
-}
-
-func TestNewLinux_FallbackToFileKeyring(t *testing.T) {
-	t.Parallel()
-
-	fileSvc, _ := setupTestFileService(t)
-	logger := testutil.NewTestLogger()
-
-	backupPath := os.Getenv("PATH")
-	defer func() { os.Setenv("PATH", backupPath) }()
-
-	os.Setenv("PATH", "")
-
-	ks, err := NewWithFS(fileSvc, logger)
-	require.NoError(t, err)
-	assert.Equal(t, "file", ks.KeyringName())
-}
-
-func TestNewLinux_WithLibsecret(t *testing.T) {
-	t.Parallel()
-
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping libsecret keyring test")
-	}
-
-	fileSvc, _ := setupTestFileService(t)
-	logger := testutil.NewTestLogger()
-
-	ks, err := NewWithFS(fileSvc, logger)
-	require.NoError(t, err)
-	assert.Equal(t, "libsecret", ks.KeyringName())
+	assert.ErrorIs(t, err, constants.ErrKeyStoreKeyNotFound)
 }

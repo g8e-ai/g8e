@@ -73,6 +73,16 @@ jobs:
           GOFIPS140: v1.0.0
         run: make test-integration
 
+      - name: Libsecret Keystore Tests (real D-Bus, FIPS mode)
+        env:
+          GOFIPS140: v1.0.0
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-tools dbus-x11
+          dbus-run-session -- bash -c '
+            echo "" | gnome-keyring-daemon --unlock --components=secrets || true
+            go test -v -count=1 ./internal/services/keystore/...
+          '
+
       - name: Verify Static Linking (FIPS binary)
         run: |
           file bin/g8e-fips-linux-amd64 | grep -q "statically linked" || \

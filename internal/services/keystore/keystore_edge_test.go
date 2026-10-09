@@ -5,8 +5,6 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-//go:build linux || windows
-
 package keystore
 
 import (
@@ -15,15 +13,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func setupTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
@@ -33,83 +31,6 @@ func setupTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
 	require.NoError(t, err)
 	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
 	return svc, svc.Resolve(constants.SecretsDirname)
-}
-
-func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
-	t.Parallel()
-	fileSvc, _ := setupTestFileService(t)
-	keyring, err := newFileKeyring(fileSvc)
-	require.NoError(t, err)
-
-	err = keyring.StoreMasterKey([]byte("too-short"))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid master key length")
-}
-
-func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
-	t.Parallel()
-	fileSvc, secretsDir := setupTestFileService(t)
-	keyring, err := newFileKeyring(fileSvc)
-	require.NoError(t, err)
-
-	keyPath := filepath.Join(secretsDir, constants.MasterKeyFilename)
-	require.NoError(t, os.WriteFile(keyPath, []byte("!!!not-base64!!!"), 0600))
-
-	_, err = keyring.RetrieveMasterKey()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "decode base64")
-}
-
-func TestFileKeyring_RetrieveMasterKey_EmptyFile(t *testing.T) {
-	t.Parallel()
-	fileSvc, secretsDir := setupTestFileService(t)
-	keyring, err := newFileKeyring(fileSvc)
-	require.NoError(t, err)
-
-	keyPath := filepath.Join(secretsDir, constants.MasterKeyFilename)
-	require.NoError(t, os.WriteFile(keyPath, []byte(""), 0600))
-
-	_, err = keyring.RetrieveMasterKey()
-	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
-}
-
-func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
-	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("chmod 0000 does not prevent reads on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root can read any file")
-	}
-	fileSvc, secretsDir := setupTestFileService(t)
-	keyring, err := newFileKeyring(fileSvc)
-	require.NoError(t, err)
-
-	keyPath := filepath.Join(secretsDir, constants.MasterKeyFilename)
-	require.NoError(t, os.WriteFile(keyPath, []byte("data"), 0000))
-	t.Cleanup(func() { _ = os.Chmod(keyPath, 0600) })
-
-	_, err = keyring.RetrieveMasterKey()
-	require.Error(t, err)
-}
-
-func TestFileKeyring_StoreAndRetrieve_RoundTrip(t *testing.T) {
-	t.Parallel()
-	fileSvc, _ := setupTestFileService(t)
-	keyring, err := newFileKeyring(fileSvc)
-	require.NoError(t, err)
-
-	testKey := make([]byte, vault.KeySize)
-	for i := range testKey {
-		testKey[i] = byte(i)
-	}
-
-	require.NoError(t, keyring.StoreMasterKey(testKey))
-
-	retrieved, err := keyring.RetrieveMasterKey()
-	require.NoError(t, err)
-	assert.Equal(t, testKey, retrieved)
 }
 
 func TestKeystore_Initialize_RetrieveError(t *testing.T) {
@@ -125,6 +46,50 @@ func TestKeystore_Initialize_RetrieveError(t *testing.T) {
 	err = ks.Initialize()
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrKeyStoreRetrieveFailed)
+}
+
+func TestKeystore_Initialize_StoreError(t *testing.T) {
+	t.Parallel()
+	fileSvc, _ := setupTestFileService(t)
+	logger := testutil.NewTestLogger()
+	keyring := &errorKeyring{storeErr: errors.New("store failed")}
+
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
+	require.NoError(t, err)
+
+	err = ks.Initialize()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKeyStoreStoreFailed)
+}
+
+func TestKeystore_Initialize_VerifyFailed_DropsWrites(t *testing.T) {
+	t.Parallel()
+	fileSvc, _ := setupTestFileService(t)
+	logger := testutil.NewTestLogger()
+	// dropsWritesKeyring accepts StoreMasterKey, but RetrieveMasterKey returns ErrKeyStoreKeyNotFound
+	keyring := &dropsWritesKeyring{}
+
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
+	require.NoError(t, err)
+
+	err = ks.Initialize()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKeyStoreVerifyFailed)
+}
+
+func TestKeystore_Initialize_VerifyFailed_Corrupted(t *testing.T) {
+	t.Parallel()
+	fileSvc, _ := setupTestFileService(t)
+	logger := testutil.NewTestLogger()
+	// corruptingKeyring stores one thing but returns altered bytes
+	keyring := &corruptingKeyring{}
+
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
+	require.NoError(t, err)
+
+	err = ks.Initialize()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKeyStoreVerifyFailed)
 }
 
 func TestKeystore_Encrypt_RetrieveError(t *testing.T) {
@@ -224,76 +189,6 @@ func TestKeystore_Purge_WithSecrets(t *testing.T) {
 	}
 }
 
-// errorKeyring is a test keyring that returns configurable errors.
-type errorKeyring struct {
-	storeErr    error
-	retrieveErr error
-	deleteErr   error
-}
-
-func (e *errorKeyring) Name() string { return "error" }
-
-func (e *errorKeyring) RetrieveMasterKey() ([]byte, error) {
-	if e.retrieveErr != nil {
-		return nil, e.retrieveErr
-	}
-	return nil, constants.ErrKeyStoreKeyNotFound
-}
-
-func (e *errorKeyring) StoreMasterKey([]byte) error {
-	return e.storeErr
-}
-
-func (e *errorKeyring) DeleteMasterKey() error {
-	return e.deleteErr
-}
-
-// newMemoryKeyring creates a simple in-memory keyring for internal tests.
-func newMemoryKeyring() *simpleMemoryKeyring {
-	return &simpleMemoryKeyring{}
-}
-
-type simpleMemoryKeyring struct {
-	key []byte
-}
-
-func (m *simpleMemoryKeyring) Name() string { return "memory" }
-
-func (m *simpleMemoryKeyring) RetrieveMasterKey() ([]byte, error) {
-	if m.key == nil {
-		return nil, constants.ErrKeyStoreKeyNotFound
-	}
-	cp := make([]byte, len(m.key))
-	copy(cp, m.key)
-	return cp, nil
-}
-
-func (m *simpleMemoryKeyring) StoreMasterKey(key []byte) error {
-	cp := make([]byte, len(key))
-	copy(cp, key)
-	m.key = cp
-	return nil
-}
-
-func (m *simpleMemoryKeyring) DeleteMasterKey() error {
-	m.key = nil
-	return nil
-}
-
-func TestKeystore_Initialize_StoreError(t *testing.T) {
-	t.Parallel()
-	fileSvc, _ := setupTestFileService(t)
-	logger := testutil.NewTestLogger()
-	keyring := &errorKeyring{storeErr: errors.New("store failed")}
-
-	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
-	require.NoError(t, err)
-
-	err = ks.Initialize()
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrKeyStoreStoreFailed)
-}
-
 func TestKeystore_EnforcePermissions_ReadDirError(t *testing.T) {
 	t.Parallel()
 	fileSvc, secretsDir := setupTestFileService(t)
@@ -383,4 +278,105 @@ func TestKeystore_DeleteSecret_Error(t *testing.T) {
 	err = ks.DeleteSecret("test-secret")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrKeyStoreDeleteSecret)
+}
+
+// errorKeyring is a test keyring that returns configurable errors.
+type errorKeyring struct {
+	storeErr    error
+	retrieveErr error
+	deleteErr   error
+}
+
+func (e *errorKeyring) Name() string { return "error" }
+
+func (e *errorKeyring) RetrieveMasterKey() ([]byte, error) {
+	if e.retrieveErr != nil {
+		return nil, e.retrieveErr
+	}
+	return nil, constants.ErrKeyStoreKeyNotFound
+}
+
+func (e *errorKeyring) StoreMasterKey([]byte) error {
+	return e.storeErr
+}
+
+func (e *errorKeyring) DeleteMasterKey() error {
+	return e.deleteErr
+}
+
+// dropsWritesKeyring simulates a keyring that silently drops stores.
+type dropsWritesKeyring struct{}
+
+func (d *dropsWritesKeyring) Name() string { return "drops-writes" }
+
+func (d *dropsWritesKeyring) RetrieveMasterKey() ([]byte, error) {
+	return nil, constants.ErrKeyStoreKeyNotFound
+}
+
+func (d *dropsWritesKeyring) StoreMasterKey([]byte) error {
+	return nil
+}
+
+func (d *dropsWritesKeyring) DeleteMasterKey() error {
+	return nil
+}
+
+// corruptingKeyring simulates a keyring that corrupts the stored key.
+type corruptingKeyring struct {
+	key []byte
+}
+
+func (c *corruptingKeyring) Name() string { return "corrupting" }
+
+func (c *corruptingKeyring) RetrieveMasterKey() ([]byte, error) {
+	if c.key == nil {
+		return nil, constants.ErrKeyStoreKeyNotFound
+	}
+	corrupted := make([]byte, len(c.key))
+	copy(corrupted, c.key)
+	corrupted[0] ^= 0xff
+	return corrupted, nil
+}
+
+func (c *corruptingKeyring) StoreMasterKey(key []byte) error {
+	c.key = make([]byte, len(key))
+	copy(c.key, key)
+	return nil
+}
+
+func (c *corruptingKeyring) DeleteMasterKey() error {
+	c.key = nil
+	return nil
+}
+
+// newMemoryKeyring creates a simple in-memory keyring for internal tests.
+func newMemoryKeyring() *simpleMemoryKeyring {
+	return &simpleMemoryKeyring{}
+}
+
+type simpleMemoryKeyring struct {
+	key []byte
+}
+
+func (m *simpleMemoryKeyring) Name() string { return "memory" }
+
+func (m *simpleMemoryKeyring) RetrieveMasterKey() ([]byte, error) {
+	if m.key == nil {
+		return nil, constants.ErrKeyStoreKeyNotFound
+	}
+	cp := make([]byte, len(m.key))
+	copy(cp, m.key)
+	return cp, nil
+}
+
+func (m *simpleMemoryKeyring) StoreMasterKey(key []byte) error {
+	cp := make([]byte, len(key))
+	copy(cp, key)
+	m.key = cp
+	return nil
+}
+
+func (m *simpleMemoryKeyring) DeleteMasterKey() error {
+	m.key = nil
+	return nil
 }

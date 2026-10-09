@@ -56,7 +56,7 @@ func TestStateRootService_CrashRecovery(t *testing.T) {
 			logger := testutil.NewTestLogger()
 			ks := newTestKeystore(t, fileSvc, logger)
 
-			db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+			db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 			require.NoError(t, err)
 			require.NoError(t, db.GetDocStore().DocSet(t.Context(), "crash", "a", mustDocJSON(t, map[string]int{"v": 1})))
 			require.NoError(t, db.GetDocStore().DocSet(t.Context(), "crash", "b", mustDocJSON(t, map[string]int{"v": 1})))
@@ -68,7 +68,7 @@ func TestStateRootService_CrashRecovery(t *testing.T) {
 
 			runStateRootCrashChild(t, fileSvc.Resolve(constants.CanonicalDBRelPath), point)
 
-			reopened, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+			reopened, err := OpenCanonicalDBService(logger, ks, fileSvc)
 			require.NoError(t, err)
 			t.Cleanup(func() { reopened.Close() })
 

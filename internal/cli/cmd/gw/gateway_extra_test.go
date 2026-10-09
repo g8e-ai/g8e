@@ -49,7 +49,7 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 
 		expectedFlags := []string{
 			"posture", "http-port", "https-port", "data-dir", "pki-dir", "secrets-dir",
-			"vault-dir", "vault-key",
+			"vault-dir", "master-key-file",
 			"passkey-rp-id", "passkey-rp-name",
 			"rate-limit-rps", "rate-limit-burst",
 			"log", "cert-mode", "consensus-id", "consensus-url",

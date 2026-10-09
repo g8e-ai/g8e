@@ -70,6 +70,7 @@ g8e.sha256
 *.pem
 *.crt
 *.secret
+secrets/
 *.p12
 *.pfx
 ssl/

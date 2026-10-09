@@ -45,7 +45,7 @@ func TestGetBinaryName(t *testing.T) {
 func TestResolveStartConfig(t *testing.T) {
 	t.Run("uses CLI flag values when no environment variables set", func(t *testing.T) {
 		// Clear environment variables
-		unsetEnvVars := []string{"G8E_VAULT_DIR", "G8E_VAULT_KEY"}
+		unsetEnvVars := []string{"G8E_VAULT_DIR"}
 		for _, env := range unsetEnvVars {
 			original := os.Getenv(env)
 			os.Unsetenv(env)
@@ -64,7 +64,7 @@ func TestResolveStartConfig(t *testing.T) {
 			PKIDir:           "/pki",
 			SecretsDir:       "/secrets",
 			VaultDir:         "/vault",
-			VaultKeyPath:     "/vault/key",
+			MasterKeyFile:    "/run/secrets/g8e_master_key",
 			PasskeyRpID:      "rp-id",
 			PasskeyRpName:    "rp-name",
 			RateLimitRPS:     100.0,
@@ -82,7 +82,7 @@ func TestResolveStartConfig(t *testing.T) {
 		assert.Equal(t, "/pki", cfg.PKIDir)
 		assert.Equal(t, "/secrets", cfg.SecretsDir)
 		assert.Equal(t, "/vault", cfg.VaultDir)
-		assert.Equal(t, "/vault/key", cfg.VaultKeyPath)
+		assert.Equal(t, "/run/secrets/g8e_master_key", cfg.MasterKeyFile)
 		assert.Equal(t, "rp-id", cfg.PasskeyRpID)
 		assert.Equal(t, "rp-name", cfg.PasskeyRpName)
 		assert.InEpsilon(t, 100.0, cfg.RateLimitRPS, 0.01)
@@ -110,7 +110,7 @@ func TestResolveStartConfig(t *testing.T) {
 			PKIDir:           "/pki",
 			SecretsDir:       "/secrets",
 			VaultDir:         "", // empty vault dir
-			VaultKeyPath:     "/vault/key",
+			MasterKeyFile:    "/run/secrets/g8e_master_key",
 			PasskeyRpID:      "rp-id",
 			PasskeyRpName:    "rp-name",
 			RateLimitRPS:     100.0,
@@ -122,39 +122,6 @@ func TestResolveStartConfig(t *testing.T) {
 		})
 
 		assert.Equal(t, "/env/vault", cfg.VaultDir)
-	})
-
-	t.Run("environment variable G8E_VAULT_KEY overrides empty CLI flag", func(t *testing.T) {
-		original := os.Getenv("G8E_VAULT_KEY")
-		os.Setenv("G8E_VAULT_KEY", "/env/vault/key")
-		t.Cleanup(func() {
-			if original != "" {
-				os.Setenv("G8E_VAULT_KEY", original)
-			} else {
-				os.Unsetenv("G8E_VAULT_KEY")
-			}
-		})
-
-		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:          "doctrine",
-			HTTPPort:         8080,
-			HTTPSPort:        8443,
-			DataDir:          "/data",
-			PKIDir:           "/pki",
-			SecretsDir:       "/secrets",
-			VaultDir:         "/vault",
-			VaultKeyPath:     "", // empty vault key
-			PasskeyRpID:      "rp-id",
-			PasskeyRpName:    "rp-name",
-			RateLimitRPS:     100.0,
-			RateLimitBurst:   50,
-			LogLevel:         "info",
-			CertIdentityMode: "full",
-			ConsensusID:      "",
-			ConsensusURL:     "",
-		})
-
-		assert.Equal(t, "/env/vault/key", cfg.VaultKeyPath)
 	})
 
 	t.Run("CLI flag value takes precedence over environment variable when set", func(t *testing.T) {
@@ -176,7 +143,7 @@ func TestResolveStartConfig(t *testing.T) {
 			PKIDir:           "/pki",
 			SecretsDir:       "/secrets",
 			VaultDir:         "/cli/vault", // CLI flag set
-			VaultKeyPath:     "/vault/key",
+			MasterKeyFile:    "/run/secrets/g8e_master_key",
 			PasskeyRpID:      "rp-id",
 			PasskeyRpName:    "rp-name",
 			RateLimitRPS:     100.0,
@@ -227,7 +194,7 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 			PKIDir:                            "/pki",
 			SecretsDir:                        "/secrets",
 			VaultDir:                          "/vault",
-			VaultKeyPath:                      "/vault/key",
+			MasterKeyFile:                     "/run/secrets/key",
 			PasskeyRpID:                       "localhost",
 			PasskeyRpName:                     "g8e",
 			PasskeyRpOrigins:                  []string{"http://localhost:8087", "https://localhost:8450"},

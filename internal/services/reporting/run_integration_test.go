@@ -9,9 +9,7 @@ package reporting
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/csv"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,6 +18,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
@@ -29,8 +29,8 @@ import (
 )
 
 // setupReportingEnv creates a fully populated reporting environment in a temp
-// directory. It returns Options pre-configoured with all paths, plus the vault
-// key path so tests can pass it to Run.
+// directory. It returns Options pre-configured with all paths and an
+// initialized Keystore.
 func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) Options {
 	t.Helper()
 
@@ -42,20 +42,19 @@ func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) Option
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	dataDir := fileSvc.Resolve(constants.DataDirname)
 
-	// Create vault with key.
-	_, privKey, err := ed25519.GenerateKey(nil)
+	// Build a memory-keyring keystore and initialize vault.
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
 	require.NoError(t, err)
-	vh, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vh.Save(fileSvc))
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.InitVault())
 
-	keyHex := hex.EncodeToString(privKey)
-	keyPath := filepath.Join(root, "vault.key")
-	require.NoError(t, os.WriteFile(keyPath, []byte(keyHex), 0o600))
+	vaultKey, err := ks.LoadVaultKey()
+	require.NoError(t, err)
+	defer vault.SecureZero(vaultKey)
 
 	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
-	require.NoError(t, v.Unlock(privKey))
+	require.NoError(t, v.Unlock(vaultKey))
 	t.Cleanup(func() { v.Close() })
 
 	// Audit store.
@@ -118,10 +117,10 @@ func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) Option
 	}
 
 	opts := Options{
-		FileSvc:      fileSvc,
-		VaultKeyPath: keyPath,
-		OutDir:       outDir,
-		Logger:       testutil.NewTestLogger(),
+		FileSvc:  fileSvc,
+		Keystore: ks,
+		OutDir:   outDir,
+		Logger:   testutil.NewTestLogger(),
 	}
 
 	if seed {
@@ -330,18 +329,22 @@ func TestRun_EmptyStores_AllCSVFilesWritten(t *testing.T) {
 	}
 }
 
-func TestRun_LockedVault_NoKeyPath(t *testing.T) {
+func TestRun_LockedVault_NilKeystore(t *testing.T) {
 	opts := setupReportingEnv(t, true, true)
-	opts.VaultKeyPath = "" // No key → locked vault.
+	opts.Keystore = nil // No keystore → locked vault.
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
 	assert.False(t, result.VaultUnlocked)
 }
 
-func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
+func TestRun_LockedVault_VaultKeyNotFound(t *testing.T) {
 	opts := setupReportingEnv(t, true, true)
-	opts.VaultKeyPath = filepath.Join(testutil.TempDir(t), "nonexistent.key")
+	// Keystore with no vault key initialized
+	ksNoVaultKey, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), opts.FileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ksNoVaultKey.Initialize())
+	opts.Keystore = ksNoVaultKey
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)

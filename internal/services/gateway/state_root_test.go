@@ -157,7 +157,7 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
 	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
-	db, err := OpenCanonicalDBService(testutil.NewTestLogger(), "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(testutil.NewTestLogger(), ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 
@@ -184,7 +184,7 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
 	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
-	db, err := OpenCanonicalDBService(testutil.NewTestLogger(), "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(testutil.NewTestLogger(), ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 

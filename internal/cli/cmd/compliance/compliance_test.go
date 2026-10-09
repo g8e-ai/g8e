@@ -10,8 +10,6 @@ package compliancecmd
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -25,7 +23,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 // writeTestKSICatalog creates and writes a valid test KSI catalog via the given file service.
@@ -127,20 +128,6 @@ func TestComplianceKSICmd_RejectsEachMissingEvaluationBindingFlag(t *testing.T) 
 			assert.NotErrorIs(t, err, errFactory)
 		})
 	}
-}
-
-// setupTestVaultWithKey initializes a test vault header and writes its private key to secrets.
-func setupTestVaultWithKey(t *testing.T, fileSvc fs.RuntimeFileService, privKey []byte) {
-	t.Helper()
-	vaultDir := fileSvc.Resolve(constants.VaultDirname)
-	require.NoError(t, os.MkdirAll(vaultDir, constants.PermDirPrivate))
-	header, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, header.Save(fileSvc))
-
-	vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
-	hexKey := hex.EncodeToString(privKey)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), vaultKeyRel, []byte(hexKey), constants.PermFilePrivate))
 }
 
 // writeTestOverlays creates and writes an overlay catalog JSON file in the given directory.
@@ -632,18 +619,19 @@ func TestComplianceOverlayCmd_Success_WithDanglingRefs(t *testing.T) {
 func TestOpenVault_Scenarios(t *testing.T) {
 	t.Run("missing vault key returns locked vault", func(t *testing.T) {
 		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-		v, cleanup := openVault(context.Background(), fileSvc)
+		v, cleanup := openVault(fileSvc, nil)
 		defer cleanup()
 		require.NotNil(t, v)
 		assert.False(t, v.IsUnlocked())
 	})
 
-	t.Run("invalid hex key returns locked vault", func(t *testing.T) {
+	t.Run("keystore without vault key returns locked vault", func(t *testing.T) {
 		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-		vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
-		require.NoError(t, fileSvc.WriteFile(context.Background(), vaultKeyRel, []byte("not-valid-hex!"), constants.PermFilePrivate))
+		ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+		require.NoError(t, err)
+		require.NoError(t, ks.Initialize())
 
-		v, cleanup := openVault(context.Background(), fileSvc)
+		v, cleanup := openVault(fileSvc, ks)
 		defer cleanup()
 		require.NotNil(t, v)
 		assert.False(t, v.IsUnlocked())
@@ -651,11 +639,12 @@ func TestOpenVault_Scenarios(t *testing.T) {
 
 	t.Run("valid key and header unlocks vault", func(t *testing.T) {
 		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-		_, privKey, err := ed25519.GenerateKey(nil)
+		ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
 		require.NoError(t, err)
-		setupTestVaultWithKey(t, fileSvc, privKey)
+		require.NoError(t, ks.Initialize())
+		require.NoError(t, ks.InitVault())
 
-		v, cleanup := openVault(context.Background(), fileSvc)
+		v, cleanup := openVault(fileSvc, ks)
 		defer cleanup()
 		require.NotNil(t, v)
 		assert.True(t, v.IsUnlocked())
@@ -663,18 +652,16 @@ func TestOpenVault_Scenarios(t *testing.T) {
 
 	t.Run("key mismatch with vault header returns locked vault", func(t *testing.T) {
 		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
-		_, privKey1, err := ed25519.GenerateKey(nil)
+		ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
 		require.NoError(t, err)
-		_, privKey2, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
+		require.NoError(t, ks.Initialize())
+		require.NoError(t, ks.InitVault())
 
-		// Setup vault header with privKey1, but write privKey2 to secrets.
-		setupTestVaultWithKey(t, fileSvc, privKey1)
-		vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
-		hexKey2 := hex.EncodeToString(privKey2)
-		require.NoError(t, fileSvc.WriteFile(context.Background(), vaultKeyRel, []byte(hexKey2), constants.PermFilePrivate))
+		wrongKey := make([]byte, vault.KeySize)
+		wrongKey[0] = 0xff
+		require.NoError(t, ks.StoreKeyMaterial(constants.SecretsFileVaultKey, wrongKey))
 
-		v, cleanup := openVault(context.Background(), fileSvc)
+		v, cleanup := openVault(fileSvc, ks)
 		defer cleanup()
 		require.NotNil(t, v)
 		assert.False(t, v.IsUnlocked())
@@ -721,6 +708,11 @@ func TestSaveKSIHistorySnapshot_Pruning(t *testing.T) {
 // TestEvaluateKSIs_NilContextHandling asserts that evaluateKSIs handles nil context safely.
 func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.InitVault())
+
 	catPath := writeTestKSICatalog(t, fileSvc)
 	cat, err := compliance.LoadKSICatalog(catPath)
 	require.NoError(t, err)
@@ -728,7 +720,7 @@ func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 	// evaluateKSIs with nil context should not panic.
 	var nilCtx context.Context
 	binding := testEvaluationBinding(t)
-	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC, binding)
+	resultSet := evaluateKSIs(nilCtx, fileSvc, ks, cat, compliance.ClassC, binding)
 	require.NotNil(t, resultSet)
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.Zero(t, resultSet.NotSatisfiedCount())
@@ -753,7 +745,12 @@ func TestOpenEvaluatorDeps_DatabaseError(t *testing.T) {
 	require.NoError(t, os.RemoveAll(dataDir))
 	require.NoError(t, os.WriteFile(dataDir, []byte("blocking-file"), constants.PermFileReadOnly))
 
-	deps, cleanup, ok := openEvaluatorDeps(context.Background(), fileSvc)
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.InitVault())
+
+	deps, cleanup, ok := openEvaluatorDeps(context.Background(), fileSvc, ks)
 	assert.False(t, ok)
 	assert.Nil(t, cleanup)
 	assert.Nil(t, deps.Audit)

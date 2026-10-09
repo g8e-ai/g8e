@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
+	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
@@ -34,6 +35,7 @@ type bootstrapFixture struct {
 	consensus *gateway.ConsensusStoreService
 	signers   *gateway.SignerStoreService
 	fileSvc   fs.RuntimeFileService
+	ks        *keystore.Keystore
 }
 
 // newBootstrapFixture opens the real canonical gateway database (SQLite,
@@ -52,11 +54,11 @@ func newBootstrapFixture(t *testing.T) bootstrapFixture {
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
 
-	db, err := gateway.OpenCanonicalDBService(testutil.NewTestLogger(), "", ks, fileSvc)
+	db, err := gateway.OpenCanonicalDBService(testutil.NewTestLogger(), ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	return bootstrapFixture{consensus: db.GetConsensusStore(), signers: db.GetSignerStore(), fileSvc: fileSvc}
+	return bootstrapFixture{consensus: db.GetConsensusStore(), signers: db.GetSignerStore(), fileSvc: fileSvc, ks: ks}
 }
 
 func writeConsensusBootstrapFile(t *testing.T, body string) string {
@@ -83,13 +85,10 @@ func publicHexOfSeed(t *testing.T, seedHex string) string {
 
 func (f bootstrapFixture) memberKeySeed(t *testing.T, consensusID, appID string) string {
 	t.Helper()
-	rel := filepath.Join(constants.SecretsDirname, fmt.Sprintf("%s%s_%s.key", constants.SecretsFileConsensusMemberKeyPrefix, consensusID, appID))
-	data, err := f.fileSvc.ReadFile(t.Context(), rel)
+	kp := consensus.NewKeystoreKeyProvider(f.ks, consensusID)
+	privKey, err := kp.GetMemberKey(appID)
 	require.NoError(t, err, "member key for %s must be saved for the in-process deliberator", appID)
-	info, err := f.fileSvc.Stat(t.Context(), rel)
-	require.NoError(t, err)
-	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "member signing keys must be 0600")
-	return string(data)
+	return hex.EncodeToString(privKey.Seed())
 }
 
 func (f bootstrapFixture) signerPublicKeys(t *testing.T) map[string]string {
@@ -109,7 +108,7 @@ func TestConsensusPolicyBootstrap_SharedSeedRegistersEveryMemberWithTheSameKey(t
 	seed := seedHexOf(0x11)
 	path := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha","beta"],"quorum":2,"seed_hex":%q}`, seed))
 
-	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.ks, testutil.NewTestLogger()))
 
 	wantPub := publicHexOfSeed(t, seed)
 	assert.Equal(t, map[string]string{"alpha": wantPub, "beta": wantPub}, f.signerPublicKeys(t))
@@ -133,7 +132,7 @@ func TestConsensusPolicyBootstrap_PerMemberSeedsGiveEachMemberADistinctKeyAndWin
 			`"seed_hex":%q,"member_seeds":{"alpha":%q,"beta":%q,"gamma":%q}}`,
 		seedHexOf(0xEE), alphaSeed, betaSeed, gammaSeed))
 
-	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.ks, testutil.NewTestLogger()))
 
 	keys := f.signerPublicKeys(t)
 	assert.Equal(t, publicHexOfSeed(t, alphaSeed), keys["alpha"])
@@ -151,7 +150,7 @@ func TestConsensusPolicyBootstrap_GeneratesOneSharedKeyWhenNoSeedIsConfigured(t 
 	f := newBootstrapFixture(t)
 	path := writeConsensusBootstrapFile(t, `{"consensus_id":"ephemeral","member_app_ids":["solo-a","solo-b"],"quorum":1}`)
 
-	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.ks, testutil.NewTestLogger()))
 
 	keys := f.signerPublicKeys(t)
 	require.Len(t, keys, 2)
@@ -165,11 +164,11 @@ func TestConsensusPolicyBootstrap_IsIdempotentAndNeverRotatesExistingKeys(t *tes
 	f := newBootstrapFixture(t)
 	firstSeed := seedHexOf(0x31)
 	first := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha"],"quorum":1,"seed_hex":%q}`, firstSeed))
-	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, first, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, first, f.ks, testutil.NewTestLogger()))
 	keysBefore := f.signerPublicKeys(t)
 
 	rotated := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha"],"quorum":1,"seed_hex":%q}`, seedHexOf(0x32)))
-	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, rotated, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, rotated, f.ks, testutil.NewTestLogger()))
 
 	assert.Equal(t, keysBefore, f.signerPublicKeys(t), "an existing consensus must not have its signers replaced")
 	assert.Equal(t, firstSeed, f.memberKeySeed(t, "tribunal", "alpha"), "an existing consensus must not have its member key overwritten")
@@ -232,7 +231,7 @@ func TestConsensusPolicyBootstrap_FailsClosedWithoutCreatingAPolicy(t *testing.T
 			f := newBootstrapFixture(t)
 			path := writeConsensusBootstrapFile(t, tt.body)
 
-			err := consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger())
+			err := consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, path, f.ks, testutil.NewTestLogger())
 
 			require.ErrorIs(t, err, tt.wantErr)
 			if tt.wantText != "" {
@@ -249,10 +248,10 @@ func TestConsensusPolicyBootstrap_RetryAfterFailureCompletesTheBootstrap(t *test
 	f := newBootstrapFixture(t)
 	seed := seedHexOf(0x51)
 	bad := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha","beta"],"quorum":3,"seed_hex":%q}`, seed))
-	require.Error(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, bad, f.fileSvc, testutil.NewTestLogger()))
+	require.Error(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, bad, f.ks, testutil.NewTestLogger()))
 
 	good := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha","beta"],"quorum":2,"seed_hex":%q}`, seed))
-	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, good, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus, f.signers, good, f.ks, testutil.NewTestLogger()))
 
 	policy, err := f.consensus.GetConsensus(t.Context(), "tribunal")
 	require.NoError(t, err)

@@ -14,12 +14,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 func TestProbe_EvaluateFailClosed(t *testing.T) {
 	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.InitVault())
+
 	tmp := t.TempDir()
 	cat := compliance.KSICatalog{Version: "1.0", Source: "test", KSIs: []compliance.KSI{{
 		ID: "KSI-CMT-01", Title: "T", Category: compliance.KSICategoryCMT,
@@ -33,7 +43,7 @@ func TestProbe_EvaluateFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("catalog load: %v", err)
 	}
-	rs := evaluateKSIs(context.Background(), fileSvc, loaded, compliance.ClassC, testEvaluationBinding(t))
+	rs := evaluateKSIs(context.Background(), fileSvc, ks, loaded, compliance.ClassC, testEvaluationBinding(t))
 	t.Logf("resultSet is nil: %v", rs == nil)
 	if rs != nil {
 		t.Logf("results: %d, satisfied: %d, notsat: %d", len(rs.Results), rs.SatisfiedCount(), rs.NotSatisfiedCount())

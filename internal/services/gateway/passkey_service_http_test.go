@@ -337,6 +337,21 @@ func TestPasskeyRevokeCredential(t *testing.T) {
 		assert.True(t, resp.Success)
 		assert.False(t, resp.Found)
 	})
+
+	t.Run("returns 409 conflict when revoking last passkey", func(t *testing.T) {
+		svc, _, user := newPasskeyServiceHTTPForTest(t)
+		credID := "cred-1"
+		err := svc.addCredential(t.Context(), user.ID, testCredential(credID))
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/"+credID, nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+		svc.RevokeCredential(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrLastPasskeyRevoke.Error())
+	})
 }
 
 func TestPasskeyCLIStatus(t *testing.T) {

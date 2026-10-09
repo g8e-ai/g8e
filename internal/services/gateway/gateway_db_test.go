@@ -50,7 +50,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	sseStore := db.GetSSEStore()
@@ -78,7 +78,7 @@ func newTestDB(t *testing.T) *CanonicalDBService {
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -245,14 +245,14 @@ func TestSchemaIdempotent(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 	ks1 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
-	db1, err := OpenCanonicalDBService(logger, "", ks1, fileSvc)
+	db1, err := OpenCanonicalDBService(logger, ks1, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, db1.GetDocStore().DocSet(t.Context(), "test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
 	ks2 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
-	db2, err := OpenCanonicalDBService(logger, "", ks2, fileSvc)
+	db2, err := OpenCanonicalDBService(logger, ks2, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -271,7 +271,7 @@ func TestOpenCanonicalDBService_CreatesDatabaseAtRuntimePath(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

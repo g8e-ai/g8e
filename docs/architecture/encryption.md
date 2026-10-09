@@ -66,7 +66,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-ENC-STORE-01 | Platform secrets are encrypted at rest with a dedicated 32-byte master key stored in an OS-native keyring (`libsecret` on Linux, Keychain on macOS, or file fallback `.g8e/secrets/master.key` on Linux/Windows). |
+| INV-ENC-STORE-01 | Platform secrets are encrypted at rest with a dedicated 32-byte master key stored in an OS-native keyring (`libsecret` on Linux, Keychain on macOS, DPAPI on Windows) or external file via `--master-key-file`. No plaintext fallback. |
 | INV-ENC-STORE-02 | Secrets stored under `.g8e/secrets/` use AES-256-GCM authenticated encryption and JSON metadata specifying format version `1`, nonce, and ciphertext. |
 | INV-ENC-STORE-03 | Keystore initialization enforces strict private filesystem permissions (`0700` for `.g8e/secrets/` and `0600` for secret files). Startup fails if master key generation or permissions enforcement fails. |
 
@@ -103,11 +103,12 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 g8e uses an envelope encryption model for vault-protected data at rest. Each runtime environment initializes one vault hierarchy:
 
-1. **Private Key**: A randomly generated 32-byte (256-bit) private key stored as a 64-character hex-encoded string in `.g8e/vault/key` (or custom path passed via `--vault-key` or `G8E_VAULT_KEY`). The key file is restricted to `0600` permissions (`constants.PermFilePrivate`).
-2. **Key Encryption Key (KEK)**: Derived from the private key using HKDF-SHA256 (`golang.org/x/crypto/hkdf`) with salt `nil` and info string `"g8e-lfaa-kek-v1"`.
+1. **Vault Key**: A randomly generated 32-byte (256-bit) private key sealed under the master key in the platform keystore as `vault_key` (persisted under `.g8e/secrets/vault_key` using AES-256-GCM).
+2. **Key Encryption Key (KEK)**: Derived from the vault key using HKDF-SHA256 (`golang.org/x/crypto/hkdf`) with salt `nil` and info string `"g8e-lfaa-kek-v1"`.
 3. **Data Encryption Key (DEK)**: A randomly generated 32-byte AES-256 key (`crypto/rand`).
 4. **Key Wrapping**: The DEK is wrapped by the KEK using AES Key Wrap (RFC 3394 / `aes-256-kw`).
-5. **Vault Header**: Persisted to `.g8e/vault/vault.header` as JSON containing format version `1`, creation timestamp, KDF parameters, KEK algorithm identifier, base64-encoded wrapped DEK, and hex-encoded private key fingerprint (`KeyFingerprintSize = 16` bytes of `SHA-256("g8e-vault-fingerprint-v1" + privateKey)`).
+5. **Vault Header**: Persisted to `.g8e/vault/vault.header` as JSON containing format version `1`, creation timestamp, KDF parameters, KEK algorithm identifier, base64-encoded wrapped DEK, and hex-encoded private key fingerprint (`KeyFingerprintSize = 16` bytes of `SHA-256("g8e-vault-fingerprint-v1" + vaultKey)`).
+6. **Rekey Flow**: Rekeying generates a fresh vault key and rewraps the existing DEK under a new KEK, staging the new key at `.g8e/secrets/vault_key.rekey` and updating the header before atomically committing the new sealed key.
 
 When unlocked, the unwrapped DEK remains in process memory (`Vault.dek`). Calls to `Vault.Lock()` or `Vault.Close()` clear the DEK using `vault.SecureZero()`.
 
@@ -124,9 +125,9 @@ Vault encryption protects selected high-sensitivity fields across platform servi
 
 ### Gateway Startup and Vault Lifecycle
 
-Gateway startup reads `--vault-dir` (default: `.g8e/vault`) and `--vault-key` (default: `.g8e/vault/key`), falling back to `G8E_VAULT_DIR` and `G8E_VAULT_KEY` environment variables.
+Gateway startup reads `--vault-dir` (default: `.g8e/vault`), falling back to `G8E_VAULT_DIR`. When no OS key store exists (e.g. in containers or headless Linux environments without a Secret Service), operators must provide `--master-key-file <path>` with the absolute path to a read-only (`0600`) file containing 32 random bytes encoded as base64, located outside the runtime directory.
 
-If no vault header exists on startup, Gateway automatically initializes a new vault header and private key. If an existing key cannot be read, decoded, or matched to the header fingerprint, Gateway startup fails closed. When locked, audit, execution-vault, and UEI writes fail closed; reads return unencrypted metadata or log decryption failures.
+If no vault header exists on startup, Gateway automatically initializes a new vault header and generates the sealed vault key in the platform keystore. If an existing key cannot be read, decrypted, or matched to the header fingerprint, Gateway startup fails closed. When locked, audit, execution-vault, and UEI writes fail closed; reads return unencrypted metadata or log decryption failures. Existing installs migrating from earlier unsealed or legacy layouts must run `g8e gw clean` to recreate platform secrets and vault state.
 
 ## Platform Keystore Architecture
 
@@ -134,11 +135,14 @@ If no vault header exists on startup, Gateway automatically initializes a new va
 
 The platform keystore (`internal/services/keystore/keystore.go`) protects long-lived operational security material. It uses a dedicated 32-byte master key independent of the vault DEK.
 
-The master key is stored using OS-native keyrings:
+The master key is stored using OS-native keyrings, failing closed if no protected store is available:
 
-- **Linux**: Uses `libsecret` (`newLibsecretKeyring()`) when available; falls back to file storage (`.g8e/secrets/master.key`, base64-encoded) if `libsecret` is absent.
-- **macOS**: Uses macOS Keychain (`newKeychainKeyring()`). Fails initialization if Keychain access is unavailable.
-- **Windows**: Uses file storage (`.g8e/secrets/master.key`, base64-encoded).
+- **Linux**: Uses `libsecret` (`newLibsecretKeyring()`) communicating over D-Bus to the Secret Service API (e.g. `gnome-keyring-daemon`).
+- **macOS**: Uses macOS Keychain (`newKeychainKeyring()`) via the OS `security` utility.
+- **Windows**: Uses Windows DPAPI (`newWindowsKeyring()`) via PowerShell `System.Security.Cryptography.ProtectedData`.
+- **External File (`--master-key-file`)**: Required in containerized or headless environments where no OS keyring exists. Accepts an absolute path to a file containing 32 base64-encoded random bytes. The file must reside outside the runtime directory (`.g8e/`) and is treated as read-only external input.
+
+There is no plaintext or unencrypted file fallback anywhere.
 
 ### Secret Storage Format
 
@@ -146,13 +150,15 @@ Secrets managed by `SecretManager` (`internal/services/gateway/secret_manager.go
 
 The platform keystore protects:
 
+- Vault private key (`vault_key`, `vault_key.rekey`)
 - Actuator signing key (`actuator_signing_key`) and Key ID (`actuator_key_id`)
 - Auditor signing key (`auditor_signing_key`), Key ID (`auditor_key_id`), and HMAC key (`auditor_hmac_key`)
 - Notary signing key (`notary_signing_key`)
 - Operator private key (`operator_private_key`)
 - CLI private key (`cli_private_key`)
 - Session encryption key (`session_encryption_key`) and session tokens (`session_token`)
-- Consensus member keys (`consensus_member_<id>`)
+- Consensus member seeds (`consensus_member_<id>`)
+- Public-feed signing keys (`public_feed_signing_key`), ingest tokens (`public_feed_ingest_token`), and rotation keys (`sealed_new_private_key`)
 - Root CA, Hub CA, Operator CA, and Gateway Peer CA private keys
 - Gateway serving certificate private key
 - Integration API keys
@@ -183,10 +189,22 @@ See [Network Architecture](network.md) for PKI hierarchy details and [Authentica
 
 ### Initializing the Vault
 
-Generate a new vault header and key file:
+Generate a new vault header and seal a new vault key in the platform keystore:
 
 ```bash
-./g8e vault init --vault-dir .g8e/vault --key-path .g8e/vault/key
+./g8e vault init
+# Or in headless/container environments:
+./g8e vault init --master-key-file /run/secrets/g8e_master_key
+```
+
+### Unlocking and Validating the Vault
+
+Confirm that the vault unlocks with the key held in the keystore:
+
+```bash
+./g8e vault unlock
+# Or in headless/container environments:
+./g8e vault unlock --master-key-file /run/secrets/g8e_master_key
 ```
 
 ### Checking Vault Status
@@ -194,29 +212,17 @@ Generate a new vault header and key file:
 Inspect whether a vault header exists and the lock state of the CLI process:
 
 ```bash
-./g8e vault status --vault-dir .g8e/vault
+./g8e vault status
 ```
 
 ### Re-keying the Vault
 
-Re-wrap the DEK with a new private key (does not re-encrypt underlying database records):
+Re-wrap the DEK with a new vault key and atomically commit the new sealed key (stop the runtime first):
 
 ```bash
-./g8e vault rekey --vault-dir .g8e/vault --key-path .g8e/vault/key --new-key-path .g8e/vault/key.new
-```
-
-### Exporting and Importing Private Keys
-
-Export a private key as hex to stdout:
-
-```bash
-./g8e vault export --key-path .g8e/vault/key
-```
-
-Import a private key from hex string:
-
-```bash
-./g8e vault import --key-path .g8e/vault/key --key-hex <64-char-hex-string>
+./g8e vault rekey
+# Or in headless/container environments:
+./g8e vault rekey --master-key-file /run/secrets/g8e_master_key
 ```
 
 ### Resetting the Vault
@@ -224,7 +230,7 @@ Import a private key from hex string:
 Destroy vault headers and database artifacts (requires typing `destroy` or passing `--confirm`):
 
 ```bash
-./g8e vault reset --vault-dir .g8e/vault --confirm
+./g8e vault reset --confirm
 ```
 
 ## Anti-patterns

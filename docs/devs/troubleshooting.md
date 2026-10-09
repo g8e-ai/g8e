@@ -120,11 +120,11 @@ make proto-generate
 ### Vault Validation
 
 ```bash
-# Validate existing vault header and key pair
-./g8e vault unlock --vault-dir .g8e/vault --key-path .g8e/vault/key
+# Validate existing vault header with stored vault key
+./g8e vault unlock
 
-# Start Gateway with an explicit absolute vault key path
-./g8e gw start --vault-key "$PWD/.g8e/vault/key"
+# Start Gateway with an explicit master key file (headless or container environments)
+./g8e gw start --master-key-file "/run/secrets/g8e_master_key"
 ```
 
 ### CLI Authentication and Session Recovery

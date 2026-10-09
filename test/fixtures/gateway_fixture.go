@@ -45,6 +45,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -66,6 +68,7 @@ type GatewayFixture struct {
 	DownstreamURL    string // URL of the downstream MCP/A2A server
 	DownstreamCmd    string // Command of downstream subprocess MCP server
 	DownstreamArgs   []string
+	Keystore         *keystore.Keystore
 	A2ADownstreamURL string // URL used for A2A (same as DownstreamURL if not overridden)
 }
 
@@ -207,7 +210,6 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
 		VaultDir:          testPaths.VaultDir,
-		VaultKeyPath:      testPaths.VaultKeyPath,
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: opts.AllowTestPortZero,
@@ -236,12 +238,16 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keystoretest.NewMemoryKeyring(), fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+
 	// C2 inverted construction order: open DB first, seed consensus
 	// policy into the DB before NewGatewayModeServiceWithDB (build() reads the
 	// policy from the DB and wires the ConsensusService at construction via
 	// GatewayModeDeps — no SetConsensusService, no second pubsub construction,
 	// no adapter wiring).
-	db, err := gateway.OpenCanonicalDBService(testutil.NewTestLogger(), cfg.Gateway.VaultKeyPath, nil, fileSvc)
+	db, err := gateway.OpenCanonicalDBService(testutil.NewTestLogger(), ks, fileSvc)
 	require.NoError(t, err)
 
 	var consensusSvc *consensus.ConsensusService
@@ -342,6 +348,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		DownstreamURL:    downstreamURL,
 		DownstreamCmd:    opts.DownstreamCmd,
 		DownstreamArgs:   opts.DownstreamArgs,
+		Keystore:         ks,
 		A2ADownstreamURL: a2aURL,
 	}
 }

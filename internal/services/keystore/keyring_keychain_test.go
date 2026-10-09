@@ -99,10 +99,10 @@ func TestNewDarwin_WithKeychain(t *testing.T) {
 		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 
-	ks, err := New(secretsDir, logger)
+	ks, err := NewWithFS(fileSvc, logger, Options{})
 	require.NoError(t, err)
 	assert.Equal(t, "keychain", ks.KeyringName())
 }

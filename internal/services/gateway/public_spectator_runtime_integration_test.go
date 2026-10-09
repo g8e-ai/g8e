@@ -25,6 +25,8 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 	privatePort := mustFreePort(t)
 	publicPort := mustFreePort(t)
 	fileSvc := newProducerFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -34,7 +36,7 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 		PublicListenAddress:   "127.0.0.1:" + publicPort,
 		ExplorerListenAddress: "",
 		TrustedProxyCIDRs:     []string{"172.28.0.1/32"},
-	}, fileSvc, testutil.NewTestLogger())
+	}, fileSvc, ks, logger)
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(ctx))
 
@@ -51,6 +53,8 @@ func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
 	publicPort := mustFreePort(t)
 	explorerPort := mustFreePort(t)
 	fileSvc := newProducerFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -59,7 +63,7 @@ func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
 		PrivateListenAddress:  "127.0.0.1:" + privatePort,
 		PublicListenAddress:   "127.0.0.1:" + publicPort,
 		ExplorerListenAddress: "127.0.0.1:" + explorerPort,
-	}, fileSvc, testutil.NewTestLogger())
+	}, fileSvc, ks, logger)
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(ctx))
 
@@ -82,11 +86,15 @@ func TestNewPublicSpectatorRuntime_ContainerBindRequiresExplicitConfig(t *testin
 		ExplorerListenAddress: "",
 	}
 
-	_, err := NewPublicSpectatorRuntime(cfg, newProducerFileSvc(t), testutil.NewTestLogger())
+	fileSvc := newProducerFileSvc(t)
+	logger := testutil.NewTestLogger()
+	ks := newTestKeystore(t, fileSvc, logger)
+
+	_, err := NewPublicSpectatorRuntime(cfg, fileSvc, ks, logger)
 	require.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
 
 	cfg.AllowContainerBind = true
-	_, err = NewPublicSpectatorRuntime(cfg, newProducerFileSvc(t), testutil.NewTestLogger())
+	_, err = NewPublicSpectatorRuntime(cfg, fileSvc, ks, logger)
 	require.NoError(t, err)
 }
 

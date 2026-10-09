@@ -373,8 +373,8 @@ docker run --rm -e GODEBUG=fips140=only g8e-gateway:latest version --fips
 The root Compose file is a single-host reference deployment. A production deployment supplies its own orchestration, secret backup and recovery, resource sizing, monitoring, ingress, and browser HTTPS termination.
 
 - Configure the Gateway public URL, CORS origin, passkey RP ID, and passkey RP origin to exactly match the browser-visible deployment.
-- Persist and protect the complete Gateway runtime volume, including the vault key. `G8E_VAULT_KEY` or `--vault-key` changes the key path; it does not provide the key value.
-- Treat generated authority, serving, workload, and vault keys as secrets.
+- Supply the master key using Docker secrets (e.g. `g8e_master_key` mounted at `/run/secrets/g8e_master_key` and passed via `--master-key-file /run/secrets/g8e_master_key`). The master key secret must sit outside the runtime volume. Upgrading an existing deployment from legacy unsealed/file layouts requires `g8e gw clean` (or wiping volumes).
+- Treat generated authority, serving, workload, and sealed vault keys as secrets.
 - Keep `g8e.local` resolvable inside the Compose network because the Data Operator and ensemble use that name.
 - Treat the public mirror ports as separate read/ingest surfaces and keep them bound to loopback unless the deployment explicitly supplies the required proxy and access controls.
 - Verify FIPS mode and enforcement on the deployed process with `g8e version --fips`.

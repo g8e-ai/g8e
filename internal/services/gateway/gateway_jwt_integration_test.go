@@ -129,7 +129,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -367,7 +367,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -620,7 +620,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -871,7 +871,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

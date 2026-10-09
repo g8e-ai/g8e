@@ -27,7 +27,7 @@ func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 		PKIDir:             "/pki",
 		SecretsDir:         "/secrets",
 		VaultDir:           "/vault",
-		VaultKeyPath:       "/vault/key",
+		MasterKeyFile:      "/run/secrets/g8e_master_key",
 		PasskeyRpID:        "example.com",
 		PasskeyRpName:      "Example",
 		PasskeyRpOrigins:   []string{"https://example.com"},
@@ -54,7 +54,7 @@ func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 	assert.Equal(t, "/pki", cfg.PKIDir)
 	assert.Equal(t, "/secrets", cfg.SecretsDir)
 	assert.Equal(t, "/vault", cfg.VaultDir)
-	assert.Equal(t, "/vault/key", cfg.VaultKeyPath)
+	assert.Equal(t, "/run/secrets/g8e_master_key", cfg.MasterKeyFile)
 	assert.Equal(t, "example.com", cfg.PasskeyRpID)
 	assert.Equal(t, "Example", cfg.PasskeyRpName)
 	assert.Equal(t, []string{"https://example.com"}, cfg.PasskeyRpOrigins)
@@ -84,7 +84,7 @@ func TestGatewayFlagsToServeConfig_EmptyFlags(t *testing.T) {
 	assert.Empty(t, cfg.PKIDir)
 	assert.Empty(t, cfg.SecretsDir)
 	assert.Empty(t, cfg.VaultDir)
-	assert.Empty(t, cfg.VaultKeyPath)
+	assert.Empty(t, cfg.MasterKeyFile)
 	assert.Empty(t, cfg.PasskeyRpID)
 	assert.Empty(t, cfg.PasskeyRpName)
 	assert.Nil(t, cfg.PasskeyRpOrigins)
@@ -118,7 +118,7 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 		{"pki-dir", ""},
 		{"secrets-dir", ""},
 		{"vault-dir", ""},
-		{"vault-key", ""},
+		{"master-key-file", ""},
 		{"passkey-rp-id", ""},
 		{"passkey-rp-name", ""},
 		{"rate-limit-rps", "0"},
@@ -213,7 +213,7 @@ func TestResolveGatewayFlags_ConsensusCLITakesPrecedence(t *testing.T) {
 
 func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 	envKeys := []string{
-		"G8E_VAULT_DIR", "G8E_VAULT_KEY",
+		"G8E_VAULT_DIR",
 		"G8E_CONSENSUS_ID", "G8E_CONSENSUS_URL", "G8E_CONSENSUS_BOOTSTRAP",
 	}
 	originalValues := make(map[string]string)
@@ -231,14 +231,12 @@ func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 
 	result := resolveGatewayFlags(GatewayFlags{
 		VaultDir:           "/cli/vault",
-		VaultKeyPath:       "/cli/key",
 		ConsensusID:        "cli-id",
 		ConsensusURL:       "https://cli/consensus",
 		ConsensusBootstrap: "/cli/bootstrap.json",
 	})
 
 	assert.Equal(t, "/cli/vault", result.VaultDir)
-	assert.Equal(t, "/cli/key", result.VaultKeyPath)
 	assert.Equal(t, "cli-id", result.ConsensusID)
 	assert.Equal(t, "https://cli/consensus", result.ConsensusURL)
 	assert.Equal(t, "/cli/bootstrap.json", result.ConsensusBootstrap)

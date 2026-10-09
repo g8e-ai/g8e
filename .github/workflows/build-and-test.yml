@@ -133,6 +133,14 @@ jobs:
       - name: Integration Tests
         run: make test-integration
 
+      - name: Libsecret Keystore Tests (real D-Bus)
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-tools dbus-x11
+          dbus-run-session -- bash -c '
+            echo "" | gnome-keyring-daemon --unlock --components=secrets || true
+            go test -v -count=1 ./internal/services/keystore/...
+          '
+
       - name: Cross-Compile (Windows)
         run: make build-windows
 
