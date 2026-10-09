@@ -228,7 +228,7 @@ help:
 		'g8e developer commands' \
 		'' \
 		'Usage: make <target> [VARIABLE=value]' \
-		'Windows: use build.ps1 instead of make.' \
+		'Windows: GNU Make and Git for Windows Bash are required.' \
 		'' \
 		'Setup' \
 		'  dev-setup                 Install everything required by make ci' \
@@ -597,10 +597,11 @@ EXPLORER_EMBED := internal/services/gateway/explorer/static
 
 # Frontend builds are incremental: each dist rebuilds only when its sources
 # change, and each embed refreshes only when its dist is newer. The explorer
-# bundle also compiles in VERSION and imports g8e-adapter/src.
-FRONTEND_PRUNE := -name node_modules -prune -o -name dist -prune -o
+# bundle also compiles in VERSION and imports g8e-adapter/src. The Go source
+# lister avoids platform-specific find commands during Makefile parsing.
+SOURCE_FILES := go run ./internal/tools/sourcefiles -base .
 
-EXPLORER_SOURCES := $(shell find evaluation-explorer $(FRONTEND_PRUNE) -type f ! -path '*/tests/*' ! -path '*/e2e/*' -print) $(shell find g8e-adapter/src -type f) VERSION
+EXPLORER_SOURCES := $(shell $(SOURCE_FILES) -exclude node_modules,dist,tests,e2e evaluation-explorer) $(shell $(SOURCE_FILES) g8e-adapter/src) VERSION
 
 evaluation-explorer/node_modules/.package-lock.json: evaluation-explorer/package-lock.json
 	@npm ci --prefix evaluation-explorer
@@ -619,7 +620,7 @@ explorer-embed: $(EXPLORER_EMBED)/index.html
 
 CONSOLE_DIST := console/dist
 CONSOLE_EMBED := internal/services/gateway/console/static
-CONSOLE_SOURCES := $(shell find console $(FRONTEND_PRUNE) -type f ! -path '*/tests/*' -print)
+CONSOLE_SOURCES := $(shell $(SOURCE_FILES) -exclude node_modules,dist,tests console)
 
 $(CONSOLE_EMBED)/index.html: $(CONSOLE_DIST)/index.html
 	@rm -rf $(CONSOLE_EMBED) && cp -r $(CONSOLE_DIST) $(CONSOLE_EMBED)

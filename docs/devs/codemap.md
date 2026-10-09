@@ -429,7 +429,7 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 | `make doctrines-validate` | Doctrine JSON under `protocol/constants/doctrine/`. |
 | `make swagger-generate` | Gateway OpenAPI from Swagger annotations. |
 
-Other tools under `internal/tools/`: `agent_harness` (shared typed Go client used by evaluation and integration workflows, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
+Other tools under `internal/tools/`: `agent_harness` (shared typed Go client used by evaluation and integration workflows, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `constgen`, `explorercatalog` (evaluation-explorer scenario catalog generation, see `make explorer-catalog`), `g8ebinaries`, `sourcefiles` (portable frontend dependency discovery used by `Makefile`), `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
 
 ## Procedures
 

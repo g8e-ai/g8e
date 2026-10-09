@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -58,17 +59,36 @@ func ComputeSourceTreeHash(root string, excludes ...string) (string, error) {
 // directories; each file's key is its path relative to base. Entries that
 // do not exist, escape the base, or are symlinks are rejected.
 func ComputeSourceManifestHash(base string, entries, excludes []string) (string, error) {
+	paths, err := ListSourceManifestFiles(base, entries, excludes)
+	if err != nil {
+		return "", err
+	}
+	files := make([]hashedEntry, 0, len(paths))
+	for _, key := range paths {
+		digest, err := hashFile(filepath.Join(base, filepath.FromSlash(key)))
+		if err != nil {
+			return "", err
+		}
+		files = append(files, hashedEntry{key: key, digest: digest})
+	}
+	return digestEntries(files), nil
+}
+
+// ListSourceManifestFiles returns the sorted, slash-separated paths of regular
+// files in the listed manifest entries. It applies the same validation,
+// exclusions, and symlink rejection as ComputeSourceManifestHash.
+func ListSourceManifestFiles(base string, entries, excludes []string) ([]string, error) {
 	baseInfo, err := os.Stat(base)
 	if err != nil {
-		return "", fmt.Errorf("buildinfo: stat source base: %w", err)
+		return nil, fmt.Errorf("buildinfo: stat source base: %w", err)
 	}
 	if !baseInfo.IsDir() {
-		return "", fmt.Errorf("%w: %s", constants.ErrSourceTreeNotDir, base)
+		return nil, fmt.Errorf("%w: %s", constants.ErrSourceTreeNotDir, base)
 	}
-	var files []hashedEntry
+	var files []string
 	for _, entry := range entries {
 		if err := validateManifestEntry(entry); err != nil {
-			return "", err
+			return nil, err
 		}
 		key := filepath.ToSlash(entry)
 		if excludedKey(key, excludes) {
@@ -78,35 +98,46 @@ func ComputeSourceManifestHash(base string, entries, excludes []string) (string,
 		lstat, err := os.Lstat(abs)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return "", fmt.Errorf("%w: %s", constants.ErrSourceTreeEntryNotFound, entry)
+				return nil, fmt.Errorf("%w: %s", constants.ErrSourceTreeEntryNotFound, entry)
 			}
-			return "", fmt.Errorf("buildinfo: lstat manifest entry %s: %w", entry, err)
+			return nil, fmt.Errorf("buildinfo: lstat manifest entry %s: %w", entry, err)
 		}
 		if lstat.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("%w: %s", constants.ErrSourceTreeSymlink, entry)
+			return nil, fmt.Errorf("%w: %s", constants.ErrSourceTreeSymlink, entry)
 		}
 		if lstat.IsDir() {
-			if err := walkDir(base, abs, excludes, &files); err != nil {
-				return "", err
+			if err := walkRegularFiles(base, abs, excludes, func(_ string, key string) error {
+				files = append(files, key)
+				return nil
+			}); err != nil {
+				return nil, err
 			}
 			continue
 		}
 		if !lstat.Mode().IsRegular() {
 			continue
 		}
-		digest, err := hashFile(abs)
-		if err != nil {
-			return "", err
-		}
-		files = append(files, hashedEntry{key: key, digest: digest})
+		files = append(files, key)
 	}
-	return digestEntries(files), nil
+	sort.Slice(files, func(i, j int) bool { return lessPathParts(files[i], files[j]) })
+	return compactSortedPaths(files), nil
 }
 
 // walkDir appends every regular file beneath absDir, keyed by path relative
 // to base. Symlinks and excluded paths are rejected or skipped before
 // descent.
 func walkDir(base, absDir string, excludes []string, out *[]hashedEntry) error {
+	return walkRegularFiles(base, absDir, excludes, func(path, key string) error {
+		digest, err := hashFile(path)
+		if err != nil {
+			return err
+		}
+		*out = append(*out, hashedEntry{key: key, digest: digest})
+		return nil
+	})
+}
+
+func walkRegularFiles(base, absDir string, excludes []string, visit func(path, key string) error) error {
 	return filepath.WalkDir(absDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("buildinfo: walk %s: %w", path, err)
@@ -128,13 +159,21 @@ func walkDir(base, absDir string, excludes []string, out *[]hashedEntry) error {
 		if !d.Type().IsRegular() || excludedKey(key, excludes) {
 			return nil
 		}
-		digest, err := hashFile(path)
-		if err != nil {
-			return err
-		}
-		*out = append(*out, hashedEntry{key: key, digest: digest})
-		return nil
+		return visit(path, key)
 	})
+}
+
+func compactSortedPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return paths
+	}
+	out := paths[:1]
+	for _, path := range paths[1:] {
+		if path != out[len(out)-1] {
+			out = append(out, path)
+		}
+	}
+	return out
 }
 
 // digestEntries streams sorted (key, digest) pairs into one SHA-256 in the
@@ -188,11 +227,12 @@ func excludedKey(key string, excludes []string) bool {
 // validateManifestEntry rejects entries that are absolute, empty, or
 // escape the base via "..".
 func validateManifestEntry(entry string) error {
-	if entry == "" || filepath.IsAbs(entry) {
+	canonical := filepath.ToSlash(entry)
+	if canonical == "" || path.IsAbs(canonical) || filepath.IsAbs(entry) || filepath.VolumeName(entry) != "" {
 		return fmt.Errorf("%w: %q", constants.ErrSourceTreeEntryInvalid, entry)
 	}
-	clean := filepath.Clean(entry)
-	if clean != entry || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	clean := path.Clean(canonical)
+	if clean != canonical || clean == ".." || strings.HasPrefix(clean, "../") {
 		return fmt.Errorf("%w: %q", constants.ErrSourceTreeEntryInvalid, entry)
 	}
 	return nil

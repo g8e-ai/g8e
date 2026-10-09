@@ -202,3 +202,14 @@ func TestComputeSourceManifestHash_ExcludeSkipsNestedGeneratedDirs(t *testing.T)
 	require.NoError(t, err)
 	assert.Equal(t, clean, excluded)
 }
+
+func TestListSourceManifestFiles_ReturnsPortableSortedDependencies(t *testing.T) {
+	base := t.TempDir()
+	writeParityFixture(t, base)
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "dir", "tests"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "dir", "tests", "ignored.ts"), []byte("ignored"), 0o644))
+
+	paths, err := ListSourceManifestFiles(base, []string{"dir", "a.txt", "dir"}, []string{"tests"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a.txt", "dir/sub/c.txt"}, paths)
+}
