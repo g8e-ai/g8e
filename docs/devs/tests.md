@@ -3,7 +3,7 @@ doc_id: tests
 title: Testing Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-06
+last_updated: 2026-10-09
 version: v2.3.2
 owners:
   - internal/cli/cmd/test/
@@ -87,7 +87,8 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Test tiers and CLI commands | `internal/cli/cmd/test/test.go` | `./g8e test --help` |
 | Chaos testing harness and summary | `internal/tools/chaos/`, `internal/cli/cmd/test/chaos.go` | `./g8e test chaos --help`, `./g8e test summary` |
 | Public loop qualification harness | `internal/cli/cmd/test/public_loop.go` | `./g8e test public-loop --help` |
-| Makefile platform test targets | `Makefile` | `make test`, `make test-unit`, `make test-integration`, `make test-coverage`, `make test-docker`, `make test-cross-enrollment`, `make test-airgap` |
+| Operator fleet scale qualification | `internal/cli/cmd/test/scale.go`, `test/e2e/operator_fleet_e2e_test.go` | `./g8e test scale --help`, `make test-scale` |
+| Makefile platform test targets | `Makefile` | `make test`, `make test-unit`, `make test-integration`, `make test-coverage`, `make test-docker`, `make test-cross-enrollment`, `make test-scale`, `make test-airgap` |
 | Cross-component test targets | `Makefile`, `ensemble/`, `console/`, `protocol/` | `make ensemble-test`, `make ensemble-test-external`, `make console-test`, `make ci-protocol` |
 | Integration Gateway fixture | `test/fixtures/gateway_fixture.go` | `NewGatewayFixture` |
 | File service test isolation | `internal/testutil/paths.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
@@ -162,9 +163,23 @@ make lint
 
 # Verify air-gapped vendored compilation without network access
 make test-airgap
+
+# Operator fleet scale qualification (isolated Gateway, N real Operator processes)
+./g8e test scale --count 100
+make test-scale SCALE_COUNT=1000 SCALE_ARGS='--soak 10m --fan-out-concurrency 64,all --root .local.dev/scale/run-1'
 ```
 
 `./g8e test chaos` generates a realistic distribution of governance events (70% valid good actor intent, 20% L1 forbidden command prompt injection, 10% corrupted transaction hash MitM) directly in-process through `TransactionVerifier` and `Actuator`, bypassing network and TLS layers. Results persist to SQLite databases under `.g8e/test-vault/<timestamp>-chaos-test/`. `./g8e test summary` aggregates outcomes across all runs in the test vault directory.
+
+`./g8e test scale` is the only supported way to run a fleet scale test; it is never part of `make test`. It refuses to start while anything listens on the default Gateway ports (Operators always dial them) and refuses a non-empty `--root` unless `--clean` is passed. In a fresh scratch root (default: a new temporary directory) it:
+
+1. Starts a doctrine Gateway in `<root>/run` and enrolls a headless CLI owner. Every child process gets `HOME` and `USERPROFILE` set to `<root>/home`; the Go caches are kept.
+2. Deploys `--count` Operators with `operator deploy --local --background --approve`. By default the whole fleet goes in one invocation, staged all at once (`--parallel` defaults to the Gateway's live Operator request quota, 2048). `--batch-size` splits it into appending invocations (`--start-index`). A failed batch stops the run.
+3. Runs `TestOperatorFleet_HoldsUnderFanOut`: complete enrollment and heartbeats, an idle `--soak` with no stale Operator, governed fan-out at each `--fan-out-concurrency` level (default `all`: every target in one wave) with every dispatch succeeding, and a settle window.
+4. Runs `TestOperatorFleet_RecoversAfterGatewayRestart` (skip with `--skip-restart`): `gw restart`, then every pre-restart Operator identity must heartbeat again within three minutes, no new identity may appear, and a one-wave governed fan-out must reach the whole fleet.
+5. Always tears down: stops all of this run's workers at once by the `operator.pid` recorded in each `<root>/fleet/op-NNNNN`, then runs `gw stop`. It never signals processes outside the scratch root.
+
+Evidence stays under `<root>/out`: per-step logs, `gateway-resources.csv` and `fleet-resources.csv` (sampled every `--sample-interval`; RSS, PSS, threads and FDs come from Linux `/proc`, other platforms record Gateway database sizes only), `fleet-report.json`, `restart-report.json`, and `scale-summary.json` with per-batch and per-phase durations. Latency and resource figures are reported, not asserted.
 
 `./g8e test public-loop` verifies candidate identity records against public feeds, executes an in-process qualification run in an isolated temporary runtime, and writes typed public-loop evidence JSON. Both `--candidate` and `--output` are required flags.
 
@@ -277,7 +292,7 @@ Tests that open localhost listeners, including `httptest.NewServer`, `httptest.N
 
 ### Scale-test cohorts
 
-`TestOperatorFleet_HoldsUnderFanOut` accepts `G8E_E2E_FLEET_SESSIONS`, a
+`./g8e test scale` sets the fleet scenario inputs (`G8E_E2E_RUNTIME_ROOT`, `G8E_E2E_FLEET_*`). `TestOperatorFleet_HoldsUnderFanOut` also accepts `G8E_E2E_FLEET_SESSIONS`, a
 comma-separated list of owner Operator session UUIDs. Its length must match
 `G8E_E2E_FLEET_SIZE`. With a cohort, registry health checks and governed CLI
 fan-out target exactly those remote sessions; the embedded Operator is excluded.

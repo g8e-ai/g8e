@@ -36,7 +36,7 @@ func resolveRepoRoot() (string, error) {
 
 // e2eRuntimeRootEnv names the directory whose .g8e/ tree the suite targets
 // instead of the repository root. Scenarios that run their own isolated
-// Gateway (scripts/ci/operator-fleet-smoke.sh) set it so the suite never reads
+// Gateway (g8e test scale) set it so the suite never reads
 // the developer's own runtime.
 const e2eRuntimeRootEnv = "G8E_E2E_RUNTIME_ROOT"
 

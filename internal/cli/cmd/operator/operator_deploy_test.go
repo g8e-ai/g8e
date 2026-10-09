@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -258,23 +259,27 @@ func TestOperatorDeployLocalBatchSharesBinaryAndPreservesEarlierBatch(t *testing
 	client := &cmdtest.MockAPIClient{}
 	out, err := runOperatorDeploy(t, client, "--local", "--dest-dir", root, "--count", "10", "--parallel", "4")
 	require.NoError(t, err, out)
-	first, err := os.Stat(filepath.Join(root, "op-00001", "g8e"))
+	binaryName := "g8e"
+	if runtime.GOOS == "windows" {
+		binaryName = "g8e.exe"
+	}
+	first, err := os.Stat(filepath.Join(root, "op-00001", binaryName))
 	require.NoError(t, err)
 	for _, dir := range operatorDeployDirs(root, 10) {
-		info, err := os.Stat(filepath.Join(dir, "g8e"))
+		info, err := os.Stat(filepath.Join(dir, binaryName))
 		require.NoError(t, err)
 		assert.True(t, os.SameFile(first, info), "binaries must share one inode")
 	}
 	out, err = runOperatorDeploy(t, client, "--local", "--dest-dir", root, "--count", "2", "--start-index", "11", "--parallel", "2")
 	require.NoError(t, err, out)
-	unchanged, err := os.Stat(filepath.Join(root, "op-00001", "g8e"))
+	unchanged, err := os.Stat(filepath.Join(root, "op-00001", binaryName))
 	require.NoError(t, err)
 	assert.True(t, os.SameFile(first, unchanged), "appending a batch must preserve existing deployments")
-	require.FileExists(t, filepath.Join(root, "op-00012", "g8e"))
+	require.FileExists(t, filepath.Join(root, "op-00012", binaryName))
 	// Explicit start-index with count=1 must still use a numbered directory.
 	out, err = runOperatorDeploy(t, client, "--local", "--dest-dir", root, "--start-index", "5000")
 	require.NoError(t, err, out)
-	require.FileExists(t, filepath.Join(root, "op-05000", "g8e"))
+	require.FileExists(t, filepath.Join(root, "op-05000", binaryName))
 	dirs := operatorDeployDirs(root, 5000)
 	require.Len(t, dirs, 5000)
 	assert.Equal(t, filepath.ToSlash(filepath.Join(root, "op-05000")), filepath.ToSlash(dirs[4999]))
@@ -283,7 +288,7 @@ func TestOperatorDeployLocalBatchSharesBinaryAndPreservesEarlierBatch(t *testing
 func TestOperatorDeployRejectsUnsafeBatchesAndRoles(t *testing.T) {
 	for _, flags := range [][]string{
 		{"--count", "5001"}, {"--count", "2", "--start-index", "5000"},
-		{"--start-index", "0"}, {"--parallel", "0"}, {"--parallel", "101"},
+		{"--start-index", "0"}, {"--parallel", "0"}, {"--parallel", strconv.Itoa(constants.PlatformEnrollmentMaxLiveOperatorRequests + 1)},
 		{"--roles", "unknown"},
 
 		{"--local"}, {"--hosts", "a,,b"}, {"--hosts", "a,a"}, {"--hosts", "-oProxyCommand=bad"},

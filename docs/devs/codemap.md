@@ -407,6 +407,7 @@ Depth is [Testing](tests.md). `e2e-docker` and Compose profiles: INV-TESTMAP-02,
 | `./g8e test chaos` | | Chaos command in `internal/cli/cmd/test/chaos.go`. Engine: `internal/tools/chaos/`. |
 | `./g8e test summary` | | Reads the chaos summary from the test vault. |
 | `./g8e test public-loop` | | Provider-free public-feed qualification. Stays in `testcmd` (INV-PKG-02). |
+| `./g8e test scale` | 3 | Operator fleet scale qualification in `internal/cli/cmd/test/scale.go`: isolated Gateway, `operator deploy` batches, then `TestOperatorFleet_*` in `test/e2e/`. Owns its own Gateway and worker teardown. |
 
 Component test entry points named by the root Makefile: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make ensemble-test`, `make ensemble-test-external`, `make console-test`. `make ensemble-test-external` is the Ensemble external-provider suite (Tier 4 in [Testing](tests.md)), not a `./g8e test` subcommand.
 

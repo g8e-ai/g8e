@@ -655,6 +655,8 @@ var (
 	ErrE2ETestsFailed            = errors.New("e2e tests failed")
 	ErrCoverageTestsFailed       = errors.New("coverage tests failed")
 	ErrLintingFailed             = errors.New("linting failed")
+	ErrScaleTestFailed           = errors.New("scale test failed")
+	ErrScaleTestInvalidInput     = errors.New("invalid scale test input")
 
 	// Vault command errors
 	ErrVaultAlreadyInitialized = errors.New("vault already initialized")

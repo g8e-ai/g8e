@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -39,8 +40,11 @@ import (
 const (
 	// operatorDeployDirPrefix names the per-Operator directories created under
 	// --remote-dir when --count is greater than one.
-	operatorDeployDirPrefix   = "op"
-	operatorDeployMaxParallel = 100
+	operatorDeployDirPrefix = "op"
+	// operatorDeployMaxParallel stages a whole cohort at once up to the
+	// Gateway's live Operator request quota; a larger --parallel could only
+	// queue requests the Gateway would reject.
+	operatorDeployMaxParallel = constants.PlatformEnrollmentMaxLiveOperatorRequests
 
 	operatorDeployDiagnoseTimeout   = 10 * time.Second
 	operatorDeployOnlineBaseTimeout = time.Minute
@@ -183,7 +187,7 @@ Use --dest-dir for the binary and isolated runtime state; --remote-dir remains a
 With --count N, directories are op-00001 through op-N. --start-index adds later batches
 without replacing earlier Operators. An explicit --start-index always uses numbered directories.
 The binary is installed once per host and hard-linked into each directory.
---parallel bounds concurrent deployments (default 100, maximum 100).
+--parallel bounds concurrent deployments (default and maximum: the Gateway live Operator request quota).
 
 --roles selects any combination of data (default), provenance, inference, and observer.
 Capability flags and role-specific settings use the same flags as operator start.
@@ -503,10 +507,18 @@ func (s deploySSH) prepareDir(ctx context.Context, dir string) (string, error) {
 	return absDir, nil
 }
 
+func (s deploySSH) binaryName() string {
+	if s.local && runtime.GOOS == "windows" {
+		return "g8e.exe"
+	}
+	return "g8e"
+}
+
 // installBinary uploads beside the target and renames into place: scp cannot
 // open a running (or hard-linked, shared) g8e for writing (ETXTBSY), but a
 // rename replaces the directory entry and leaves the old inode alone.
 func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) error {
+	binName := s.binaryName()
 	if s.binaryDir != "" {
 		if s.local {
 			tmp, err := os.CreateTemp(dir, ".g8e-link-*")
@@ -521,15 +533,15 @@ func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) 
 			if err := os.Remove(staging); err != nil {
 				return err
 			}
-			if err := os.Link(filepath.Join(s.binaryDir, "g8e"), staging); err != nil {
+			if err := os.Link(filepath.Join(s.binaryDir, binName), staging); err != nil {
 				return err
 			}
-			return os.Rename(staging, filepath.Join(dir, "g8e"))
+			return os.Rename(staging, filepath.Join(dir, binName))
 		}
 		_, err := s.run(ctx, fmt.Sprintf("ln -f %s/g8e %s/g8e.new && mv -f %s/g8e.new %s/g8e", s.binaryDir, dir, dir, dir))
 		return err
 	}
-	staging := dir + "/g8e.new"
+	staging := dir + "/" + binName + ".new"
 	if s.local {
 		// Copy once, then hard-link into each runtime directory. The source may be rebuilt.
 		tmp, err := os.CreateTemp(dir, ".g8e-copy-*")
@@ -544,7 +556,7 @@ func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) 
 		if err := CopyFile(sourceBinary, staging); err != nil {
 			return err
 		}
-		return os.Rename(staging, filepath.Join(dir, "g8e"))
+		return os.Rename(staging, filepath.Join(dir, binName))
 	}
 	scp := exec.CommandContext(ctx, "scp", append(s.sshOptions("-P"), sourceBinary, fmt.Sprintf("%s:%s", s.host, staging))...)
 	scp.Stderr = s.stderr
@@ -588,7 +600,7 @@ func (s deploySSH) stopPreviousOperator(ctx context.Context, dir string) error {
 // so a Gateway the workers cannot reach fails the deploy before any starts.
 func (s deploySSH) preflightGateway(ctx context.Context, args []string) error {
 	if s.local {
-		check := exec.CommandContext(ctx, filepath.Join(s.binaryDir, "g8e"), append([]string{"operator", "gateway-preflight"}, args...)...)
+		check := exec.CommandContext(ctx, filepath.Join(s.binaryDir, s.binaryName()), append([]string{"operator", "gateway-preflight"}, args...)...)
 		check.Stderr = s.stderr
 		return check.Run()
 	}
@@ -621,9 +633,13 @@ func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, star
 		defer log.Close()
 		args := append([]string{"operator", "start", "--endpoint", endpoint}, startArgs...)
 		args = append(args, "--working-dir", dir)
-		worker := exec.Command(filepath.Join(dir, "g8e"), args...)
+		worker := exec.Command(filepath.Join(dir, s.binaryName()), args...)
 		// Preserve the exact argv prefix used by directory-scoped replacement.
-		worker.Args[0] = "./g8e"
+		if runtime.GOOS == "windows" {
+			worker.Args[0] = `.\` + s.binaryName()
+		} else {
+			worker.Args[0] = "./g8e"
+		}
 		worker.Dir = dir
 		worker.Stdout, worker.Stderr = log, log
 		detachDeployedOperator(worker)

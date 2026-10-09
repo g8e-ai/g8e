@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,16 +31,18 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// Environment contract for the fleet scenario. scripts/ci/operator-fleet-smoke.sh
-// deploys the fleet and sets these; the scenario is opt-in (it is not part of
-// defaultE2ERunRegexp) and fails closed when its inputs are missing.
+// Environment contract for the fleet scenarios. `g8e test scale`
+// (internal/cli/cmd/test/scale.go) deploys the fleet and sets these; the
+// scenarios are opt-in (not part of defaultE2ERunRegexp) and fail closed when
+// their inputs are missing.
 const (
-	fleetSizeEnv        = "G8E_E2E_FLEET_SIZE"        // required: remote Operators the script deployed
-	fleetBinEnv         = "G8E_E2E_FLEET_BIN"         // required: g8e binary used for `operator run`
-	fleetSoakEnv        = "G8E_E2E_FLEET_SOAK"        // optional: idle soak before fan-out (Go duration)
-	fleetConcurrencyEnv = "G8E_E2E_FLEET_CONCURRENCY" // optional: comma-separated fan-out concurrencies
-	fleetRoundsEnv      = "G8E_E2E_FLEET_ROUNDS"      // optional: fan-outs per concurrency level
-	fleetReportEnv      = "G8E_E2E_FLEET_REPORT"      // optional: path for the JSON report
+	fleetSizeEnv          = "G8E_E2E_FLEET_SIZE"           // required: remote Operators the script deployed
+	fleetBinEnv           = "G8E_E2E_FLEET_BIN"            // required: g8e binary used for `operator run`
+	fleetSoakEnv          = "G8E_E2E_FLEET_SOAK"           // optional: idle soak before fan-out (Go duration)
+	fleetConcurrencyEnv   = "G8E_E2E_FLEET_CONCURRENCY"    // optional: comma-separated fan-out concurrencies
+	fleetRoundsEnv        = "G8E_E2E_FLEET_ROUNDS"         // optional: fan-outs per concurrency level
+	fleetReportEnv        = "G8E_E2E_FLEET_REPORT"         // optional: path for the JSON report
+	fleetRestartReportEnv = "G8E_E2E_FLEET_RESTART_REPORT" // optional: path for the restart JSON report
 
 	defaultFleetSoak        = 75 * time.Second // longer than OperatorHeartbeatStaleAfter, so a missed heartbeat shows up
 	defaultFleetConcurrency = "16,64"
@@ -48,8 +51,17 @@ const (
 	fleetSampleInterval     = 10 * time.Second
 	fleetEnrollmentWait     = 90 * time.Second
 	fleetFanOutTimeoutSecs  = 60
-	fleetFanOutCommand      = "uname -n"
+	fleetRestartTimeout     = 2 * time.Minute
+	fleetRecoveryWait       = 3 * time.Minute // several heartbeat intervals plus reconnect backoff
 )
+
+// fleetFanOutCommand prints the host name on every supported Operator platform.
+func fleetFanOutCommand() string {
+	if runtime.GOOS == "windows" {
+		return "hostname"
+	}
+	return "uname -n"
+}
 
 // fleetSample is one observation of the remote Operator registry.
 type fleetSample struct {
@@ -145,6 +157,94 @@ func TestOperatorFleet_HoldsUnderFanOut(t *testing.T) {
 	t.Run("fan-out leaves every Operator active", func(t *testing.T) {
 		watchFleet(t, &report, "settle", size, fleetSettleDuration, sessions)
 	})
+}
+
+// fleetRestartReport is the machine-readable result of the restart scenario.
+// It carries no identifiers, keys, or tokens.
+type fleetRestartReport struct {
+	Size               int                 `json:"size"`
+	RestartSeconds     float64             `json:"gateway_restart_seconds"`
+	RecoveredIn        float64             `json:"recovered_after_restart_seconds"`
+	SessionsRotated    int                 `json:"sessions_rotated"`
+	FanOutAfterRecover operator.RunSummary `json:"fan_out_after_recovery"`
+	GeneratedAt        time.Time           `json:"generated_at"`
+}
+
+// TestOperatorFleet_RecoversAfterGatewayRestart proves that a deployed fleet
+// survives a Gateway restart without re-enrollment: after `g8e gw restart`,
+// every remote Operator identity that was active before is active again with
+// a heartbeat newer than the restart, no new Operator identity appears, and a
+// governed fan-out reaches the whole fleet. Recovery time is reported, not
+// asserted beyond the fleetRecoveryWait correctness bound.
+func TestOperatorFleet_RecoversAfterGatewayRestart(t *testing.T) {
+	size := requireFleetSize(t)
+	bin := requireFleetEnv(t, fleetBinEnv)
+	require.Empty(t, strings.TrimSpace(os.Getenv(string(constants.EnvVar.E2EFleetSessions))),
+		"the restart scenario runs against a dedicated Gateway and does not take a session cohort")
+	root, err := resolveRuntimeRoot()
+	require.NoError(t, err)
+
+	report := fleetRestartReport{Size: size}
+	t.Cleanup(func() {
+		report.GeneratedAt = time.Now().UTC()
+		writeFleetJSON(t, fleetRestartReportEnv, &report)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+	before, err := remoteFleetOperators(ctx, nil)
+	cancel()
+	require.NoError(t, err)
+	identities := make(map[string]string, len(before))
+	for _, op := range before {
+		require.Equal(t, string(constants.OperatorStatusActive), op.Status, "every remote Operator must be active before the restart")
+		identities[op.Id] = op.OperatorSessionId
+	}
+	require.Len(t, identities, size, "the registry must hold exactly the deployed fleet before the restart")
+
+	restartAt := time.Now()
+	restartCtx, restartCancel := context.WithTimeout(context.Background(), fleetRestartTimeout)
+	restart := exec.CommandContext(restartCtx, bin, "gw", "restart")
+	restart.Dir = root
+	output, err := restart.CombinedOutput()
+	restartCancel()
+	require.NoError(t, err, "gw restart failed: %s", output)
+	report.RestartSeconds = time.Since(restartAt).Seconds()
+
+	var recovered []*operatorv1.OperatorDocument
+	require.Eventually(t, func() bool {
+		pollCtx, pollCancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+		defer pollCancel()
+		operators, err := remoteFleetOperators(pollCtx, nil)
+		if err != nil {
+			t.Logf("recovery poll: %v", err)
+			return false
+		}
+		recovered = recovered[:0]
+		for _, op := range operators {
+			if op.Status != string(constants.OperatorStatusActive) {
+				continue
+			}
+			if op.LastHeartbeatAt == nil || !op.LastHeartbeatAt.AsTime().After(restartAt) {
+				return false
+			}
+			recovered = append(recovered, op)
+		}
+		return len(recovered) == size
+	}, fleetRecoveryWait, 2*time.Second, "all %d remote Operators must heartbeat again after the Gateway restart", size)
+	report.RecoveredIn = time.Since(restartAt).Seconds()
+
+	for _, op := range recovered {
+		session, known := identities[op.Id]
+		assert.True(t, known, "Operator %s appeared after the restart: the fleet must reconnect, not re-enroll", op.Id)
+		if known && session != op.OperatorSessionId {
+			report.SessionsRotated++
+		}
+	}
+	t.Logf("gateway restart: restart=%.1fs recovered=%.1fs sessions_rotated=%d", report.RestartSeconds, report.RecoveredIn, report.SessionsRotated)
+
+	// One wave across the fleet plus the embedded Operator.
+	out := runFleetFanOut(t, bin, size+1, size, nil)
+	report.FanOutAfterRecover = out.Summary
 }
 
 // sampleFleet reads the registry once and summarises the remote Operators.
@@ -250,7 +350,7 @@ func runFleetFanOut(t *testing.T, bin string, concurrency, size int, sessions []
 	}
 	args = append(args,
 		"--concurrency", strconv.Itoa(concurrency),
-		"--cmd", fleetFanOutCommand,
+		"--cmd", fleetFanOutCommand(),
 		"--timeout", strconv.Itoa(fleetFanOutTimeoutSecs),
 		"--json")
 	cmd := exec.CommandContext(ctx, bin, args...)
@@ -282,11 +382,17 @@ func runFleetFanOut(t *testing.T, bin string, concurrency, size int, sessions []
 
 func writeFleetReport(t *testing.T, report *fleetReport) {
 	t.Helper()
-	path := strings.TrimSpace(os.Getenv(fleetReportEnv))
+	report.GeneratedAt = time.Now().UTC()
+	writeFleetJSON(t, fleetReportEnv, report)
+}
+
+// writeFleetJSON writes report to the path named by env, if set.
+func writeFleetJSON(t *testing.T, env string, report any) {
+	t.Helper()
+	path := strings.TrimSpace(os.Getenv(env))
 	if path == "" {
 		return
 	}
-	report.GeneratedAt = time.Now().UTC()
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		t.Errorf("encode fleet report: %v", err)
@@ -300,7 +406,7 @@ func writeFleetReport(t *testing.T, report *fleetReport) {
 func requireFleetEnv(t *testing.T, name string) string {
 	t.Helper()
 	value := strings.TrimSpace(os.Getenv(name))
-	require.NotEmpty(t, value, "%s must be set by scripts/ci/operator-fleet-smoke.sh", name)
+	require.NotEmpty(t, value, "%s must be set by g8e test scale", name)
 	return value
 }
 

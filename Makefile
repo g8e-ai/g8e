@@ -266,6 +266,7 @@ help:
 		'  test-coverage             Run tests and enforce $(COVERAGE_THRESHOLD)% coverage (PKG=..., VERBOSE=true)' \
 		'  test-docker               Run Tier 3 Docker E2E tests' \
 		'  test-cross-enrollment     Run Tier 3 cross-enrollment E2E tests' \
+		'  test-scale                Operator fleet scale qualification (SCALE_COUNT=100, SCALE_ARGS=...)' \
 		'  test-airgap               Verify the vendored air-gap build' \
 		'  lint                      Run all lint and quality checks' \
 		'  fmt                       Format all Go source files' \
@@ -862,6 +863,16 @@ test-docker:
 test-cross-enrollment:
 	@echo "Running Tier 3 cross-enrollment E2E tests..."
 	@./g8e test e2e --run 'TestCrossEnrollment'
+
+# Operator fleet scale qualification: starts an isolated Gateway in a fresh
+# scratch root, deploys SCALE_COUNT real Operators, runs the fleet soak/fan-out
+# and Gateway restart scenarios, and always tears down its own processes.
+# Never part of `make test`. Extra flags: SCALE_ARGS='--soak 10m --root DIR'.
+SCALE_COUNT ?= 100
+.PHONY: test-scale tests-scale
+test-scale: build
+	@./g8e test scale --count $(SCALE_COUNT) $(SCALE_ARGS)
+tests-scale: test-scale
 
 
 # Air-Gap Verification: verify vendored build works without network access

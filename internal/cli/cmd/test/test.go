@@ -35,7 +35,7 @@ func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "test",
 		Aliases: []string{"tests"},
-		Short:   "Run test suites (unit, integration, e2e, e2e-docker, lint, chaos)",
+		Short:   "Run test suites (unit, integration, e2e, e2e-docker, lint, chaos, scale)",
 		Long:    `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Chaos generates governance events for testing.`,
 	}
 
@@ -48,6 +48,7 @@ func Cmd() *cobra.Command {
 		testLintCmd(),
 		publicLoopCmd(),
 		chaosCmd(),
+		scaleCmd(),
 		testSummaryCmd(),
 	)
 
