@@ -54,6 +54,8 @@ The hostname must resolve on the Operator host and must match the Gateway certif
 
 Replace `192.0.2.10` with the Gateway IP address. Do not use `--cert-mode localhost` for remote connections; the default mode generates a certificate with the detected hostname and IP addresses.
 
+The Gateway HTTP and HTTPS listeners bind `127.0.0.1` by default, so only Operators on the Gateway host can reach them. Start the Gateway with `g8e gw start --listen-host 0.0.0.0` (or a specific interface address) before connecting Operators from other hosts or containers.
+
 ---
 
 ## Connect a New Operator
@@ -261,14 +263,14 @@ Without `--background`, Docker deployment prepares stopped containers. With `--b
 
 #### Expose a WSL Gateway on the Windows LAN
 
-For WSL in NAT mode, run the checked-in helper from an elevated Windows PowerShell. Inspect first, then apply rules scoped to the Docker machine (or a deliberately selected LAN subnet):
+Start the Gateway inside WSL with `g8e gw start --listen-host 0.0.0.0`; the Windows port forward connects to the WSL address, which a loopback-only Gateway refuses. For WSL in NAT mode, run the checked-in helper from an elevated Windows PowerShell. Inspect first, then apply rules scoped to the Docker machine (or a deliberately selected LAN subnet):
 
 ```powershell
 .\scripts\configure-gateway-lan.ps1 -Action Inspect
 .\scripts\configure-gateway-lan.ps1 -Action Apply -RemoteScope 192.168.1.53
 ```
 
-The helper discovers the current Windows LAN and WSL addresses unless they are passed as `-LanAddress` and `-WslAddress`, checks WSL listeners and Gateway health, displays existing matching rules, and manages only `192.168.1.2:8080`/`:8443`-style forwards and its two named firewall rules. Use `-WhatIf` for a dry run and `-Action Remove` to remove those rules. WSL addresses can change after restart, so inspect and reapply the helper when that happens. It does not create a scheduled task or change WSL networking mode. With WSL mirrored networking, inspect the current listeners/routing first and do not add redundant NAT forwarding.
+The helper discovers the current Windows LAN and WSL addresses unless they are passed as `-LanAddress` and `-WslAddress`, checks that WSL ports 8080 and 8443 listen on all interfaces or the WSL address, checks Gateway health, displays existing matching rules, and manages only `192.168.1.2:8080`/`:8443`-style forwards and its two named firewall rules. Use `-WhatIf` for a dry run and `-Action Remove` to remove those rules. WSL addresses can change after restart, so inspect and reapply the helper when that happens. It does not create a scheduled task or change WSL networking mode. With WSL mirrored networking, inspect the current listeners/routing first and do not add redundant NAT forwarding.
 
 Before a fleet rollout, verify both ports from the remote Docker host and deploy one Operator through full mTLS enrollment and WebSocket readiness. A successful HTTP health check alone is not an acceptance test. Increase to ten only after the one-container redeploy preserves its named volume and identity. Measure memory, CPU, file descriptors, startup time, Gateway load, and heartbeat delays before attempting 100 or 1000 containers.
 

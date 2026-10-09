@@ -262,7 +262,7 @@ This is the current implementation model for SAN drift: additive identity discov
 
 ### Windows/WSL LAN access
 
-`scripts/configure-gateway-lan.ps1` (`-Action Inspect|Apply|Remove`) configures Windows port forwarding and firewall rules for Gateway ports 8080 and 8443 so LAN hosts can reach a Gateway running in WSL. Inspect is the default action; Apply and Remove require an elevated session.
+`scripts/configure-gateway-lan.ps1` (`-Action Inspect|Apply|Remove`) configures Windows port forwarding and firewall rules for Gateway ports 8080 and 8443 so LAN hosts can reach a Gateway running in WSL. The Gateway must be started with `--listen-host 0.0.0.0`; Apply fails when WSL ports 8080 and 8443 listen only on loopback. Inspect is the default action; Apply and Remove require an elevated session.
 
 ## Anti-patterns
 

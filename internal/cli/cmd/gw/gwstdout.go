@@ -8,6 +8,7 @@
 package gw
 
 import (
+	"net"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -16,6 +17,24 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 )
+
+// printListenHostNotice warns when the HTTP/HTTPS listeners are loopback-only,
+// because the Gateway is then reachable from this host alone. An empty
+// listenHost comes from a launch profile written before --listen-host existed,
+// which the Gateway now resolves to loopback.
+func printListenHostNotice(cmd *cobra.Command, listenHost string) {
+	host := listenHost
+	if host == "" {
+		host = constants.LocalhostIP
+	}
+	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+		return
+	}
+	cmd.Printf("[g8e] Listening on loopback only (%s). Remote Operators, workstations, and LAN\n", host)
+	cmd.Println("      clients cannot reach this Gateway. To listen on all interfaces, run")
+	cmd.Println("      `gw stop`, then `gw start --listen-host 0.0.0.0`.")
+	cmd.Println()
+}
 
 // printNextSteps outputs guidance after the gateway starts. The passkey
 // enrollment guidance is posture-aware: ratify and notary require a

@@ -75,9 +75,9 @@ Starts the Governance Gateway with a specified posture. The binary runs as the p
 Embedded command dispatch runs the governance processor alongside the result consumer. Its bounded result queue waits for capacity, slowing local inference progress publishers while the consumer is busy. Caller cancellation, the dispatch deadline, or a progress callback failure cancels processing and joins the processor before removing the result handler. A terminal result is returned only after processing succeeds. Remote progress queue overflow remains a typed backpressure failure.
 
 Commands:
-- `g8e gw start [--posture doctrine|consensus|ratify|notary] [--http-port 8080] [--https-port 8443]` — Starts Gateway with optional port overrides.
+- `g8e gw start [--posture doctrine|consensus|ratify|notary] [--http-port 8080] [--https-port 8443] [--listen-host 127.0.0.1]` — Starts Gateway with optional port and bind-host overrides. The HTTP and HTTPS listeners bind loopback by default; pass `--listen-host 0.0.0.0` when remote Operators, workstations, or containers must reach them.
 - `g8e gw status` — Reports health, an Operators table (one row per connected Operator: type, status, host, port, capabilities, directory), an Operator flags table (the start values each Operator reported), and enrollment counts. See [Getting started](../guides/getting_started.md) for the output.
-- `g8e gw restart` — Reads persisted launch profile from `.g8e/pids/operator-launch-profile.json` and re-runs network identity detection before restart. Fails closed if profile is missing or malformed.
+- `g8e gw restart` — Reads persisted launch profile from `.g8e/pids/operator-launch-profile.json` and re-runs network identity detection before restart. Fails closed if profile is missing or malformed. A profile without `listen_host` restarts on loopback.
 - `g8e gw stop` — Gracefully shuts down the Gateway.
 
 **Operator Mode (`operator start`)**

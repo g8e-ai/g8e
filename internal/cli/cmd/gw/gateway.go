@@ -459,7 +459,7 @@ Posture Persistence: The complete launch configuration is persisted in
 .g8e/pids/operator-launch-profile.json on every successful background start. When
 using 'gateway restart', the full configuration (CORS, passkey, ports, posture,
 downstream routes, rate limits, doctrine, consensus, vault, cert mode, public
-base URL) is read from this profile and restored. If the profile is missing or
+base URL, listen host) is read from this profile and restored. If the profile is missing or
 malformed, the restart fails closed rather than falling back to default settings.
 Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -597,6 +597,7 @@ Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n", pid)
 			cmd.Println()
+			printListenHostNotice(cmd, gatewayCfg.ListenHost)
 			printNextSteps(cmd, postureObj, externalIP, hostname)
 
 			return nil
@@ -834,6 +835,7 @@ restart.`,
 			}
 
 			cmd.Println("g8e Gateway restarted successfully")
+			printListenHostNotice(cmd, profile.Config.ListenHost)
 			postureObj, _ := governance.ParseGovernancePosture(string(profile.Config.Posture))
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))

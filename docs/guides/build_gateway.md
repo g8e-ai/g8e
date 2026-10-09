@@ -152,7 +152,7 @@ Use `--follow` to run in the foreground, which is appropriate for containers and
 ./g8e gw start --follow
 ```
 
-On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; use `--http-port` and `--https-port` flags to override these defaults. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through a checked-in `docker-compose.override.yml`. Confirm the resolved endpoints, then enroll the first owner:
+On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; use `--http-port` and `--https-port` flags to override these defaults. Both listeners bind `127.0.0.1` unless `--listen-host` names another address; pass `--listen-host 0.0.0.0` when Operators or workstations on other hosts must reach the gateway. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through a checked-in `docker-compose.override.yml`. Confirm the resolved endpoints, then enroll the first owner:
 
 ```bash
 ./g8e gw status

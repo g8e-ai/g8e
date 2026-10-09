@@ -391,3 +391,21 @@ func TestPickHostname(t *testing.T) {
 		assert.Equal(t, "dev.g8e.local", pickHostname(id))
 	})
 }
+
+func TestPrintListenHostNotice(t *testing.T) {
+	for _, host := range []string{"", constants.LocalhostIP, "127.0.0.2", "::1", "localhost"} {
+		t.Run("loopback "+host, func(t *testing.T) {
+			cmd, buf := newOutputCmd()
+			printListenHostNotice(cmd, host)
+			assert.Contains(t, buf.String(), "Listening on loopback only")
+			assert.Contains(t, buf.String(), "--listen-host 0.0.0.0")
+		})
+	}
+	for _, host := range []string{"0.0.0.0", "::", "192.168.1.10", "gateway.example"} {
+		t.Run("reachable "+host, func(t *testing.T) {
+			cmd, buf := newOutputCmd()
+			printListenHostNotice(cmd, host)
+			assert.Empty(t, buf.String())
+		})
+	}
+}

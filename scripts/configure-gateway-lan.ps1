@@ -52,7 +52,16 @@ Write-Host "WSL address: $WslAddress"
 if ($Action -ne 'Remove') {
     try {
         Write-Host 'Gateway listeners in WSL:'
-        Invoke-WslText "ss -ltn | grep -E ':(8080|8443)[[:space:]]'" | Write-Host
+        $listeners = Invoke-WslText "ss -ltn | grep -E ':(8080|8443)[[:space:]]'"
+        $listeners | Write-Host
+        # portproxy connects to the WSL address, which a loopback-only listener
+        # (the Gateway default) refuses even though the health check below passes.
+        $escapedWslAddress = [regex]::Escape($WslAddress)
+        foreach ($port in $ports) {
+            if ($listeners -notmatch "(?m)\s(0\.0\.0\.0|\*|\[::\]|$escapedWslAddress):$port\s") {
+                throw "WSL port $port is not listening on $WslAddress or all interfaces. Start the Gateway with 'g8e gw start --listen-host 0.0.0.0'."
+            }
+        }
         Write-Host 'Gateway health in WSL:'
         Invoke-WslText "curl -fsS --connect-timeout 3 http://127.0.0.1:8080/api/v1/health" | Write-Host
     } catch {

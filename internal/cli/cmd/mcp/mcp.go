@@ -389,10 +389,12 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 		return session, nil
 	}
 
-	externalIP := network.GetExternalInterfaceIP()
-	gatewayURL = fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
+	// The default URL targets the local Gateway, whose listeners bind loopback
+	// unless started with --listen-host. tlsCfg pins ServerName to g8e.local,
+	// so dialing the loopback IP still verifies the Gateway certificate.
+	gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.LocalhostIP, constants.Ports.OperatorHttps)
 	session.gatewayURL = gatewayURL
-	slog.Info("g8e.local DNS resolution failed, falling back to direct IP", "ip", externalIP)
+	slog.Info("g8e.local DNS resolution failed, falling back to loopback", "ip", constants.LocalhostIP)
 
 	return session, nil
 }
@@ -811,7 +813,7 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 	cmd.Println("┌─ g8e.local (mTLS) ─────────────────────────────────────────────────────────────")
 	cmd.Println("│ Use: Production environments with DNS configured")
 	cmd.Println("│ Apps: Claude Code, Codex, Goose, Gemini CLI")
-	cmd.Println("│ Requires: DNS or /etc/hosts entry for g8e.local resolution")
+	cmd.Println("│ Requires: DNS or /etc/hosts entry for g8e.local resolution; Gateway started with --listen-host 0.0.0.0")
 	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
 	if err := printMCPConfigLocal(cmd); err != nil {
 		return fmt.Errorf("mcp: print local config: %w", err)
@@ -821,7 +823,7 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 	cmd.Println("┌─ IP Address (mTLS) ───────────────────────────────────────────────────────────")
 	cmd.Println("│ Use: Environments without DNS or for direct IP access")
 	cmd.Println("│ Apps: Claude Code, Codex, Goose, Gemini CLI")
-	cmd.Println("│ Requires: No DNS setup, uses external interface IP")
+	cmd.Println("│ Requires: No DNS setup, uses external interface IP; Gateway started with --listen-host 0.0.0.0")
 	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
 	if err := printMCPConfigIP(cmd); err != nil {
 		return fmt.Errorf("mcp: print IP config: %w", err)
