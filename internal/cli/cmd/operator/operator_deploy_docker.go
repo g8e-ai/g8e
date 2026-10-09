@@ -82,7 +82,7 @@ func (d *deployDocker) docker(ctx context.Context, args ...string) ([]byte, erro
 // prepare performs all shared, non-fleet checks before any persistent resource
 // is created. The image ID is then used for every container so a mutable tag
 // cannot change halfway through a rollout.
-func (d *deployDocker) prepare(ctx context.Context, endpoint string) error {
+func (d *deployDocker) prepare(ctx context.Context, preflight []string) error {
 	if !dockerSafeValue.MatchString(d.context) || !dockerSafeValue.MatchString(d.image) {
 		return fmt.Errorf("%w: unsafe Docker context or image name", constants.ErrPathValidation)
 	}
@@ -105,10 +105,9 @@ func (d *deployDocker) prepare(ctx context.Context, endpoint string) error {
 		return fmt.Errorf("docker image platform %s is incompatible with daemon platform %s", got, want)
 	}
 	d.imageID = parts[0]
-	if endpoint != "" {
-		_, err = d.docker(ctx, "run", "--rm", "--entrypoint", "/gateway-preflight.sh", d.imageID, endpoint)
-		if err != nil {
-			return fmt.Errorf("docker context %q cannot verify Gateway HTTP/TLS connectivity at %s on ports 8080/8443: %w", d.context, endpoint, err)
+	if preflight != nil {
+		if _, err := d.docker(ctx, append([]string{"run", "--rm", d.imageID, "operator", "gateway-preflight"}, preflight...)...); err != nil {
+			return gatewayPreflightError(d.name(), preflight[0], err)
 		}
 	}
 	return nil

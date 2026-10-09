@@ -122,11 +122,10 @@ docs/*
 !README.md
 
 # CI/CD, scripts, third-party reference, generated site — not needed in any
-# container except the entrypoint and Gateway connectivity preflight scripts.
+# container except the entrypoint script.
 .github/
 scripts/*
 !scripts/docker-entrypoint.sh
-!scripts/gateway-preflight.sh
 third_party/
 .build/
 site/

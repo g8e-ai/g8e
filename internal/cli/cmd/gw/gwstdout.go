@@ -23,16 +23,16 @@ import (
 // listenHost comes from a launch profile written before --listen-host existed,
 // which the Gateway now resolves to loopback.
 func printListenHostNotice(cmd *cobra.Command, listenHost string) {
-	host := listenHost
-	if host == "" {
-		host = constants.LocalhostIP
+	if listenHost == "" {
+		listenHost = constants.LocalhostIP
 	}
-	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+	if listenHost != "localhost" && !net.ParseIP(listenHost).IsLoopback() {
 		return
 	}
-	cmd.Printf("[g8e] Listening on loopback only (%s). Remote Operators, workstations, and LAN\n", host)
+	bin := getBinaryName()
+	cmd.Printf("[g8e] Listening on loopback only (%s). Remote Operators, workstations, and LAN\n", listenHost)
 	cmd.Println("      clients cannot reach this Gateway. To listen on all interfaces, run")
-	cmd.Println("      `gw stop`, then `gw start --listen-host 0.0.0.0`.")
+	cmd.Printf("      '%s gw stop', then '%s gw start --listen-host 0.0.0.0'.\n", bin, bin)
 	cmd.Println()
 }
 

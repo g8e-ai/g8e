@@ -57,8 +57,13 @@ func preparedFakeDocker(t *testing.T) (*deployDocker, *fakeDockerRunner) {
 	}}
 	d := newDeployDocker("livingroom-node", "g8e-operator:local", "/operators/fleet", nil)
 	d.runner = fake
-	require.NoError(t, d.prepare(context.Background(), "192.168.1.2"))
+	require.NoError(t, d.prepare(context.Background(), []string{"192.168.1.2", "--gateway-https-port=9443"}))
 	return d, fake
+}
+
+func TestDockerPrepareRunsGatewayPreflightFromTheResolvedImage(t *testing.T) {
+	_, fake := preparedFakeDocker(t)
+	assert.Contains(t, joinedDockerCalls(fake.calls), "run --rm sha256:resolved operator gateway-preflight 192.168.1.2 --gateway-https-port=9443")
 }
 
 func TestDockerDeploymentBuildsOwnedUnpublishedContainer(t *testing.T) {

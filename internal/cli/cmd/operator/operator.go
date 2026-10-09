@@ -81,6 +81,7 @@ func Cmd() *cobra.Command {
 		operatorScpCmd(),
 		operatorDeployCmd(),
 		operatorDeploymentStateCmd(),
+		operatorGatewayPreflightCmd(),
 		operatorStreamCmd(),
 		operatorModelCmd(),
 	)

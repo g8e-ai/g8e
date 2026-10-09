@@ -38,6 +38,7 @@ import (
 const fakeWorkerStatePreamble = `#!/bin/sh
 state='@state@'
 id=$(printf %s "$PWD" | md5sum | cut -c1-32)
+if [ "$2" = gateway-preflight ]; then exit 0; fi
 if [ "$2" = deployment-state ]; then
   if [ ! -f "$state" ]; then printf 'null\n'; exit; fi
   cat "$state"
@@ -384,6 +385,22 @@ func TestOperatorDeployForwardsGatewayPortsToTheWorker(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 	assert.Contains(t, string(data), "--gateway-http-port=9080\n")
 	assert.Contains(t, string(data), "--gateway-https-port=9443\n")
+}
+
+func TestOperatorDeployStopsBeforeStartingWorkersWhenTheGatewayIsUnreachable(t *testing.T) {
+	// The preflight runs from the shared binary in <dest-dir>/.deploy-bin.
+	useFakeSSH(t, `#!/bin/sh
+if [ "$2" = gateway-preflight ]; then printf '%s\n' "$@" > "$(dirname "$0")/../preflight.txt"; exit 7; fi
+`+fakeWorkerEnrolls[10:])
+	root := filepath.Join(t.TempDir(), "fleet")
+	out, err := runOperatorDeploy(t, &cmdtest.MockAPIClient{}, "--hosts", "host", "--dest-dir", root,
+		"--background", "--endpoint", "192.168.1.2", "--gateway-https-port", "9443")
+	require.ErrorIs(t, err, constants.ErrOperatorDeployFailed, out)
+	assert.Contains(t, err.Error(), "--listen-host 0.0.0.0")
+	data, readErr := os.ReadFile(filepath.Join(root, "preflight.txt"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "operator\ngateway-preflight\n192.168.1.2\n--gateway-https-port=9443\n", string(data))
+	assert.NoFileExists(t, filepath.Join(root, operatorDeployStartLog), "no worker may start")
 }
 
 func TestOperatorDeployRejectsGatewayPortsOutOfRange(t *testing.T) {

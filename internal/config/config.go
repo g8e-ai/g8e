@@ -648,7 +648,7 @@ func Load(opts LoadOptions) (*Config, error) {
 	}
 
 	// Build config from explicit options
-	tlsServerName := tlsServerName(opts.OperatorEndpoint)
+	tlsServerName := TLSServerName(opts.OperatorEndpoint)
 	cfg := &Config{
 		OperatorRoles: opts.OperatorRoles.Canonical(),
 		// From options
@@ -835,12 +835,12 @@ func (c *Config) ReportedHTTPSPort() int {
 	return c.HTTPSPort
 }
 
-// tlsServerName returns the TLS ServerName override to use when endpoint is a
+// TLSServerName returns the TLS ServerName override to use when endpoint is a
 // raw IP address. When connecting to a Gateway via IP, we use the internal
 // Gateway hostname (g8e.local) for TLS verification since the Gateway's
 // certificate is issued to this name.
 // Returns an empty string when endpoint is already a hostname (no override needed).
-func tlsServerName(endpoint string) string {
+func TLSServerName(endpoint string) string {
 	if net.ParseIP(endpoint) != nil {
 		return constants.GatewayInternalHostname
 	}

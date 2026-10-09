@@ -133,7 +133,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `examples/` | Runnable Go and Python platform examples, external console app, and MCP client configuration templates. |
 | `release-evidence/` | Immutable release compliance evidence bundles and signatures. |
 | `docs/` | Architecture, guides, references, developer docs, and release notes. |
-| `scripts/` | Validation, generation, release, onboarding, and build support scripts. `scripts/gateway-preflight.sh` is included in the shared Gateway/Operator image built by the root `Dockerfile` for Docker fleet connectivity checks. `scripts/full.py` is the host launcher behind `make full`. `scripts/configure-gateway-lan.ps1` is the Windows-to-WSL Gateway LAN helper. `scripts/ci/` and `scripts/tests/` hold the onboarding smoke workflow and script unit tests. Catalog: [Automation Scripts](../architecture/scripts.md). |
+| `scripts/` | Validation, generation, release, onboarding, and build support scripts. `scripts/full.py` is the host launcher behind `make full`. `scripts/configure-gateway-lan.ps1` is the Windows-to-WSL Gateway LAN helper. `scripts/ci/` and `scripts/tests/` hold the onboarding smoke workflow and script unit tests. Catalog: [Automation Scripts](../architecture/scripts.md). |
 | `website/` | Static site generator and Cloudflare Worker packaging. Source overview is the root `README.md`. |
 | `third_party/` | Vendored inputs generated into internal adapters. Lattice protobuf provenance is under `third_party/anduril/`. |
 | `vendor/` | Third-party Go modules. Not a g8e product owner. |

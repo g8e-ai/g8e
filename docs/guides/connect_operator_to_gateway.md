@@ -243,7 +243,7 @@ docker --context livingroom-node build --platform linux/amd64 --pull=false \
   --file Dockerfile --tag g8e:local .
 ```
 
-Then deploy a small batch. Here the owner CLI talks to its local Gateway while containers dial the Gateway through the machine's LAN address:
+Then deploy a small batch. Here the owner CLI talks to its local Gateway while containers dial the Gateway through the machine's LAN address, so the Gateway must be started with `--listen-host 0.0.0.0`; a loopback-only Gateway fails the connectivity preflight before any fleet resource is created:
 
 ```bash
 ./g8e operator deploy \
@@ -255,7 +255,7 @@ Then deploy a small batch. Here the owner CLI talks to its local Gateway while c
   --background --approve
 ```
 
-When the Gateway listens on non-default ports, add `--gateway-http-port` and `--gateway-https-port` so the workers dial them; `--operator-endpoint` stays a bare host or IP. Every Docker command names the selected context explicitly. Deployment resolves the image to one immutable image ID for the batch, checks daemon/image platform compatibility, and checks HTTP discovery reachability from a temporary container before creating fleet resources. Stable ownership labels protect containers and volumes from accidental adoption. A redeploy recreates only a matching owned container and retains its volume and enrollment identity. After enrollment and command-channel readiness, its restart policy becomes `unless-stopped`; failed initial enrollment does not enter an unlimited restart loop.
+When the Gateway listens on non-default ports, add `--gateway-http-port` and `--gateway-https-port` so the workers dial them; `--operator-endpoint` stays a bare host or IP. Every Docker command names the selected context explicitly. Deployment resolves the image to one immutable image ID for the batch, checks daemon/image platform compatibility, and runs `operator gateway-preflight` from a temporary container against the worker endpoint and ports before creating fleet resources. SSH and `--local` targets run the same check from the installed binary before starting workers. Stable ownership labels protect containers and volumes from accidental adoption. A redeploy recreates only a matching owned container and retains its volume and enrollment identity. After enrollment and command-channel readiness, its restart policy becomes `unless-stopped`; failed initial enrollment does not enter an unlimited restart loop.
 
 `--dest-dir` is an absolute path inside each container. The private volume is mounted there and is also the container working directory. A repeatable `--docker-mount type=bind,source=/remote/path,target=/container/path,readonly` can expose a remote-host model store to a provenance Operator. Bind source paths belong to the remote Docker host. Mounts must be read-only and cannot cover the private runtime root or `/g8e`. Observer hardware access is host-specific and is not granted automatically; deployment never adds `--privileged`.
 

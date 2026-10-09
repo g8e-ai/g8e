@@ -66,7 +66,6 @@ Entry points: [Development bootstrap](#development-bootstrap) (`linux-setup.sh`,
 | Fresh onboarding smoke test | `scripts/ci/onboarding-smoke.sh` | Disposable Linux checkout only: installs build prerequisites, builds and starts Gateway, enrolls owner, installs Ensemble runtime, then starts and approves four Operators and Ensemble |
 | Host stack launcher | `scripts/full.py` | Behind `make full`, `full-setup`, `full-reset`, `status`, `down`, `ensemble-*`, and `operators-*`; see [Host lifecycle launcher](../guides/unified_stack.md#host-lifecycle-launcher-make-full) |
 | Windows-to-WSL Gateway LAN helper | `scripts/configure-gateway-lan.ps1` | `-Action Inspect\|Apply\|Remove` for ports 8080 and 8443 portproxy and firewall rules; see [Network Architecture](network.md) |
-| Docker deployment preflight | `scripts/gateway-preflight.sh`, root `Dockerfile` | Included in the shared Gateway/Operator image; verifies Gateway HTTP/TLS connectivity from the selected Docker context before fleet startup |
 | Container entrypoint | `scripts/docker-entrypoint.sh` | Copied into the image as `/entrypoint.sh` by the `Dockerfile` |
 | License header check | `scripts/check-bsl-headers.py` | Run by `make bsl-headers-check` |
 | Script unit tests | `scripts/tests/` | Audit, uv bootstrap, conditional developer installation, host launcher, and runtime-safe clean coverage |

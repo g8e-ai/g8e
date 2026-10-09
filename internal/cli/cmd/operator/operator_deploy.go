@@ -103,6 +103,9 @@ type operatorDeployOptions struct {
 	endpoint   string
 	background bool
 	startArgs  []string
+	// preflight is the operator gateway-preflight argument list each target runs
+	// before any worker starts; it is set whenever workers are started.
+	preflight []string
 	// client is set only with --approve; the staged cohort is approved once.
 	client authcmd.APIClient
 	// events delivers the Gateway's staging and readiness announcements for the
@@ -188,6 +191,7 @@ Role IDs default to unique, stable values per host/directory. Flag values suppor
 {name} (directory basename), {dir} (absolute directory), and {host} substitutions.
 --background starts workers; --endpoint or --operator-endpoint is required.
 --operator-endpoint selects the worker-facing Gateway host and defaults to --endpoint.
+Workers dialing a non-loopback host need a Gateway started with --listen-host 0.0.0.0.
 --approve approves enrollment as
 the authenticated owner in one batch after every worker is staged, then verifies
 every worker has established its command subscription. Without --approve, workers remain pending. Repeating a deployment replaces only its own workers.`,
@@ -219,6 +223,9 @@ every worker has established its command subscription. Without --approve, worker
 				return err
 			}
 			opts := operatorDeployOptions{endpoint: workerEndpoint, background: background, startArgs: startArgs}
+			if background {
+				opts.preflight = operatorDeployPreflightArgs(cmd, workerEndpoint)
+			}
 			if approve {
 				opts.client, err = clientFactory(fileSvc, cfg)
 				if err != nil {
@@ -577,6 +584,22 @@ func (s deploySSH) stopPreviousOperator(ctx context.Context, dir string) error {
 	return nil
 }
 
+// preflightGateway runs the installed binary's gateway-preflight on this host,
+// so a Gateway the workers cannot reach fails the deploy before any starts.
+func (s deploySSH) preflightGateway(ctx context.Context, args []string) error {
+	if s.local {
+		check := exec.CommandContext(ctx, filepath.Join(s.binaryDir, "g8e"), append([]string{"operator", "gateway-preflight"}, args...)...)
+		check.Stderr = s.stderr
+		return check.Run()
+	}
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = operatorDeployShellQuote(arg)
+	}
+	_, err := s.run(ctx, fmt.Sprintf("%s/g8e operator gateway-preflight %s", operatorDeployShellQuote(s.binaryDir), strings.Join(quoted, " ")))
+	return err
+}
+
 // startOperator stops any worker previously deployed from dir, clears its start
 // log, and starts a new worker.
 func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, startArgs ...string) error {
@@ -659,6 +682,25 @@ var operatorDeployForwardFlags = []string{
 	"provenance-operator-enabled", "provenance-operator-id", "model-storage-root",
 	"gateway-http-port", "gateway-https-port",
 	"heartbeat-interval", "no-git", "execution-vault", "log", "trust-bundle",
+}
+
+// operatorDeployPreflightArgs returns the gateway-preflight arguments that probe
+// the same host and ports the workers will dial.
+func operatorDeployPreflightArgs(cmd *cobra.Command, endpoint string) []string {
+	args := []string{endpoint}
+	for _, name := range []string{"gateway-http-port", "gateway-https-port"} {
+		if flag := cmd.Flags().Lookup(name); flag.Changed {
+			args = append(args, "--"+name+"="+flag.Value.String())
+		}
+	}
+	return args
+}
+
+// gatewayPreflightError names the likely cause of a failed preflight: the
+// Gateway listens on loopback unless started with --listen-host.
+func gatewayPreflightError(target, endpoint string, err error) error {
+	return fmt.Errorf("%w: %s cannot reach the Gateway at %s (it listens on loopback unless started with --listen-host 0.0.0.0): %w",
+		constants.ErrOperatorDeployFailed, target, endpoint, err)
 }
 
 func operatorDeployStartArgs(cmd *cobra.Command) ([]string, error) {
@@ -839,11 +881,7 @@ func executeDeployDocker(
 	totalTargets int,
 ) ([]deployedOperator, []string, error) {
 	d := newDeployDocker(dockerContext, dockerImage, remoteDir, dockerMounts)
-	preflightEndpoint := ""
-	if opts.background {
-		preflightEndpoint = opts.endpoint
-	}
-	if err := d.prepare(ctx, preflightEndpoint); err != nil {
+	if err := d.prepare(ctx, opts.preflight); err != nil {
 		return nil, nil, err
 	}
 	var deployed []deployedOperator
@@ -889,6 +927,11 @@ func executeDeploySSH(
 			return deployed, failed, err
 		}
 		s.binaryDir = cache
+		if opts.preflight != nil {
+			if err := s.preflightGateway(ctx, opts.preflight); err != nil {
+				return deployed, failed, gatewayPreflightError(s.host, opts.endpoint, err)
+			}
+		}
 		results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
 		for result := range results {
 			cmd.Print(result.output)

@@ -148,8 +148,7 @@ COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
 # 3. Host-mounted arch binary from /opt/g8e/bin/g8e-linux-${ARCH}
 # 4. Image baked-in binary (/g8e)
 COPY scripts/docker-entrypoint.sh /entrypoint.sh
-COPY scripts/gateway-preflight.sh /gateway-preflight.sh
-RUN chmod +x /entrypoint.sh /gateway-preflight.sh
+RUN chmod +x /entrypoint.sh
 
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants
