@@ -35,7 +35,7 @@ func putCLISession(t *testing.T, store *DocumentStoreService, id, userID string)
 		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour),
 	})
 	require.NoError(t, err)
-	require.NoError(t, store.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), id, body))
+	require.NoError(t, store.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), id, body))
 }
 
 // connectCLIStream simulates the open SSE stream of CLI session id, which is
@@ -83,7 +83,7 @@ func TestOperatorCommandSubscribed_AnnouncesReadinessToOwnerCLIAndWebSessions(t 
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 	putSubscribableOperator(t, store, constants.OperatorStatusActive)
 
-	require.NoError(t, store.OperatorCommandSubscribed("op-1", "sess-1", "launch-1"))
+	require.NoError(t, store.OperatorCommandSubscribed(t.Context(), "op-1", "sess-1", "launch-1"))
 
 	for name, events := range map[string][]recordedOperatorEvent{
 		"owner CLI session": cliSessionEvents(t, ls, statusEventOwner, "cli-owner"),
@@ -105,7 +105,7 @@ func TestOperatorCommandSubscribed_ReportsTheDocumentsStatusNotReadiness(t *test
 	connectCLIStream(t, ls, "cli-owner")
 	putSubscribableOperator(t, store, constants.OperatorStatusStopped)
 
-	require.NoError(t, store.OperatorCommandSubscribed("op-1", "sess-1", "launch-1"))
+	require.NoError(t, store.OperatorCommandSubscribed(t.Context(), "op-1", "sess-1", "launch-1"))
 
 	events := cliSessionEvents(t, ls, statusEventOwner, "cli-owner")
 	require.Len(t, events, 1)
@@ -120,10 +120,10 @@ func TestOperatorCommandSubscribed_StaleSessionAndUnknownOperatorAnnounceNothing
 	connectCLIStream(t, ls, "cli-owner")
 	putSubscribableOperator(t, store, constants.OperatorStatusActive)
 
-	require.NoError(t, store.OperatorCommandSubscribed("op-1", "sess-superseded", "launch-1"))
+	require.NoError(t, store.OperatorCommandSubscribed(t.Context(), "op-1", "sess-superseded", "launch-1"))
 	assert.Empty(t, cliSessionEvents(t, ls, statusEventOwner, "cli-owner"))
 
-	require.ErrorIs(t, store.OperatorCommandSubscribed("op-missing", "sess-1", "launch-1"), constants.ErrNotFound)
+	require.ErrorIs(t, store.OperatorCommandSubscribed(t.Context(), "op-missing", "sess-1", "launch-1"), constants.ErrNotFound)
 }
 
 func TestOperatorStatusEvents_EnrollmentActiveAnnouncementReachesOwnerCLISessionWithoutLaunchKey(t *testing.T) {
@@ -135,7 +135,7 @@ func TestOperatorStatusEvents_EnrollmentActiveAnnouncementReachesOwnerCLISession
 	connectCLIStream(t, ls, "cli-other")
 	putWebSession(t, store, "web-owner", statusEventOwner, time.Hour)
 
-	store.NotifyOperatorEnrolled("op-1", statusEventOwner, "edge-1")
+	store.NotifyOperatorEnrolled(t.Context(), "op-1", statusEventOwner, "edge-1")
 
 	require.Len(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"), 1)
 	events := cliSessionEvents(t, ls, statusEventOwner, "cli-owner")
@@ -157,7 +157,7 @@ func TestOperatorStatusEvents_WorkerCLISessionsWithoutAStreamGetNoRows(t *testin
 		putCLISession(t, store, fmt.Sprintf("cli-worker-%d", i), statusEventOwner)
 	}
 
-	store.NotifyOperatorEnrolled("op-1", statusEventOwner, "edge-1")
+	store.NotifyOperatorEnrolled(t.Context(), "op-1", statusEventOwner, "edge-1")
 
 	require.Len(t, cliSessionEvents(t, ls, statusEventOwner, "cli-owner"), 1)
 	for i := range workers {
@@ -167,7 +167,7 @@ func TestOperatorStatusEvents_WorkerCLISessionsWithoutAStreamGetNoRows(t *testin
 
 func TestApprovalsChanged_EnrollmentRequestedCarriesTheLaunchToOwnerCLISession(t *testing.T) {
 	f := newApprovalsFixture(t)
-	owner, err := f.users.CreateUser()
+	owner, err := f.users.CreateUser(t.Context())
 	require.NoError(t, err)
 	putCLISession(t, f.store, "cli-owner", owner.ID)
 	tap := &liveTap{}
@@ -180,7 +180,7 @@ func TestApprovalsChanged_EnrollmentRequestedCarriesTheLaunchToOwnerCLISession(t
 	})
 	t.Cleanup(unregister)
 
-	f.notifier.EnrollmentRequested("req-1", "launch-1")
+	f.notifier.EnrollmentRequested(t.Context(), "req-1", "launch-1")
 
 	tap.mu.Lock()
 	defer tap.mu.Unlock()

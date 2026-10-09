@@ -80,7 +80,7 @@ func TestDocGet_Success(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u1")
+	doc, err := svc.DocGet(t.Context(), "users", "u1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, "users", doc.Collection)
@@ -94,7 +94,7 @@ func TestDocGet_Success(t *testing.T) {
 func TestDocGet_NotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	doc, err := svc.DocGet("users", "nonexistent")
+	doc, err := svc.DocGet(t.Context(), "users", "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 }
@@ -105,7 +105,7 @@ func TestDocGet_DatabaseError(t *testing.T) {
 	// Close the DB to cause errors
 	_ = svc.db.Close()
 
-	_, err := svc.DocGet("users", "u1")
+	_, err := svc.DocGet(t.Context(), "users", "u1")
 	require.Error(t, err)
 }
 
@@ -113,10 +113,10 @@ func TestDocCreate_Success(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "bob", "role": "user"})
-	err := svc.DocCreate("users", "u2", data)
+	err := svc.DocCreate(t.Context(), "users", "u2", data)
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u2")
+	doc, err := svc.DocGet(t.Context(), "users", "u2")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, "bob", docField(t, doc, "name"))
@@ -127,11 +127,11 @@ func TestDocCreate_AlreadyExists(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "charlie"})
-	err := svc.DocCreate("users", "u3", data)
+	err := svc.DocCreate(t.Context(), "users", "u3", data)
 	require.NoError(t, err)
 
 	// Attempt to create duplicate
-	err = svc.DocCreate("users", "u3", data)
+	err = svc.DocCreate(t.Context(), "users", "u3", data)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAlreadyExists)
 }
@@ -145,10 +145,10 @@ func TestDocCreate_StripsSystemFields(t *testing.T) {
 		"created_at": json.RawMessage(`"should-be-stripped"`),
 		"updated_at": json.RawMessage(`"should-be-stripped"`),
 	})
-	err := svc.DocCreate("users", "u4", data)
+	err := svc.DocCreate(t.Context(), "users", "u4", data)
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u4")
+	doc, err := svc.DocGet(t.Context(), "users", "u4")
 	require.NoError(t, err)
 	assert.Equal(t, "u4", doc.ID)
 	assert.NotContains(t, doc.Data, "id")
@@ -159,7 +159,7 @@ func TestDocCreate_StripsSystemFields(t *testing.T) {
 func TestDocCreate_InvalidJSON(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	err := svc.DocCreate("users", "u5", json.RawMessage(`{invalid json`))
+	err := svc.DocCreate(t.Context(), "users", "u5", json.RawMessage(`{invalid json`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal document")
 }
@@ -167,10 +167,10 @@ func TestDocCreate_InvalidJSON(t *testing.T) {
 func TestDocCreate_NilData(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	err := svc.DocCreate("users", "u6", json.RawMessage(`null`))
+	err := svc.DocCreate(t.Context(), "users", "u6", json.RawMessage(`null`))
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u6")
+	doc, err := svc.DocGet(t.Context(), "users", "u6")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Empty(t, doc.Data)
@@ -180,10 +180,10 @@ func TestDocSet_Create(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "eve"})
-	err := svc.DocSet("users", "u7", data)
+	err := svc.DocSet(t.Context(), "users", "u7", data)
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u7")
+	doc, err := svc.DocGet(t.Context(), "users", "u7")
 	require.NoError(t, err)
 	assert.Equal(t, "eve", docField(t, doc, "name"))
 }
@@ -191,24 +191,22 @@ func TestDocSet_Create(t *testing.T) {
 func TestDocSet_Update(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	// Create initial document
+	// Create initial document, stamped in the past so updated_at must advance.
 	data1 := mustDocJSON(t, map[string]string{"name": "frank", "role": "user"})
-	err := svc.DocSet("users", "u8", data1)
+	past := time.Now().UTC().Add(-time.Hour)
+	err := svc.DocSetWithTimestamps(t.Context(), "users", "u8", data1, past, past)
 	require.NoError(t, err)
 
-	doc1, err := svc.DocGet("users", "u8")
+	doc1, err := svc.DocGet(t.Context(), "users", "u8")
 	require.NoError(t, err)
 	createdAt := doc1.CreatedAt
 
-	// Small delay to ensure timestamp changes
-	time.Sleep(10 * time.Millisecond)
-
 	// Update with new data
 	data2 := mustDocJSON(t, map[string]string{"name": "frank", "role": "admin"})
-	err = svc.DocSet("users", "u8", data2)
+	err = svc.DocSet(t.Context(), "users", "u8", data2)
 	require.NoError(t, err)
 
-	doc2, err := svc.DocGet("users", "u8")
+	doc2, err := svc.DocGet(t.Context(), "users", "u8")
 	require.NoError(t, err)
 	assert.Equal(t, "admin", docField(t, doc2, "role"))
 	assert.True(t, doc2.CreatedAt.Equal(createdAt), "created_at must not change on upsert")
@@ -224,10 +222,10 @@ func TestDocSet_StripsSystemFields(t *testing.T) {
 		"created_at": json.RawMessage(`"should-be-stripped"`),
 		"updated_at": json.RawMessage(`"should-be-stripped"`),
 	})
-	err := svc.DocSet("users", "u9", data)
+	err := svc.DocSet(t.Context(), "users", "u9", data)
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u9")
+	doc, err := svc.DocGet(t.Context(), "users", "u9")
 	require.NoError(t, err)
 	assert.Equal(t, "u9", doc.ID)
 	assert.NotContains(t, doc.Data, "id")
@@ -238,7 +236,7 @@ func TestDocSet_StripsSystemFields(t *testing.T) {
 func TestDocSet_InvalidJSON(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	err := svc.DocSet("users", "u10", json.RawMessage(`{invalid json`))
+	err := svc.DocSet(t.Context(), "users", "u10", json.RawMessage(`{invalid json`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal document")
 }
@@ -250,10 +248,10 @@ func TestDocSetWithTimestamps_CustomTimestamps(t *testing.T) {
 	customUpdatedAt := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 
 	data := mustDocJSON(t, map[string]string{"name": "henry"})
-	err := svc.DocSetWithTimestamps("users", "u11", data, customCreatedAt, customUpdatedAt)
+	err := svc.DocSetWithTimestamps(t.Context(), "users", "u11", data, customCreatedAt, customUpdatedAt)
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u11")
+	doc, err := svc.DocGet(t.Context(), "users", "u11")
 	require.NoError(t, err)
 	assert.Equal(t, customCreatedAt, doc.CreatedAt)
 	assert.Equal(t, customUpdatedAt, doc.UpdatedAt)
@@ -265,10 +263,10 @@ func TestDocSetWithTimestamps_ZeroTimestamps(t *testing.T) {
 	before := time.Now().UTC().Truncate(time.Microsecond)
 
 	data := mustDocJSON(t, map[string]string{"name": "iris"})
-	err := svc.DocSetWithTimestamps("users", "u12", data, time.Time{}, time.Time{})
+	err := svc.DocSetWithTimestamps(t.Context(), "users", "u12", data, time.Time{}, time.Time{})
 	require.NoError(t, err)
 
-	doc, err := svc.DocGet("users", "u12")
+	doc, err := svc.DocGet(t.Context(), "users", "u12")
 	require.NoError(t, err)
 	assert.True(t, doc.CreatedAt.After(before) || doc.CreatedAt.Equal(before))
 	assert.True(t, doc.UpdatedAt.After(before) || doc.UpdatedAt.Equal(before))
@@ -277,21 +275,19 @@ func TestDocSetWithTimestamps_ZeroTimestamps(t *testing.T) {
 func TestDocUpdate_Success(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	// Create initial document
+	// Create initial document, stamped in the past so updated_at must advance.
 	data1 := mustDocJSON(t, map[string]string{"name": "jack", "role": "user", "temp": "value"})
-	err := svc.DocSet("users", "u13", data1)
+	past := time.Now().UTC().Add(-time.Hour)
+	err := svc.DocSetWithTimestamps(t.Context(), "users", "u13", data1, past, past)
 	require.NoError(t, err)
 
-	doc1, err := svc.DocGet("users", "u13")
+	doc1, err := svc.DocGet(t.Context(), "users", "u13")
 	require.NoError(t, err)
 	createdAt := doc1.CreatedAt
 
-	// Small delay to ensure timestamp changes
-	time.Sleep(10 * time.Millisecond)
-
 	// Update with partial data
 	data2 := mustDocJSON(t, map[string]string{"role": "admin"})
-	updated, err := svc.DocUpdate("users", "u13", data2)
+	updated, err := svc.DocUpdate(t.Context(), "users", "u13", data2)
 	require.NoError(t, err)
 
 	assert.Equal(t, "jack", docField(t, updated, "name"))
@@ -305,7 +301,7 @@ func TestDocUpdate_NotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"role": "admin"})
-	_, err := svc.DocUpdate("users", "nonexistent", data)
+	_, err := svc.DocUpdate(t.Context(), "users", "nonexistent", data)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 }
@@ -315,12 +311,12 @@ func TestDocUpdate_DeleteFieldWithNull(t *testing.T) {
 
 	// Create document with field to delete
 	data1 := mustDocJSON(t, map[string]string{"name": "kate", "temp": "remove_me"})
-	err := svc.DocSet("users", "u14", data1)
+	err := svc.DocSet(t.Context(), "users", "u14", data1)
 	require.NoError(t, err)
 
 	// Update with null to delete field
 	data2 := mustDocJSON(t, map[string]json.RawMessage{"temp": nil})
-	updated, err := svc.DocUpdate("users", "u14", data2)
+	updated, err := svc.DocUpdate(t.Context(), "users", "u14", data2)
 	require.NoError(t, err)
 
 	_, hasTemp := updated.Data["temp"]
@@ -333,7 +329,7 @@ func TestDocUpdate_IgnoresSystemFields(t *testing.T) {
 
 	// Create initial document
 	data1 := mustDocJSON(t, map[string]string{"name": "leo"})
-	err := svc.DocSet("users", "u15", data1)
+	err := svc.DocSet(t.Context(), "users", "u15", data1)
 	require.NoError(t, err)
 
 	// Try to update system fields (should be ignored)
@@ -343,7 +339,7 @@ func TestDocUpdate_IgnoresSystemFields(t *testing.T) {
 		"updated_at": json.RawMessage(`"2024-01-01T00:00:00Z"`),
 		"name":       json.RawMessage(`"leonardo"`),
 	})
-	updated, err := svc.DocUpdate("users", "u15", data2)
+	updated, err := svc.DocUpdate(t.Context(), "users", "u15", data2)
 	require.NoError(t, err)
 
 	assert.Equal(t, "u15", updated.ID)
@@ -358,11 +354,11 @@ func TestDocUpdate_InvalidJSON(t *testing.T) {
 
 	// Create document
 	data1 := mustDocJSON(t, map[string]string{"name": "mike"})
-	err := svc.DocSet("users", "u16", data1)
+	err := svc.DocSet(t.Context(), "users", "u16", data1)
 	require.NoError(t, err)
 
 	// Try to update with invalid JSON
-	_, err = svc.DocUpdate("users", "u16", json.RawMessage(`{invalid json`))
+	_, err = svc.DocUpdate(t.Context(), "users", "u16", json.RawMessage(`{invalid json`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal fields")
 }
@@ -372,16 +368,16 @@ func TestDocDelete_Success(t *testing.T) {
 
 	// Create document
 	data := mustDocJSON(t, map[string]string{"name": "nancy"})
-	err := svc.DocSet("users", "u17", data)
+	err := svc.DocSet(t.Context(), "users", "u17", data)
 	require.NoError(t, err)
 
 	// Delete document
-	deleted, err := svc.DocDeleteWithResult("users", "u17")
+	deleted, err := svc.DocDeleteWithResult(t.Context(), "users", "u17")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
 	// Verify deletion
-	doc, err := svc.DocGet("users", "u17")
+	doc, err := svc.DocGet(t.Context(), "users", "u17")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 }
@@ -389,7 +385,7 @@ func TestDocDelete_Success(t *testing.T) {
 func TestDocDelete_NotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	deleted, err := svc.DocDeleteWithResult("users", "nonexistent")
+	deleted, err := svc.DocDeleteWithResult(t.Context(), "users", "nonexistent")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }
@@ -400,27 +396,27 @@ func TestDocDeleteNamespace_Success(t *testing.T) {
 	// Create multiple documents in a namespace
 	for i := 0; i < 5; i++ {
 		data := mustDocJSON(t, map[string]string{"id": string(rune('a' + i))})
-		err := svc.DocSet("test_ns", string(rune('a'+i)), data)
+		err := svc.DocSet(t.Context(), "test_ns", string(rune('a'+i)), data)
 		require.NoError(t, err)
 	}
 
 	// Create documents in another namespace
 	data := mustDocJSON(t, map[string]string{"id": "other"})
-	err := svc.DocSet("other_ns", "other", data)
+	err := svc.DocSet(t.Context(), "other_ns", "other", data)
 	require.NoError(t, err)
 
 	// Delete namespace
-	deleted, err := svc.DocDeleteNamespace("test_ns")
+	deleted, err := svc.DocDeleteNamespace(t.Context(), "test_ns")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), deleted)
 
 	// Verify deletion
-	doc, err := svc.DocGet("test_ns", "a")
+	doc, err := svc.DocGet(t.Context(), "test_ns", "a")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 
 	// Verify other namespace untouched
-	doc, err = svc.DocGet("other_ns", "other")
+	doc, err = svc.DocGet(t.Context(), "other_ns", "other")
 	require.NoError(t, err)
 	assert.NotNil(t, doc)
 }
@@ -428,7 +424,7 @@ func TestDocDeleteNamespace_Success(t *testing.T) {
 func TestDocDeleteNamespace_EmptyNamespace(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	deleted, err := svc.DocDeleteNamespace("empty_ns")
+	deleted, err := svc.DocDeleteNamespace(t.Context(), "empty_ns")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
@@ -436,7 +432,7 @@ func TestDocDeleteNamespace_EmptyNamespace(t *testing.T) {
 func TestDocDeleteNamespace_NonExistent(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	deleted, err := svc.DocDeleteNamespace("nonexistent_ns")
+	deleted, err := svc.DocDeleteNamespace(t.Context(), "nonexistent_ns")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
@@ -450,23 +446,23 @@ func TestGetField_Success(t *testing.T) {
 		"age":   30,
 		"admin": true,
 	})
-	err := svc.DocSet("users", "u18", data)
+	err := svc.DocSet(t.Context(), "users", "u18", data)
 	require.NoError(t, err)
 
 	// Get string field
-	field, err := svc.GetField("users", "u18", "name")
+	field, err := svc.GetField(t.Context(), "users", "u18", "name")
 	require.NoError(t, err)
 	require.NotNil(t, field.Str)
 	assert.Equal(t, "olivia", *field.Str)
 
 	// Get number field
-	field, err = svc.GetField("users", "u18", "age")
+	field, err = svc.GetField(t.Context(), "users", "u18", "age")
 	require.NoError(t, err)
 	require.NotNil(t, field.Float64)
 	assert.InEpsilon(t, float64(30), *field.Float64, 0.0)
 
 	// Get boolean field - SQLite json_extract may return float64 for true/false
-	field, err = svc.GetField("users", "u18", "admin")
+	field, err = svc.GetField(t.Context(), "users", "u18", "admin")
 	require.NoError(t, err)
 	// JSON true unmarshals to bool in Go, but SQLite json_extract may return float64(1)
 	// Accept either representation
@@ -482,7 +478,7 @@ func TestGetField_Success(t *testing.T) {
 func TestGetField_NotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	_, err := svc.GetField("users", "nonexistent", "name")
+	_, err := svc.GetField(t.Context(), "users", "nonexistent", "name")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 }
@@ -491,13 +487,13 @@ func TestGetField_FieldNotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "peter"})
-	err := svc.DocSet("users", "u19", data)
+	err := svc.DocSet(t.Context(), "users", "u19", data)
 	require.NoError(t, err)
 
 	// When a field doesn't exist, json_extract returns SQL NULL, and
 	// json_quote(NULL) returns the JSON text "null", which unmarshals to Go nil.
 	// convertToFieldValue(nil) produces FieldValue{Null: true}.
-	field, err := svc.GetField("users", "u19", "nonexistent_field")
+	field, err := svc.GetField(t.Context(), "users", "u19", "nonexistent_field")
 	require.NoError(t, err)
 	assert.True(t, field.Null)
 }
@@ -505,7 +501,7 @@ func TestGetField_FieldNotFound(t *testing.T) {
 func TestGetField_DocumentNotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	_, err := svc.GetField("users", "nonexistent_doc", "name")
+	_, err := svc.GetField(t.Context(), "users", "nonexistent_doc", "name")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 }
@@ -516,11 +512,11 @@ func TestDocQuery_NoFilters(t *testing.T) {
 	// Create documents
 	for i := 0; i < 3; i++ {
 		data := mustDocJSON(t, map[string]string{"name": string(rune('a' + i))})
-		err := svc.DocSet("items", string(rune('a'+i)), data)
+		err := svc.DocSet(t.Context(), "items", string(rune('a'+i)), data)
 		require.NoError(t, err)
 	}
 
-	results, err := svc.DocQuery("items", nil, "", 0)
+	results, err := svc.DocQuery(t.Context(), "items", nil, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 3)
 }
@@ -532,15 +528,15 @@ func TestDocQuery_WithFilter(t *testing.T) {
 	data1 := mustDocJSON(t, map[string]string{"status": "active", "name": "a"})
 	data2 := mustDocJSON(t, map[string]string{"status": "inactive", "name": "b"})
 	data3 := mustDocJSON(t, map[string]string{"status": "active", "name": "c"})
-	require.NoError(t, svc.DocSet("items", "a", data1))
-	require.NoError(t, svc.DocSet("items", "b", data2))
-	require.NoError(t, svc.DocSet("items", "c", data3))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data1))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "b", data2))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "c", data3))
 
 	filters := []models.DocFilter{
 		{Field: "status", Op: "==", Value: json.RawMessage(`"active"`)},
 	}
 
-	results, err := svc.DocQuery("items", filters, "", 0)
+	results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }
@@ -551,11 +547,11 @@ func TestDocQuery_WithLimit(t *testing.T) {
 	// Create documents
 	for i := 0; i < 5; i++ {
 		data := mustDocJSON(t, map[string]string{"id": string(rune('a' + i))})
-		err := svc.DocSet("items", string(rune('a'+i)), data)
+		err := svc.DocSet(t.Context(), "items", string(rune('a'+i)), data)
 		require.NoError(t, err)
 	}
 
-	results, err := svc.DocQuery("items", nil, "", 2)
+	results, err := svc.DocQuery(t.Context(), "items", nil, "", 2)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }
@@ -567,11 +563,11 @@ func TestDocQuery_WithOrderBy(t *testing.T) {
 	data1 := mustDocJSON(t, map[string]int{"priority": 3})
 	data2 := mustDocJSON(t, map[string]int{"priority": 1})
 	data3 := mustDocJSON(t, map[string]int{"priority": 2})
-	require.NoError(t, svc.DocSet("items", "a", data1))
-	require.NoError(t, svc.DocSet("items", "b", data2))
-	require.NoError(t, svc.DocSet("items", "c", data3))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data1))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "b", data2))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "c", data3))
 
-	results, err := svc.DocQuery("items", nil, "priority ASC", 0)
+	results, err := svc.DocQuery(t.Context(), "items", nil, "priority ASC", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 3)
 	assert.Equal(t, float64(1), docField(t, results[0], "priority"))
@@ -586,11 +582,11 @@ func TestDocQuery_WithOrderByDesc(t *testing.T) {
 	data1 := mustDocJSON(t, map[string]int{"priority": 1})
 	data2 := mustDocJSON(t, map[string]int{"priority": 3})
 	data3 := mustDocJSON(t, map[string]int{"priority": 2})
-	require.NoError(t, svc.DocSet("items", "a", data1))
-	require.NoError(t, svc.DocSet("items", "b", data2))
-	require.NoError(t, svc.DocSet("items", "c", data3))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data1))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "b", data2))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "c", data3))
 
-	results, err := svc.DocQuery("items", nil, "priority DESC", 0)
+	results, err := svc.DocQuery(t.Context(), "items", nil, "priority DESC", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 3)
 	assert.Equal(t, float64(3), docField(t, results[0], "priority"))
@@ -605,16 +601,16 @@ func TestDocQuery_MultipleFilters(t *testing.T) {
 	data1 := mustDocJSON(t, map[string]interface{}{"status": "active", "priority": 1})
 	data2 := mustDocJSON(t, map[string]interface{}{"status": "active", "priority": 2})
 	data3 := mustDocJSON(t, map[string]interface{}{"status": "inactive", "priority": 1})
-	require.NoError(t, svc.DocSet("items", "a", data1))
-	require.NoError(t, svc.DocSet("items", "b", data2))
-	require.NoError(t, svc.DocSet("items", "c", data3))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data1))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "b", data2))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "c", data3))
 
 	filters := []models.DocFilter{
 		{Field: "status", Op: "==", Value: json.RawMessage(`"active"`)},
 		{Field: "priority", Op: "==", Value: json.RawMessage(`1`)},
 	}
 
-	results, err := svc.DocQuery("items", filters, "", 0)
+	results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, "a", results[0].ID)
@@ -624,13 +620,13 @@ func TestDocQuery_InvalidFilterField(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
-	require.NoError(t, svc.DocSet("items", "a", data))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data))
 
 	filters := []models.DocFilter{
 		{Field: "name; DROP TABLE documents--", Op: "==", Value: json.RawMessage(`"test"`)},
 	}
 
-	_, err := svc.DocQuery("items", filters, "", 0)
+	_, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid filter field")
 }
@@ -639,9 +635,9 @@ func TestDocQuery_InvalidOrderByField(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
-	require.NoError(t, svc.DocSet("items", "a", data))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data))
 
-	_, err := svc.DocQuery("items", nil, "name; DROP TABLE documents--", 0)
+	_, err := svc.DocQuery(t.Context(), "items", nil, "name; DROP TABLE documents--", 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid orderBy field")
 }
@@ -651,14 +647,14 @@ func TestDocQuery_UnknownOperatorSkipped(t *testing.T) {
 
 	data1 := mustDocJSON(t, map[string]string{"name": "a"})
 	data2 := mustDocJSON(t, map[string]string{"name": "b"})
-	require.NoError(t, svc.DocSet("items", "a", data1))
-	require.NoError(t, svc.DocSet("items", "b", data2))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data1))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "b", data2))
 
 	filters := []models.DocFilter{
 		{Field: "name", Op: "LIKE", Value: json.RawMessage(`"a"`)},
 	}
 
-	results, err := svc.DocQuery("items", filters, "", 0)
+	results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 2, "unknown operator should be skipped, returning all docs")
 }
@@ -669,15 +665,15 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 	data1 := mustDocJSON(t, map[string]int{"value": 10})
 	data2 := mustDocJSON(t, map[string]int{"value": 20})
 	data3 := mustDocJSON(t, map[string]int{"value": 30})
-	require.NoError(t, svc.DocSet("items", "a", data1))
-	require.NoError(t, svc.DocSet("items", "b", data2))
-	require.NoError(t, svc.DocSet("items", "c", data3))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data1))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "b", data2))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "c", data3))
 
 	t.Run("greater than", func(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "value", Op: ">", Value: json.RawMessage(`15`)},
 		}
-		results, err := svc.DocQuery("items", filters, "", 0)
+		results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 	})
@@ -686,7 +682,7 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "value", Op: "<", Value: json.RawMessage(`25`)},
 		}
-		results, err := svc.DocQuery("items", filters, "", 0)
+		results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 	})
@@ -695,7 +691,7 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "value", Op: ">=", Value: json.RawMessage(`20`)},
 		}
-		results, err := svc.DocQuery("items", filters, "", 0)
+		results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 	})
@@ -704,7 +700,7 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "value", Op: "<=", Value: json.RawMessage(`20`)},
 		}
-		results, err := svc.DocQuery("items", filters, "", 0)
+		results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 	})
@@ -713,7 +709,7 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "value", Op: "!=", Value: json.RawMessage(`20`)},
 		}
-		results, err := svc.DocQuery("items", filters, "", 0)
+		results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
 	})
@@ -722,7 +718,7 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 func TestDocQuery_EmptyCollection(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	results, err := svc.DocQuery("empty", nil, "", 0)
+	results, err := svc.DocQuery(t.Context(), "empty", nil, "", 0)
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
@@ -731,13 +727,13 @@ func TestDocQuery_EmptyFilterField(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
-	require.NoError(t, svc.DocSet("items", "a", data))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data))
 
 	filters := []models.DocFilter{
 		{Field: "", Op: "==", Value: json.RawMessage(`"test"`)},
 	}
 
-	results, err := svc.DocQuery("items", filters, "", 0)
+	results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 1, "empty field should be skipped")
 }
@@ -746,13 +742,13 @@ func TestDocQuery_EmptyFilterOp(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
-	require.NoError(t, svc.DocSet("items", "a", data))
+	require.NoError(t, svc.DocSet(t.Context(), "items", "a", data))
 
 	filters := []models.DocFilter{
 		{Field: "name", Op: "", Value: json.RawMessage(`"test"`)},
 	}
 
-	results, err := svc.DocQuery("items", filters, "", 0)
+	results, err := svc.DocQuery(t.Context(), "items", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 1, "empty operator should be skipped")
 }

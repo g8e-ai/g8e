@@ -211,7 +211,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 			StateRootSvc:      infra.StateRootSvc,
 			Responder:         infra.Responder,
 			IsReady:           func() bool { return true },
-			IsGovernanceReady: func() bool { return true },
+			IsGovernanceReady: func(context.Context) bool { return true },
 		},
 		GovernanceControllerDeps: GovernanceControllerDeps{
 			Cfg:       infra.Cfg,
@@ -278,7 +278,7 @@ func TestHandleHealth(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
-		h.dataController.docStore.DocDelete("settings", "platform_settings")
+		h.dataController.docStore.DocDelete(t.Context(), "settings", "platform_settings")
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
@@ -297,7 +297,7 @@ func TestHandleHealth(t *testing.T) {
 		}
 		settingsBytes, err := json.Marshal(settings)
 		require.NoError(t, err)
-		err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
+		err = h.dataController.docStore.DocSet(t.Context(), "settings", "platform_settings", settingsBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
@@ -325,7 +325,7 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.dataController.docStore.DocSet(t.Context(), "settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	// Force state root calculation to fail by dropping the commitment table the root read queries
@@ -601,7 +601,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		ExpiresAt:         time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.dataController.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	wid := protocol.NewWorkloadIdentity()
 	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
@@ -610,7 +610,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CLI cert bound to Operator session is accepted", func(t *testing.T) {
-		bound, err := h.authMiddleware.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(t.Context(),
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -618,7 +618,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("CLI cert bound to a different Operator session is rejected", func(t *testing.T) {
-		bound, err := h.authMiddleware.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(t.Context(),
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
 		)
 		require.NoError(t, err)
@@ -626,7 +626,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
-		bound, err := h.authMiddleware.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(t.Context(),
 			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -641,10 +641,10 @@ func TestCLICertBoundToOperator(t *testing.T) {
 			ExpiresAt:         time.Now().Add(-1 * time.Hour),
 		}
 		eb, _ := json.Marshal(expired)
-		require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
+		require.NoError(t, h.dataController.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
-		bound, err := h.authMiddleware.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(t.Context(),
 			[]*url.URL{expiredURI}, "cli-expired", userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -876,25 +876,17 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 		// Context has WebSessionID + UserID → handler builds route with both →
 		// auth succeeds and the SSE stream starts. Use a cancellable context +
 		// goroutine to avoid blocking the test (the stream is long-lived).
-		ctx, cancel := context.WithCancel(context.Background())
-		ctx = context.WithValue(ctx, constants.ContextKeyWebSessionID, "web-session-1")
+		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
-		rr := httptest.NewRecorder()
 
-		done := make(chan struct{})
-		go func() {
-			h.sseController.handleInternalSSEStream(rr, req)
-			close(done)
-		}()
-
-		time.Sleep(15 * time.Millisecond)
-		cancel()
-		<-done
+		stream := startInternalSSEStream(t, h, req)
+		stream.awaitSubscribed()
+		stream.stop()
 
 		// The stream should have started — Content-Type set to text/event-stream.
-		assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
+		assert.Equal(t, "text/event-stream", stream.rec.Header().Get("Content-Type"))
 	})
 }
 
@@ -912,30 +904,22 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.dataController.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
 		// Context stamps UserID + CLISessionID (simulating auth middleware).
 		// The handler builds the route from context — no URL params needed.
-		ctx, cancel := context.WithCancel(context.Background())
-		ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
 		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
-		rr := httptest.NewRecorder()
 
-		done := make(chan struct{})
-		go func() {
-			h.sseController.handleInternalSSEStream(rr, req)
-			close(done)
-		}()
-
-		time.Sleep(15 * time.Millisecond)
-		cancel()
-		<-done
+		stream := startInternalSSEStream(t, h, req)
+		stream.awaitSubscribed()
+		stream.stop()
 
 		// Stream should have started — not 401/403.
-		assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
+		assert.Equal(t, "text/event-stream", stream.rec.Header().Get("Content-Type"))
 	})
 
 	t.Run("CLI mTLS auth with wrong user ID is forbidden", func(t *testing.T) {

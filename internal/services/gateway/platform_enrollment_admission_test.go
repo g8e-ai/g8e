@@ -37,6 +37,19 @@ func (p *cancelAfterCreateProcessor) ProcessEnvelope(ctx context.Context, payloa
 	return receipt, err
 }
 
+type cancelDuringIssueProcessor struct {
+	inner  governanceEnvelopeProcessor
+	cancel context.CancelFunc
+}
+
+func (p *cancelDuringIssueProcessor) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	receipt, err := p.inner.ProcessEnvelope(ctx, payload)
+	if err == nil && decodeActionTypeFromWire(payload) == string(constants.PlatformEnrollmentActionIssue) {
+		p.cancel()
+	}
+	return receipt, err
+}
+
 func TestPlatformEnrollmentService_CanceledCreateReleasesOnlyPendingReservation(t *testing.T) {
 	for _, approved := range []bool{false, true} {
 		name := "pending"
@@ -92,10 +105,12 @@ func TestPlatformEnrollmentService_DisconnectDuringIssuanceStillCompletes(t *tes
 		models.PlatformComponentDashboard, "dashboard-disconnect", "dashboard.local", csr, "", "")
 	proof := models.PlatformEnrollmentProofs{App: signCompletionTranscript(t, approved, key)}
 
-	// A request whose client has already gone still reaches the lease, and the
-	// issuance it starts must finish rather than roll the approval back.
+	// Disconnect after ISSUE starts. Once Complete acquires its issuance lease,
+	// it must finish the saga with its detached lease context.
 	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+	original := env.enrollSvc.envProc
+	env.enrollSvc.envProc = &cancelDuringIssueProcessor{inner: original, cancel: cancel}
+	t.Cleanup(func() { env.enrollSvc.envProc = original })
 	resp, err := env.enrollSvc.Complete(ctx, token, proof)
 	require.NoError(t, err)
 	require.NotNil(t, resp.App)

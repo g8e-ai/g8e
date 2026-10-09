@@ -199,14 +199,14 @@ func TestSQLAuditStore_DocSetAndDocDelete(t *testing.T) {
 	payload, err := json.Marshal(record)
 	require.NoError(t, err)
 
-	require.NoError(t, ass.DocSet("ignored", "ignored", payload))
-	require.NoError(t, ass.DocDelete("ignored", "ignored"))
+	require.NoError(t, ass.DocSet(t.Context(), "ignored", "ignored", payload))
+	require.NoError(t, ass.DocDelete(t.Context(), "ignored", "ignored"))
 
 	persisted, err := ass.GetActionReceipt(record.TransactionID)
 	require.NoError(t, err)
 	require.NotNil(t, persisted)
 
-	err = ass.DocSet("ignored", "ignored", json.RawMessage("{invalid"))
+	err = ass.DocSet(t.Context(), "ignored", "ignored", json.RawMessage("{invalid"))
 	require.Error(t, err)
 }
 

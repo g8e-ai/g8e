@@ -36,7 +36,7 @@ import (
 // document for assertions.
 func loadEmbeddedOperatorDoc(t *testing.T, docStore *DocumentStoreService) *operatorv1.OperatorDocument {
 	t.Helper()
-	doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+	doc, err := docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.NotNil(t, doc, "embedded operator document must exist")
 	op, err := models.OperatorDocumentFromStore(doc)
@@ -107,13 +107,13 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
 	assert.Equal(t, "test-fingerprint", op.SystemFingerprint)
 
-	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(bootstrapUserID)
+	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(t.Context(), bootstrapUserID)
 	require.NoError(t, err)
 	require.NotNil(t, opSession, "operator_sessions document must exist for the bootstrap session")
 	assert.Equal(t, bootstrapSessionID, opSession.ID)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), opSession.OperatorID)
 
-	cliSession, err := infra.CLISessionSvc.loadCLISession(cliSessionID)
+	cliSession, err := infra.CLISessionSvc.loadCLISession(t.Context(), cliSessionID)
 	require.NoError(t, err)
 	assert.Equal(t, bootstrapSessionID, cliSession.OperatorSessionID,
 		"cli_sessions document binds the bootstrap operator session")
@@ -129,22 +129,22 @@ func TestBootstrapFlow(t *testing.T) {
 	// 4. Verify the first user is active and is the admin (first user). There
 	// is no ephemeral bootstrap-user concept and no retirement flow: the user
 	// created by bootstrap IS the first human enrollee and stays active.
-	user, err := h.adminController.userSvc.GetByID(bootstrapUserID)
+	user, err := h.adminController.userSvc.GetByID(t.Context(), bootstrapUserID)
 	require.NoError(t, err)
 	assert.True(t, user.IsActive())
-	isFirst, err := h.adminController.userSvc.IsFirstUser(bootstrapUserID)
+	isFirst, err := h.adminController.userSvc.IsFirstUser(t.Context(), bootstrapUserID)
 	require.NoError(t, err)
 	assert.True(t, isFirst, "the bootstrap-created user is the first user (admin)")
 
 	// 5. Verify the user can authenticate via the operator session
-	validatedOp, err := h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
+	validatedOp, err := h.authMiddleware.ValidateOperatorSession(t.Context(), bootstrapSessionID)
 	require.NoError(t, err)
 	assert.Equal(t, bootstrapUserID, validatedOp.UserId)
 
 	// 6. Verify the user remains active (no retirement). The old
 	// create-then-retire dance is gone; the first user is a real user that
 	// is never disabled by a later login.
-	user, err = h.adminController.userSvc.GetByID(bootstrapUserID)
+	user, err = h.adminController.userSvc.GetByID(t.Context(), bootstrapUserID)
 	require.NoError(t, err)
 	assert.True(t, user.IsActive(), "the first user is never retired by a later enrollment")
 }

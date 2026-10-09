@@ -184,21 +184,42 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	runtime.mirror = mirror
 	runtime.publisher = publisher
 
-	errCh := make(chan error, 4)
-	startServer := func(server *http.Server, label string) {
-		if server == nil {
-			return
+	// Bind every listener before returning: a bind failure fails Start, and once
+	// Start returns, connections queue on the socket until the server accepts.
+	type spectatorListener struct {
+		server   *http.Server
+		label    string
+		listener net.Listener
+	}
+	var bound []spectatorListener
+	for _, surface := range []spectatorListener{
+		{server: runtime.privateServer, label: "mirror-private"},
+		{server: runtime.publicServer, label: "mirror-public"},
+		{server: runtime.explorerServer, label: "explorer"},
+	} {
+		if surface.server == nil {
+			continue
 		}
+		listener, listenErr := (&net.ListenConfig{}).Listen(ctx, "tcp", surface.server.Addr)
+		if listenErr != nil {
+			for _, open := range bound {
+				_ = open.listener.Close()
+			}
+			return fmt.Errorf("public spectator %s: listen %s: %w", surface.label, surface.server.Addr, listenErr)
+		}
+		surface.listener = listener
+		bound = append(bound, surface)
+	}
+
+	errCh := make(chan error, len(bound))
+	for _, surface := range bound {
 		go func() {
-			runtime.logger.Info("Public spectator listener started", "surface", label, "addr", server.Addr)
-			if serveErr := server.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-				errCh <- fmt.Errorf("public spectator %s: %w", label, serveErr)
+			runtime.logger.Info("Public spectator listener started", "surface", surface.label, "addr", surface.server.Addr)
+			if serveErr := surface.server.Serve(surface.listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("public spectator %s: %w", surface.label, serveErr)
 			}
 		}()
 	}
-	startServer(runtime.privateServer, "mirror-private")
-	startServer(runtime.publicServer, "mirror-public")
-	startServer(runtime.explorerServer, "explorer")
 
 	runtime.mu.Lock()
 	runtime.running = true

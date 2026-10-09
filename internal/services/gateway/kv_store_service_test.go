@@ -39,14 +39,14 @@ func setupKVStore(t *testing.T) *KVStoreService {
 func TestKVStore_SetGet(t *testing.T) {
 	s := setupKVStore(t)
 
-	err := s.KVSet("foo", "bar", 0)
+	err := s.KVSet(t.Context(), "foo", "bar", 0)
 	require.NoError(t, err)
 
-	val, found := s.KVGet("foo")
+	val, found := s.KVGet(t.Context(), "foo")
 	assert.True(t, found)
 	assert.Equal(t, "bar", val)
 
-	val, found = s.KVGet("nonexistent")
+	val, found = s.KVGet(t.Context(), "nonexistent")
 	assert.False(t, found)
 	assert.Empty(t, val)
 }
@@ -54,13 +54,13 @@ func TestKVStore_SetGet(t *testing.T) {
 func TestKVStore_Overwrite(t *testing.T) {
 	s := setupKVStore(t)
 
-	err := s.KVSet("foo", "bar", 0)
+	err := s.KVSet(t.Context(), "foo", "bar", 0)
 	require.NoError(t, err)
 
-	err = s.KVSet("foo", "baz", 0)
+	err = s.KVSet(t.Context(), "foo", "baz", 0)
 	require.NoError(t, err)
 
-	val, found := s.KVGet("foo")
+	val, found := s.KVGet(t.Context(), "foo")
 	assert.True(t, found)
 	assert.Equal(t, "baz", val)
 }
@@ -68,24 +68,24 @@ func TestKVStore_Overwrite(t *testing.T) {
 func TestKVStore_Delete(t *testing.T) {
 	s := setupKVStore(t)
 
-	err := s.KVSet("foo", "bar", 0)
+	err := s.KVSet(t.Context(), "foo", "bar", 0)
 	require.NoError(t, err)
 
-	err = s.KVDelete("foo")
+	err = s.KVDelete(t.Context(), "foo")
 	require.NoError(t, err)
 
-	_, found := s.KVGet("foo")
+	_, found := s.KVGet(t.Context(), "foo")
 	assert.False(t, found)
 }
 
 func TestKVStore_Keys(t *testing.T) {
 	s := setupKVStore(t)
 
-	require.NoError(t, s.KVSet("user:1", "alice", 0))
-	require.NoError(t, s.KVSet("user:2", "bob", 0))
-	require.NoError(t, s.KVSet("other:1", "data", 0))
+	require.NoError(t, s.KVSet(t.Context(), "user:1", "alice", 0))
+	require.NoError(t, s.KVSet(t.Context(), "user:2", "bob", 0))
+	require.NoError(t, s.KVSet(t.Context(), "other:1", "data", 0))
 
-	keys, err := s.KVKeys("user:*")
+	keys, err := s.KVKeys(t.Context(), "user:*")
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"user:1", "user:2"}, keys)
 }
@@ -95,9 +95,9 @@ func TestKVStore_Expiration(t *testing.T) {
 	s := setupKVStore(t)
 
 	// Set with negative TTL so it is immediately expired
-	require.NoError(t, s.KVSet("short", "val", -1))
+	require.NoError(t, s.KVSet(t.Context(), "short", "val", -1))
 
-	_, found := s.KVGet("short")
+	_, found := s.KVGet(t.Context(), "short")
 	assert.False(t, found, "Key should be expired and not found via KVGet")
 
 	// Ensure it still exists in DB but is just filtered out (lazy delete)
@@ -107,7 +107,7 @@ func TestKVStore_Expiration(t *testing.T) {
 	assert.Equal(t, 1, count, "Key should still exist in DB before maintenance")
 
 	// Run maintenance
-	err = s.RunMaintenance()
+	err = s.RunMaintenance(t.Context())
 	require.NoError(t, err)
 
 	err = s.db.QueryRow("SELECT COUNT(*) FROM kv_store WHERE key = 'short'").Scan(&count)

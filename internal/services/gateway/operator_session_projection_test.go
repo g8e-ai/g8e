@@ -33,11 +33,11 @@ func TestOperatorController_SessionLookupIncludesObservedHeartbeat(t *testing.T)
 	}
 	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(string(constants.CollectionOperators), op.Id, body))
-	_, err = infra.Auth.ValidateOperatorSession(op.OperatorSessionId)
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), string(constants.CollectionOperators), op.Id, body))
+	_, err = infra.Auth.ValidateOperatorSession(t.Context(), op.OperatorSessionId)
 	require.NoError(t, err, "authenticate before observed telemetry arrives")
 	heartbeatAt := time.Now().UTC()
-	require.NoError(t, infra.DocStore.RecordOperatorHeartbeat(op.Id, heartbeatUpdate{
+	require.NoError(t, infra.DocStore.RecordOperatorHeartbeat(t.Context(), op.Id, heartbeatUpdate{
 		LastHeartbeatAt: heartbeatAt, CurrentHostname: "current-worker-host",
 	}))
 	w := httptest.NewRecorder()

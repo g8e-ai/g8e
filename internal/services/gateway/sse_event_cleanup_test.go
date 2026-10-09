@@ -15,7 +15,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
+
+// backdateSSEEvents moves the named events' created_at an hour into the past,
+// so cleanup tests need no wall-clock gap between appends.
+func backdateSSEEvents(t *testing.T, store *SSEEventService, eventTypes ...string) {
+	t.Helper()
+	past := timesvc.FormatTimestamp(time.Now().UTC().Add(-time.Hour))
+	for _, eventType := range eventTypes {
+		_, err := store.db.ExecWithRetry(t.Context(), "UPDATE sse_events SET created_at = ? WHERE event_type = ?", past, eventType)
+		require.NoError(t, err)
+	}
+}
 
 // TestSSEEventService_CleanupDeletesOldEvents verifies that SSEEventsCleanup
 // removes events older than the specified max age while preserving newer ones.
@@ -25,26 +38,20 @@ func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 
 	route := SSERoute{UserID: "u-cleanup-test", CLISessionID: "cli-cleanup-test"}
 
-	// Insert an old event (created in the past via direct DB manipulation).
-	// We use SSEEventsAppend which uses now, then sleep briefly, insert another,
-	// and cleanup with a max age between the two.
+	// Append through the service, then backdate the first row so it is
+	// unambiguously older than the cutoff.
 	_, err := h.dataController.sseStore.SSEEventsAppend(route, "old-event", `{"msg":"old"}`, "test-producer")
 	require.NoError(t, err)
-
-	// Wait a tiny bit so the second event has a strictly later timestamp.
-	time.Sleep(10 * time.Millisecond)
+	backdateSSEEvents(t, h.dataController.sseStore, "old-event")
 
 	_, err = h.dataController.sseStore.SSEEventsAppend(route, "new-event", `{"msg":"new"}`, "test-producer")
 	require.NoError(t, err)
 
-	// Cleanup events older than 5ms — should delete the first but keep the second.
-	// We use a small duration to separate the two events.
-	deleted, err := h.dataController.sseStore.SSEEventsCleanup(5 * time.Millisecond)
+	// Cleanup events older than an hour — deletes the backdated row only.
+	deleted, err := h.dataController.sseStore.SSEEventsCleanup(time.Hour)
 	require.NoError(t, err)
 
-	// At least the old event should be deleted. Due to timestamp granularity,
-	// the old event's created_at is > 5ms old by now.
-	assert.GreaterOrEqual(t, deleted, int64(1), "at least one old event should be deleted")
+	assert.Equal(t, int64(1), deleted, "only the backdated event should be deleted")
 
 	// Verify the newer event still exists.
 	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 100)
@@ -73,8 +80,8 @@ func TestSSEEventService_CleanupWithZeroAgeDeletesAll(t *testing.T) {
 	_, err = h.dataController.sseStore.SSEEventsAppend(route, "event-2", `{"msg":"2"}`, "test-producer")
 	require.NoError(t, err)
 
-	// Small sleep to ensure events are strictly in the past relative to "now".
-	time.Sleep(5 * time.Millisecond)
+	// Backdate so both events are strictly in the past relative to "now".
+	backdateSSEEvents(t, h.dataController.sseStore, "event-1", "event-2")
 
 	deleted, err := h.dataController.sseStore.SSEEventsCleanup(0)
 	require.NoError(t, err)

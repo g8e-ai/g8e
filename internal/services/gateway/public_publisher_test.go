@@ -1116,7 +1116,7 @@ func TestExportBatch_NeverMutatesAuthoritativeReports(t *testing.T) {
 	}
 	projBytes, err := json.Marshal(originalProj)
 	require.NoError(t, err)
-	err = docStore.DocSet(evalCollection, "run-1", projBytes)
+	err = docStore.DocSet(t.Context(), evalCollection, "run-1", projBytes)
 	require.NoError(t, err)
 
 	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1132,7 +1132,7 @@ func TestExportBatch_NeverMutatesAuthoritativeReports(t *testing.T) {
 	require.NoError(t, err)
 
 	// The eval projection is unchanged.
-	doc, err := docStore.DocGet(evalCollection, "run-1")
+	doc, err := docStore.DocGet(t.Context(), evalCollection, "run-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	var afterProj evalProjection

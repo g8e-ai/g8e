@@ -42,7 +42,7 @@ type transitionRecorder struct {
 	transitions []OperatorStatusTransition
 }
 
-func (r *transitionRecorder) OperatorStatusChanged(t OperatorStatusTransition) {
+func (r *transitionRecorder) OperatorStatusChanged(_ context.Context, t OperatorStatusTransition) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.transitions = append(r.transitions, t)
@@ -65,7 +65,7 @@ func putWebSession(t *testing.T, store *DocumentStoreService, id, userID string,
 		ExpiresAtUnixMs: time.Now().Add(expiresIn).UnixMilli(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, store.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), id, body))
+	require.NoError(t, store.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), id, body))
 }
 
 // putSilentOperator persists an active remote Operator owned by userID whose
@@ -111,7 +111,7 @@ func TestOperatorStatusEvents_StaleTransitionReachesOnlyOwnerLiveWebSessions(t *
 	putWebSession(t, store, "web-other", statusEventOther, time.Hour)
 	putSilentOperator(t, store, "op-silent", statusEventOwner, "edge-1")
 
-	_, err := store.DocQuery(operatorsCollection, nil, "", 0)
+	_, err := store.DocQuery(t.Context(), operatorsCollection, nil, "", 0)
 	require.NoError(t, err)
 
 	for _, sessionID := range []string{"web-owner-1", "web-owner-2"} {
@@ -133,7 +133,7 @@ func TestOperatorStatusEvents_ReaderThatMarksOperatorStaleReportsTheTransition(t
 	require.NoError(t, store.BindOperatorStatusObserver(recorder))
 	putSilentOperator(t, store, "op-silent", statusEventOwner, "edge-1")
 
-	_, err := store.DocGet(operatorsCollection, "op-silent")
+	_, err := store.DocGet(t.Context(), operatorsCollection, "op-silent")
 	require.NoError(t, err)
 
 	assert.Equal(t, []OperatorStatusTransition{{
@@ -150,11 +150,11 @@ func TestOperatorStatusEvents_AlreadyStaleOperatorIsNotReportedAgain(t *testing.
 	require.NoError(t, store.BindOperatorStatusObserver(recorder))
 	putSilentOperator(t, store, "op-silent", statusEventOwner, "edge-1")
 
-	_, err := store.DocQuery(operatorsCollection, nil, "", 0)
+	_, err := store.DocQuery(t.Context(), operatorsCollection, nil, "", 0)
 	require.NoError(t, err)
-	_, err = store.DocQuery(operatorsCollection, nil, "", 0)
+	_, err = store.DocQuery(t.Context(), operatorsCollection, nil, "", 0)
 	require.NoError(t, err)
-	_, err = store.DocGet(operatorsCollection, "op-silent")
+	_, err = store.DocGet(t.Context(), operatorsCollection, "op-silent")
 	require.NoError(t, err)
 
 	assert.Len(t, recorder.recorded(), 1)
@@ -172,8 +172,8 @@ func TestOperatorStatusEvents_StopAndTerminateReachOwnerWebSession(t *testing.T)
 		putOperator(t, store, id, op, time.Second)
 	}
 
-	require.NoError(t, ls.reg.MarkOperatorStopped("op-stopped", statusEventOwner, "maintenance"))
-	require.NoError(t, ls.reg.TerminateOperator("op-terminated", statusEventOwner, "decommissioned"))
+	require.NoError(t, ls.reg.MarkOperatorStopped(t.Context(), "op-stopped", statusEventOwner, "maintenance"))
+	require.NoError(t, ls.reg.TerminateOperator(t.Context(), "op-terminated", statusEventOwner, "decommissioned"))
 
 	events := webSessionEvents(t, ls, statusEventOwner, "web-owner")
 	require.Len(t, events, 2)
@@ -193,7 +193,7 @@ func TestOperatorStatusEvents_StopByNonOwnerIsNotPushed(t *testing.T) {
 	op.UserId = statusEventOwner
 	putOperator(t, store, "op-1", op, time.Second)
 
-	require.ErrorIs(t, ls.reg.MarkOperatorStopped("op-1", statusEventOther, ""), constants.ErrRegistrationOperatorNotBelongToUser)
+	require.ErrorIs(t, ls.reg.MarkOperatorStopped(t.Context(), "op-1", statusEventOther, ""), constants.ErrRegistrationOperatorNotBelongToUser)
 
 	assert.Empty(t, webSessionEvents(t, ls, statusEventOwner, "web-owner"))
 }
@@ -252,9 +252,9 @@ func TestOperatorStatusEvents_EnrollmentAnnouncesActiveToOwner(t *testing.T) {
 
 func TestOperatorStatusEvents_SlotClaimAnnouncesActiveToOwner(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
-	owner, err := env.userSvc.GetByID(env.ownerID)
+	owner, err := env.userSvc.GetByID(t.Context(), env.ownerID)
 	require.NoError(t, err)
-	slot, err := env.svc.reg.createSlot(env.ownerID, owner.OrganizationID)
+	slot, err := env.svc.reg.createSlot(t.Context(), env.ownerID, owner.OrganizationID)
 	require.NoError(t, err)
 	putWebSession(t, env.docStore, "web-owner", env.ownerID, time.Hour)
 	putWebSession(t, env.docStore, "web-owner-expired", env.ownerID, -time.Minute)
@@ -262,7 +262,7 @@ func TestOperatorStatusEvents_SlotClaimAnnouncesActiveToOwner(t *testing.T) {
 	require.Empty(t, webSessionEvents(t, env.svc, env.ownerID, "web-owner"))
 	operatorCSR, _, _, _ := generateOperatorCSRsAndKeys(t)
 
-	resp, err := env.svc.reg.RegisterDeviceCSR(env.ownerID, owner.OrganizationID, models.OperatorRegistrationRequest{
+	resp, err := env.svc.reg.RegisterDeviceCSR(t.Context(), env.ownerID, owner.OrganizationID, models.OperatorRegistrationRequest{
 		SystemFingerprint: "slot-claim-fingerprint",
 		Hostname:          "slot-host",
 		CSR:               operatorCSR,
@@ -344,9 +344,9 @@ func TestOperatorStatusEvents_FiredTimerAfterLateHeartbeatKeepsOperatorActiveAnd
 
 	// The timer fires although the persisted deadline has not passed, as when a
 	// heartbeat lands just before it fires.
-	store.operatorWentSilent("op-beating")
+	store.operatorWentSilent(t.Context(), "op-beating")
 
-	doc, err := store.docGet(operatorsCollection, "op-beating")
+	doc, err := store.docGet(t.Context(), operatorsCollection, "op-beating")
 	require.NoError(t, err)
 	opDoc, err := models.OperatorDocumentFromStore(doc)
 	require.NoError(t, err)
@@ -369,7 +369,7 @@ func TestOperatorStatusPublisher_RejectsStatusWithoutGatewayEvent(t *testing.T) 
 		constants.OperatorStatusAvailable,
 		constants.OperatorStatusUnavailable,
 	} {
-		err := publisher.Publish(OperatorStatusTransition{OperatorID: "op-1", UserID: statusEventOwner, Status: status})
+		err := publisher.Publish(t.Context(), OperatorStatusTransition{OperatorID: "op-1", UserID: statusEventOwner, Status: status})
 		assert.ErrorIs(t, err, constants.ErrOperatorStatusEventUnsupported, status)
 	}
 }

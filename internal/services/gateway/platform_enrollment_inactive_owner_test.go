@@ -53,7 +53,7 @@ func TestPlatformEnrollmentService_InactiveOwnerDecisionFailsClosed(t *testing.T
 
 	// Disable the owner (first user). The owner remains the first user
 	// but is no longer active.
-	err = env.userSvc.Disable(env.ownerID, "test: disable owner", "", "")
+	err = env.userSvc.Disable(t.Context(), env.ownerID, "test: disable owner", "", "")
 	require.NoError(t, err)
 
 	// A decision from the disabled owner must fail closed.
@@ -89,7 +89,7 @@ func TestPlatformEnrollmentService_InactiveOwnerDistinctFromNonOwner(t *testing.
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	// Create a second user (non-owner).
-	secondUser, err := env.userSvc.CreateUser()
+	secondUser, err := env.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, env.ownerID, secondUser.ID)
 
@@ -104,7 +104,7 @@ func TestPlatformEnrollmentService_InactiveOwnerDistinctFromNonOwner(t *testing.
 	require.NoError(t, err)
 
 	// Disable the owner.
-	err = env.userSvc.Disable(env.ownerID, "test: disable owner", "", "")
+	err = env.userSvc.Disable(t.Context(), env.ownerID, "test: disable owner", "", "")
 	require.NoError(t, err)
 
 	// Both the disabled owner and the non-owner receive the same typed
@@ -146,7 +146,7 @@ func TestPlatformEnrollmentService_ReenabledOwnerCanDecide(t *testing.T) {
 	require.NoError(t, err)
 
 	// Disable the owner.
-	err = env.userSvc.Disable(env.ownerID, "test: disable owner", "", "")
+	err = env.userSvc.Disable(t.Context(), env.ownerID, "test: disable owner", "", "")
 	require.NoError(t, err)
 
 	// Decision fails while disabled.
@@ -159,7 +159,7 @@ func TestPlatformEnrollmentService_ReenabledOwnerCanDecide(t *testing.T) {
 	// Re-enable the owner by directly setting the status back to active.
 	updateBytes, err := json.Marshal(models.User{Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	_, err = env.docStore.DocUpdate(
+	_, err = env.docStore.DocUpdate(t.Context(),
 		marshaler.CollectionName(constants.CollectionUsers), env.ownerID, updateBytes)
 	require.NoError(t, err)
 

@@ -27,17 +27,17 @@ import (
 func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 	t.Run("Doctrine posture returns true without signers", func(t *testing.T) {
 		ls := newTestGatewayService(t, testGatewayOpts{posture: config.PostureDoctrine})
-		assert.True(t, ls.IsGovernanceReady())
+		assert.True(t, ls.IsGovernanceReady(t.Context()))
 	})
 
 	t.Run("Empty posture returns true without signers", func(t *testing.T) {
 		ls := newTestGatewayService(t, testGatewayOpts{})
-		assert.True(t, ls.IsGovernanceReady())
+		assert.True(t, ls.IsGovernanceReady(t.Context()))
 	})
 
 	t.Run("Notary posture returns false without signers", func(t *testing.T) {
 		ls := newTestGatewayService(t, testGatewayOpts{posture: config.PostureNotary})
-		assert.False(t, ls.IsGovernanceReady())
+		assert.False(t, ls.IsGovernanceReady(t.Context()))
 	})
 
 	t.Run("Notary posture returns true with signers", func(t *testing.T) {
@@ -51,10 +51,10 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		}
 		signerBytes, err := json.Marshal(signer)
 		require.NoError(t, err)
-		err = ls.GetDocStore().DocSet("trusted_signers", "test-signer-1", signerBytes)
+		err = ls.GetDocStore().DocSet(t.Context(), "trusted_signers", "test-signer-1", signerBytes)
 		require.NoError(t, err)
 
-		assert.True(t, ls.IsGovernanceReady())
+		assert.True(t, ls.IsGovernanceReady(t.Context()))
 	})
 }
 

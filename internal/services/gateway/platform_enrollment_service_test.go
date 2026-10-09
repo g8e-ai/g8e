@@ -82,7 +82,7 @@ func setupPlatformEnrollmentEnv(t *testing.T, createOwner bool) *platformEnrollm
 	}
 
 	if createOwner {
-		owner, err := ls.GetUserService().CreateUser()
+		owner, err := ls.GetUserService().CreateUser(t.Context())
 		require.NoError(t, err)
 		env.ownerID = owner.ID
 	}
@@ -166,7 +166,7 @@ func createAndApproveRequestWithFingerprint(t *testing.T, env *platformEnrollmen
 	})
 	require.NoError(t, err)
 
-	stored, err := env.enrollSvc.loadByID(createResp.RequestID)
+	stored, err := env.enrollSvc.loadByID(t.Context(), createResp.RequestID)
 	require.NoError(t, err)
 	require.NotNil(t, stored)
 	require.Equal(t, models.PlatformEnrollmentStateApproved, stored.State)
@@ -177,7 +177,7 @@ func createAndApproveRequestWithFingerprint(t *testing.T, env *platformEnrollmen
 // loadStoredRequest loads a platform enrollment request from the doc store by ID.
 func loadStoredRequest(t *testing.T, env *platformEnrollmentTestEnv, requestID string) *models.PlatformEnrollmentRequest {
 	t.Helper()
-	req, err := env.enrollSvc.loadByID(requestID)
+	req, err := env.enrollSvc.loadByID(t.Context(), requestID)
 	require.NoError(t, err)
 	require.NotNil(t, req)
 	return req
@@ -255,7 +255,7 @@ func TestPlatformEnrollmentService_NonOwnerDecisionFailsClosed(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	// Create a second user (non-owner).
-	secondUser, err := env.userSvc.CreateUser()
+	secondUser, err := env.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, env.ownerID, secondUser.ID)
 
@@ -346,7 +346,7 @@ func TestPlatformEnrollmentService_DashboardIssuanceProducesDualSANAndOwnershipP
 	assert.NotNil(t, stored.Issued)
 
 	// Verify the app policy was persisted with ownership and approval provenance.
-	policyDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
+	policyDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
 	require.NoError(t, err)
 	require.NotNil(t, policyDoc)
 	dataBytes, err := json.Marshal(policyDoc.Data)
@@ -385,7 +385,7 @@ func TestPlatformEnrollmentService_EnsembleIssuanceProducesDualSANAndOwnershipPo
 	assert.Equal(t, "spiffe://g8e.local/user/"+env.ownerID, uris[1])
 
 	// Verify the ensemble app policy.
-	policyDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ee")
+	policyDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ee")
 	require.NoError(t, err)
 	require.NotNil(t, policyDoc)
 
@@ -416,14 +416,14 @@ func TestPlatformEnrollmentService_RevokeAppDisablesPolicyAndCertificate(t *test
 	require.NoError(t, err)
 	assert.Equal(t, models.PlatformEnrollmentStateRevoked, revoked.State)
 
-	policy, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
+	policy, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
 	require.NoError(t, err)
 	assert.Nil(t, policy)
 	block, _ := pem.Decode([]byte(resp.App.AppCert))
 	require.NotNil(t, block)
 	cert, err := x509.ParseCertificate(block.Bytes)
 	require.NoError(t, err)
-	assert.ErrorIs(t, env.pki.VerifyCertificate(cert), constants.ErrPKICertificateRevoked)
+	assert.ErrorIs(t, env.pki.VerifyCertificate(t.Context(), cert), constants.ErrPKICertificateRevoked)
 	stored := loadStoredRequest(t, env, requestID)
 	assert.Equal(t, models.PlatformEnrollmentStateRevoked, stored.State)
 	assert.Equal(t, env.ownerID, stored.RevokedByUserID)
@@ -462,16 +462,16 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 		require.NotNil(t, block)
 		cert, parseErr := x509.ParseCertificate(block.Bytes)
 		require.NoError(t, parseErr)
-		assert.ErrorIs(t, env.pki.VerifyCertificate(cert), constants.ErrPKICertificateRevoked)
+		assert.ErrorIs(t, env.pki.VerifyCertificate(t.Context(), cert), constants.ErrPKICertificateRevoked)
 	}
-	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
+	opDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
 	op, err := models.OperatorDocumentFromStore(opDoc)
 	require.NoError(t, err)
 	assert.Equal(t, string(constants.OperatorStatusTerminated), op.Status)
 
-	cliDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
+	cliDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
 	require.NoError(t, err)
 	cliBytes, err := json.Marshal(cliDoc.Data)
 	require.NoError(t, err)
@@ -479,7 +479,7 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 	require.NoError(t, json.Unmarshal(cliBytes, &cli))
 	assert.False(t, cli.IsActive)
 
-	opSessionDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), resp.Operator.OperatorSessionID)
+	opSessionDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperatorSessions), resp.Operator.OperatorSessionID)
 	require.NoError(t, err)
 	opSessionBytes, err := json.Marshal(opSessionDoc.Data)
 	require.NoError(t, err)
@@ -499,7 +499,7 @@ func TestPlatformEnrollmentService_RevokeOperatorSucceedsWhenCLISessionMissing(t
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, env.docStore.DocDelete(
+	require.NoError(t, env.docStore.DocDelete(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID))
 
 	revoked, err := env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{
@@ -513,7 +513,7 @@ func TestPlatformEnrollmentService_RevokeOperatorSucceedsWhenCLISessionMissing(t
 	require.NotNil(t, block)
 	cert, err := x509.ParseCertificate(block.Bytes)
 	require.NoError(t, err)
-	assert.ErrorIs(t, env.pki.VerifyCertificate(cert), constants.ErrPKICertificateRevoked)
+	assert.ErrorIs(t, env.pki.VerifyCertificate(t.Context(), cert), constants.ErrPKICertificateRevoked)
 }
 
 // ============================================================================
@@ -554,7 +554,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	// owner's user_id so the owner can discover it via ListUserOperators.
 	// is_slot remains false: platform-enrolled operators are not
 	// user-created slots, but they are user-owned.
-	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
+	opDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
 	op, err := models.OperatorDocumentFromStore(opDoc)
@@ -564,7 +564,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	// document was found by resp.Operator.OperatorID, which proves the ID
 	// was correctly generated and used as the document key.
 	assert.Equal(t, env.ownerID, op.UserId, "operator doc must carry the approving owner's user_id")
-	owner, err := env.userSvc.GetByID(env.ownerID)
+	owner, err := env.userSvc.GetByID(t.Context(), env.ownerID)
 	require.NoError(t, err)
 	require.NotNil(t, owner)
 	assert.Equal(t, owner.OrganizationID, op.OrganizationId, "operator doc must carry the approving owner's organization_id")
@@ -573,7 +573,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	assert.True(t, op.Claimed)
 
 	// Verify the CLI session is bound to the approving owner's user_id.
-	cliDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
+	cliDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, cliDoc)
 	cliBytes, err := json.Marshal(cliDoc.Data)
@@ -583,7 +583,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	assert.Equal(t, env.ownerID, cliSession.UserID, "CLI session must carry the approving owner's user_id")
 
 	// Verify the operator session is bound to the approving owner's user_id.
-	opSessDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), resp.Operator.OperatorSessionID)
+	opSessDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperatorSessions), resp.Operator.OperatorSessionID)
 	require.NoError(t, err)
 	require.NotNil(t, opSessDoc)
 	opSessBytes, err := json.Marshal(opSessDoc.Data)
@@ -604,11 +604,11 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 
 func TestPlatformEnrollmentService_OperatorIssuanceRejectsMissingOrganization(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
-	owner, err := env.userSvc.GetByID(env.ownerID)
+	owner, err := env.userSvc.GetByID(t.Context(), env.ownerID)
 	require.NoError(t, err)
 	require.NotNil(t, owner)
 	require.NotEmpty(t, owner.OrganizationID)
-	require.NoError(t, env.docStore.DocDelete(marshaler.CollectionName(constants.CollectionOrganizations), owner.OrganizationID))
+	require.NoError(t, env.docStore.DocDelete(t.Context(), marshaler.CollectionName(constants.CollectionOrganizations), owner.OrganizationID))
 
 	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
 	requestID, token, approved := createAndApproveRequest(t, env,
@@ -650,7 +650,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOper
 	// ListUserOperators, which filters by user_id only (no is_slot
 	// requirement).
 	regSvc := env.svc.GetRegistrationService()
-	operators, err := regSvc.ListUserOperators(env.ownerID)
+	operators, err := regSvc.ListUserOperators(t.Context(), env.ownerID)
 	require.NoError(t, err)
 	require.NotEmpty(t, operators, "owner must see the platform-enrolled operator")
 
@@ -698,7 +698,7 @@ func TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease(t *t
 	newID, newSessionID := enrollOperatorWithFingerprint(t, env, "operator-new", "fingerprint-observer")
 	require.NotEqual(t, oldID, newID)
 
-	operators, err := env.svc.GetRegistrationService().ListUserOperators(env.ownerID)
+	operators, err := env.svc.GetRegistrationService().ListUserOperators(t.Context(), env.ownerID)
 	require.NoError(t, err)
 	byID := make(map[string]*operatorv1.OperatorDocument, len(operators))
 	for _, op := range operators {
@@ -710,7 +710,7 @@ func TestPlatformEnrollmentService_ReEnrollmentSupersedesPriorOperatorLease(t *t
 
 	assertOperatorSessionActive := func(sessionID string, want bool) {
 		t.Helper()
-		doc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), sessionID)
+		doc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperatorSessions), sessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		var session models.OperatorSession
@@ -811,7 +811,7 @@ func TestPlatformEnrollmentService_TokenTheftWithoutKeysFails(t *testing.T) {
 	require.NoError(t, err)
 
 	// Load the approved request via the token to build the transcript.
-	statusReq, err := env.enrollSvc.loadByToken(token)
+	statusReq, err := env.enrollSvc.loadByToken(t.Context(), token)
 	require.NoError(t, err)
 	attackerSig := signCompletionTranscript(t, statusReq, attackerKey)
 
@@ -1215,7 +1215,7 @@ func TestPlatformEnrollmentService_ExpiredLeaseRecovery(t *testing.T) {
 		LastTransitionAt:     time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	applied, err := env.docStore.DocConditionalUpdate(
+	applied, err := env.docStore.DocConditionalUpdate(t.Context(),
 		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
@@ -1223,7 +1223,7 @@ func TestPlatformEnrollmentService_ExpiredLeaseRecovery(t *testing.T) {
 	require.True(t, applied)
 
 	// Reconciliation should recover the expired lease.
-	err = env.enrollSvc.ReconcileExpiredLeases()
+	err = env.enrollSvc.ReconcileExpiredLeases(t.Context())
 	require.NoError(t, err)
 
 	stored := loadStoredRequest(t, env, approved.ID)
@@ -1264,7 +1264,7 @@ func TestPlatformEnrollmentService_LiveLeaseReturnsRetryAfter(t *testing.T) {
 		LastTransitionAt:     time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	applied, err := env.docStore.DocConditionalUpdate(
+	applied, err := env.docStore.DocConditionalUpdate(t.Context(),
 		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
@@ -1471,7 +1471,7 @@ func TestPlatformEnrollmentService_CleanupRemovesTerminalRequestsPastRetention(t
 		LastTransitionAt time.Time `json:"last_transition_at"`
 	}{LastTransitionAt: oldTransition})
 	require.NoError(t, err)
-	_, err = env.docStore.DocConditionalUpdate(
+	_, err = env.docStore.DocConditionalUpdate(t.Context(),
 		platformEnrollmentCollectionName(), createResp.RequestID, backdateUpdate,
 		"state", string(models.PlatformEnrollmentStateDenied),
 	)
@@ -1479,11 +1479,11 @@ func TestPlatformEnrollmentService_CleanupRemovesTerminalRequestsPastRetention(t
 	_ = stored
 
 	// Run cleanup.
-	err = env.enrollSvc.CleanupTerminalRequests()
+	err = env.enrollSvc.CleanupTerminalRequests(t.Context())
 	require.NoError(t, err)
 
 	// The denied request is removed.
-	doc, err := env.docStore.DocGet(platformEnrollmentCollectionName(), createResp.RequestID)
+	doc, err := env.docStore.DocGet(t.Context(), platformEnrollmentCollectionName(), createResp.RequestID)
 	require.NoError(t, err)
 	assert.Nil(t, doc, "denied request past retention must be removed by cleanup")
 }
@@ -1511,17 +1511,17 @@ func TestPlatformEnrollmentService_CleanupPreservesCompletedRequests(t *testing.
 		LastTransitionAt time.Time `json:"last_transition_at"`
 	}{LastTransitionAt: oldTransition})
 	require.NoError(t, err)
-	_, err = env.docStore.DocConditionalUpdate(
+	_, err = env.docStore.DocConditionalUpdate(t.Context(),
 		platformEnrollmentCollectionName(), requestID, backdateUpdate,
 		"state", string(models.PlatformEnrollmentStateCompleted),
 	)
 	require.NoError(t, err)
 
-	err = env.enrollSvc.CleanupTerminalRequests()
+	err = env.enrollSvc.CleanupTerminalRequests(t.Context())
 	require.NoError(t, err)
 
 	// The completed request is still present.
-	doc, err := env.docStore.DocGet(platformEnrollmentCollectionName(), requestID)
+	doc, err := env.docStore.DocGet(t.Context(), platformEnrollmentCollectionName(), requestID)
 	require.NoError(t, err)
 	assert.NotNil(t, doc, "completed request must not be removed by cleanup")
 }

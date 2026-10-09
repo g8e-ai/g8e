@@ -58,9 +58,9 @@ func TestStateRootService_CrashRecovery(t *testing.T) {
 
 			db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 			require.NoError(t, err)
-			require.NoError(t, db.GetDocStore().DocSet("crash", "a", mustDocJSON(t, map[string]int{"v": 1})))
-			require.NoError(t, db.GetDocStore().DocSet("crash", "b", mustDocJSON(t, map[string]int{"v": 1})))
-			require.NoError(t, db.GetKVStore().KVSet("crash:k", "v", 0))
+			require.NoError(t, db.GetDocStore().DocSet(t.Context(), "crash", "a", mustDocJSON(t, map[string]int{"v": 1})))
+			require.NoError(t, db.GetDocStore().DocSet(t.Context(), "crash", "b", mustDocJSON(t, map[string]int{"v": 1})))
+			require.NoError(t, db.GetKVStore().KVSet(t.Context(), "crash:k", "v", 0))
 			_, err = db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 			require.NoError(t, err)
 			treeBefore := committedBoundTreeRoot(t, db.db)

@@ -56,7 +56,7 @@ func setupTestCLIRecoveryController(t *testing.T) (*CLIRecoveryController, *mode
 	})
 
 	// Create a real active user to act as the approver.
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
@@ -339,7 +339,7 @@ func TestCLIRecoveryController_Approve_InactiveUser(t *testing.T) {
 	resp := newRecoveryRequest(t, c, csrPEM)
 
 	// Disable the approving user.
-	require.NoError(t, c.userSvc.Disable(user.ID, "test", "actor", "op"))
+	require.NoError(t, c.userSvc.Disable(t.Context(), user.ID, "test", "actor", "op"))
 
 	body, _ := json.Marshal(models.CLIRecoveryApproveRequest{Token: resp.Token, Approve: true})
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRecoveryApprove, bytes.NewReader(body))
@@ -641,7 +641,7 @@ func recoveryStatus(t *testing.T, c *CLIRecoveryController, token string) models
 // user, CLI session ID, and the parsed certificate.
 func seedCLIIdentityForRecoveryApprove(t *testing.T, infra *TestInfrastructure) (*models.User, string, *x509.Certificate) {
 	t.Helper()
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
@@ -654,7 +654,7 @@ func seedCLIIdentityForRecoveryApprove(t *testing.T, infra *TestInfrastructure) 
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes,
 	))
 
@@ -701,7 +701,7 @@ func TestHandleRecoveryApproveCLI_MTLSApprovesPendingRequest(t *testing.T) {
 
 	// Create a pending recovery request via the controller's recovery service.
 	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-pending")
-	requestID, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	requestID, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(t.Context(), csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 	require.NotEmpty(t, requestID)
@@ -718,7 +718,7 @@ func TestHandleRecoveryApproveCLI_MTLSApprovesPendingRequest(t *testing.T) {
 	assert.Equal(t, models.CLIRecoveryStateApproved, resp.State)
 
 	// The recovery request must be bound to the mTLS-derived approver user ID.
-	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(token)
+	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, models.CLIRecoveryStateApproved, storedReq.State)
 	assert.Equal(t, approverUser.ID, storedReq.ApprovingUserID)
@@ -734,12 +734,12 @@ func TestHandleRecoveryApproveCLI_RejectsRevokedCert(t *testing.T) {
 	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
 
 	// Revoke the approver's CLI cert by serial.
-	err := infra.PKI.RevokeCertificate(cliCert.SerialNumber.String(), "test-revocation")
+	err := infra.PKI.RevokeCertificate(t.Context(), cliCert.SerialNumber.String(), "test-revocation")
 	require.NoError(t, err)
 
 	// Create a pending recovery request.
 	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-revoked")
-	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(t.Context(), csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
 	require.NoError(t, err)
 
 	req := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
@@ -761,11 +761,11 @@ func TestHandleRecoveryApproveCLI_RejectsInactiveUser(t *testing.T) {
 
 	// Create a pending recovery request.
 	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-inactive")
-	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(t.Context(), csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
 	require.NoError(t, err)
 
 	// Disable the approver user (cert still valid, not revoked).
-	require.NoError(t, infra.UserSvc.Disable(approverUser.ID, "test-deactivation", "test-actor", "test-op"))
+	require.NoError(t, infra.UserSvc.Disable(t.Context(), approverUser.ID, "test-deactivation", "test-actor", "test-op"))
 
 	req := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
 	rr := httptest.NewRecorder()
@@ -784,7 +784,7 @@ func TestHandleRecoveryApproveCLI_DenyViaMTLS(t *testing.T) {
 	approverUser, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
 
 	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-deny")
-	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(t.Context(), csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
 	require.NoError(t, err)
 
 	req := buildMTLSRecoveryApproveRequest(t, token, false, cliSessionID, cliCert)
@@ -797,7 +797,7 @@ func TestHandleRecoveryApproveCLI_DenyViaMTLS(t *testing.T) {
 	assert.True(t, resp.Success)
 	assert.Equal(t, models.CLIRecoveryStateDenied, resp.State)
 
-	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(token)
+	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, models.CLIRecoveryStateDenied, storedReq.State)
 	assert.Equal(t, approverUser.ID, storedReq.ApprovingUserID)
@@ -880,7 +880,7 @@ func TestHandleRecoveryApproveCLI_AlreadyApproved(t *testing.T) {
 	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
 
 	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-consumed")
-	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(t.Context(), csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
 	require.NoError(t, err)
 
 	// First approval succeeds.
@@ -938,7 +938,7 @@ func TestHandleRecoveryApproveCLI_FullLifecycle(t *testing.T) {
 	assert.Equal(t, models.CLIRecoveryStateApproved, approveResp.State)
 
 	// The recovery request must be bound to the mTLS-derived approver user ID.
-	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(createResp.Token)
+	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(t.Context(), createResp.Token)
 	require.NoError(t, err)
 	assert.Equal(t, approverUser.ID, storedReq.ApprovingUserID)
 
@@ -992,11 +992,11 @@ func TestCLIRecoveryController_IssueCLIIdentity_ReusesEmbeddedSession(t *testing
 
 	// Claim the embedded operator for the user: the same state the first
 	// user's bootstrap produces.
-	operatorID, operatorSessionID, err := embedded.New(c.docStore, c.operatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := embedded.New(c.docStore, c.operatorSessionSvc).ClaimEmbeddedOperator(t.Context(), user.ID)
 	require.NoError(t, err)
 	require.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
 
-	resp, err := c.issueCLIIdentity(&models.CLIRecoveryRequest{
+	resp, err := c.issueCLIIdentity(t.Context(), &models.CLIRecoveryRequest{
 		ApprovingUserID:   user.ID,
 		CLICSRPEM:         csrPEM,
 		SystemFingerprint: "test-sys-fp",
@@ -1007,12 +1007,12 @@ func TestCLIRecoveryController_IssueCLIIdentity_ReusesEmbeddedSession(t *testing
 	assert.Equal(t, operatorSessionID, resp.OperatorSessionID)
 
 	// No new operator document was minted — only the embedded one exists.
-	docs, err := c.docStore.DocList(marshaler.CollectionName(constants.CollectionOperators))
+	docs, err := c.docStore.DocList(t.Context(), marshaler.CollectionName(constants.CollectionOperators))
 	require.NoError(t, err)
 	assert.Len(t, docs, 1)
 
 	// The new CLI session is bound to the embedded operator session.
-	cliSession, err := c.cliSessionSvc.loadCLISession(resp.CLISessionID)
+	cliSession, err := c.cliSessionSvc.loadCLISession(t.Context(), resp.CLISessionID)
 	require.NoError(t, err)
 	assert.Equal(t, operatorSessionID, cliSession.OperatorSessionID)
 }
@@ -1025,7 +1025,7 @@ func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *t
 	c, user := setupTestCLIRecoveryController(t)
 	csrPEM, _, _ := generateTestCSR(t, "recovery-remote-cli")
 
-	resp, err := c.issueCLIIdentity(&models.CLIRecoveryRequest{
+	resp, err := c.issueCLIIdentity(t.Context(), &models.CLIRecoveryRequest{
 		ApprovingUserID:   user.ID,
 		CLICSRPEM:         csrPEM,
 		SystemFingerprint: "test-sys-fp",
@@ -1037,7 +1037,7 @@ func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *t
 	assert.NotEqual(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID)
 
 	// A remote recovery operator document was minted for the binding.
-	doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.OperatorID)
+	doc, err := c.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), resp.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	op, err := models.OperatorDocumentFromStore(doc)
@@ -1048,7 +1048,7 @@ func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *t
 	assert.Equal(t, user.ID, op.UserId)
 
 	// The new CLI session is bound to the minted session.
-	cliSession, err := c.cliSessionSvc.loadCLISession(resp.CLISessionID)
+	cliSession, err := c.cliSessionSvc.loadCLISession(t.Context(), resp.CLISessionID)
 	require.NoError(t, err)
 	assert.Equal(t, resp.OperatorSessionID, cliSession.OperatorSessionID)
 }

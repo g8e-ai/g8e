@@ -34,14 +34,14 @@ func newTestEnrollmentTokenService(t *testing.T) *EnrollmentTokenService {
 func TestEnrollmentToken_GenerateAndValidateRoundTrip(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 
-	token, err := svc.GenerateToken("user-123", "cli-session-456")
+	token, err := svc.GenerateToken(t.Context(), "user-123", "cli-session-456")
 	require.NoError(t, err)
 	assert.NotEmpty(t, token.Token)
 	assert.Equal(t, "user-123", token.UserID)
 	assert.Equal(t, "cli-session-456", token.CLISessionID)
 	assert.False(t, token.Consumed)
 
-	consumed, err := svc.ValidateAndConsumeToken(token.Token)
+	consumed, err := svc.ValidateAndConsumeToken(t.Context(), token.Token)
 	require.NoError(t, err)
 	assert.Equal(t, "user-123", consumed.UserID)
 	assert.Equal(t, "cli-session-456", consumed.CLISessionID)
@@ -52,7 +52,7 @@ func TestEnrollmentToken_GenerateAndValidateRoundTrip(t *testing.T) {
 func TestEnrollmentToken_ValidateUnknownTokenReturnsInvalid(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 
-	_, err := svc.ValidateAndConsumeToken("nonexistenttoken1234567890abcdef")
+	_, err := svc.ValidateAndConsumeToken(t.Context(), "nonexistenttoken1234567890abcdef")
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenInvalid))
 }
 
@@ -69,34 +69,34 @@ func TestEnrollmentToken_ValidateExpiredTokenReturnsExpired(t *testing.T) {
 	}
 	data, err := json.Marshal(expiredToken)
 	require.NoError(t, err)
-	err = svc.db.DocSet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token, data)
+	err = svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token, data)
 	require.NoError(t, err)
 
-	_, err = svc.ValidateAndConsumeToken(expiredToken.Token)
+	_, err = svc.ValidateAndConsumeToken(t.Context(), expiredToken.Token)
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenExpired))
 }
 
 func TestEnrollmentToken_ConsumedTokenCannotBeReused(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 
-	token, err := svc.GenerateToken("user-reuse", "cli-reuse")
+	token, err := svc.GenerateToken(t.Context(), "user-reuse", "cli-reuse")
 	require.NoError(t, err)
 
-	first, err := svc.ValidateAndConsumeToken(token.Token)
+	first, err := svc.ValidateAndConsumeToken(t.Context(), token.Token)
 	require.NoError(t, err)
 	assert.True(t, first.Consumed)
 
-	_, err = svc.ValidateAndConsumeToken(token.Token)
+	_, err = svc.ValidateAndConsumeToken(t.Context(), token.Token)
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenConsumed))
 }
 
 func TestEnrollmentToken_ShortStringDoesNotPanic(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 
-	_, err := svc.ValidateAndConsumeToken("")
+	_, err := svc.ValidateAndConsumeToken(t.Context(), "")
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenInvalid))
 
-	_, err = svc.ValidateAndConsumeToken("x")
+	_, err = svc.ValidateAndConsumeToken(t.Context(), "x")
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenInvalid))
 }
 
@@ -104,13 +104,13 @@ func TestEnrollmentToken_GenerateTokenShortCLISessionIDDoesNotPanic(t *testing.T
 	svc := newTestEnrollmentTokenService(t)
 
 	// cliSessionID shorter than 8 characters should not panic on prefix slicing
-	token, err := svc.GenerateToken("user-short", "abc")
+	token, err := svc.GenerateToken(t.Context(), "user-short", "abc")
 	require.NoError(t, err)
 	assert.NotEmpty(t, token.Token)
 	assert.Equal(t, "abc", token.CLISessionID)
 
 	// Empty cliSessionID should also not panic
-	token2, err := svc.GenerateToken("user-empty", "")
+	token2, err := svc.GenerateToken(t.Context(), "user-empty", "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, token2.Token)
 	assert.Equal(t, "", token2.CLISessionID)
@@ -119,11 +119,11 @@ func TestEnrollmentToken_GenerateTokenShortCLISessionIDDoesNotPanic(t *testing.T
 func TestEnrollmentToken_ValidateTokenDoesNotConsume(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 
-	token, err := svc.GenerateToken("user-validate", "cli-validate")
+	token, err := svc.GenerateToken(t.Context(), "user-validate", "cli-validate")
 	require.NoError(t, err)
 
 	// ValidateToken must succeed and NOT mark the token consumed.
-	got, err := svc.ValidateToken(token.Token)
+	got, err := svc.ValidateToken(t.Context(), token.Token)
 	require.NoError(t, err)
 	assert.Equal(t, "user-validate", got.UserID)
 	assert.Equal(t, "cli-validate", got.CLISessionID)
@@ -131,18 +131,18 @@ func TestEnrollmentToken_ValidateTokenDoesNotConsume(t *testing.T) {
 
 	// A second ValidateToken on the same token still succeeds — the
 	// token remains unconsumed and reusable for the verify step.
-	got2, err := svc.ValidateToken(token.Token)
+	got2, err := svc.ValidateToken(t.Context(), token.Token)
 	require.NoError(t, err)
 	assert.False(t, got2.Consumed)
 
 	// ValidateAndConsumeToken must still work afterwards (the
 	// non-consuming validate did not consume it).
-	consumed, err := svc.ValidateAndConsumeToken(token.Token)
+	consumed, err := svc.ValidateAndConsumeToken(t.Context(), token.Token)
 	require.NoError(t, err)
 	assert.True(t, consumed.Consumed)
 
 	// Now ValidateToken must reject it as consumed.
-	_, err = svc.ValidateToken(token.Token)
+	_, err = svc.ValidateToken(t.Context(), token.Token)
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenConsumed))
 }
 
@@ -160,24 +160,24 @@ func TestEnrollmentToken_CleanupExpiredTokens(t *testing.T) {
 	}
 	expiredData, err := json.Marshal(expiredToken)
 	require.NoError(t, err)
-	err = svc.db.DocSet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token, expiredData)
+	err = svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token, expiredData)
 	require.NoError(t, err)
 
 	// Insert a valid (non-expired) token via GenerateToken
-	validToken, err := svc.GenerateToken("user-valid", "cli-valid")
+	validToken, err := svc.GenerateToken(t.Context(), "user-valid", "cli-valid")
 	require.NoError(t, err)
 
 	// Call CleanupExpiredTokens
-	err = svc.CleanupExpiredTokens()
+	err = svc.CleanupExpiredTokens(t.Context())
 	require.NoError(t, err)
 
 	// Verify the expired token is deleted
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token)
 	require.NoError(t, err)
 	assert.Nil(t, doc, "expired token should be deleted")
 
 	// Verify the valid token remains
-	doc, err = svc.db.DocGet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), validToken.Token)
+	doc, err = svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionEnrollmentTokens), validToken.Token)
 	require.NoError(t, err)
 	assert.NotNil(t, doc, "valid token should remain")
 }

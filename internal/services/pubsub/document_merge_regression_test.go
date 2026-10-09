@@ -40,7 +40,7 @@ func newInMemoryGovernedDocStore() *inMemoryGovernedDocStore {
 	return &inMemoryGovernedDocStore{docs: make(map[string]map[string]map[string]json.RawMessage)}
 }
 
-func (s *inMemoryGovernedDocStore) DocReplace(collection, id string, data json.RawMessage) error {
+func (s *inMemoryGovernedDocStore) DocReplace(_ context.Context, collection, id string, data json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.docs[collection] == nil {
@@ -57,7 +57,7 @@ func (s *inMemoryGovernedDocStore) DocReplace(collection, id string, data json.R
 	return nil
 }
 
-func (s *inMemoryGovernedDocStore) DocMerge(collection, id string, fields json.RawMessage) error {
+func (s *inMemoryGovernedDocStore) DocMerge(_ context.Context, collection, id string, fields json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.docs[collection] == nil || s.docs[collection][id] == nil {
@@ -87,7 +87,7 @@ func (s *inMemoryGovernedDocStore) DocMerge(collection, id string, fields json.R
 	return nil
 }
 
-func (s *inMemoryGovernedDocStore) DocDelete(collection, id string) error {
+func (s *inMemoryGovernedDocStore) DocDelete(_ context.Context, collection, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.docs[collection] != nil {

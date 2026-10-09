@@ -94,7 +94,7 @@ func setupPlatformEnrollmentRouterEnv(t *testing.T) *platformEnrollmentRouterEnv
 // and returns the cookie to attach to a test request.
 func createWebSessionCookie(t *testing.T, env *platformEnrollmentRouterEnv, userID string) *http.Cookie {
 	t.Helper()
-	session, err := env.webSession.CreateWebSession(userID)
+	session, err := env.webSession.CreateWebSession(t.Context(), userID)
 	require.NoError(t, err)
 	require.NotNil(t, session)
 	return &http.Cookie{Name: constants.WebSessionCookieName, Value: session.ID}
@@ -113,7 +113,7 @@ func createExpiredWebSessionCookie(t *testing.T, env *platformEnrollmentRouterEn
 	}
 	sessionBytes, err := json.Marshal(session)
 	require.NoError(t, err)
-	require.NoError(t, env.svc.docStore.DocSet("web_sessions", sessionID, sessionBytes))
+	require.NoError(t, env.svc.docStore.DocSet(t.Context(), "web_sessions", sessionID, sessionBytes))
 	return &http.Cookie{Name: constants.WebSessionCookieName, Value: sessionID}
 }
 
@@ -385,7 +385,7 @@ func TestPlatformEnrollmentRouter_OwnerRoutesDenyMissingIdentity(t *testing.T) {
 func TestPlatformEnrollmentRouter_OwnerRoutesDenyNonOwner(t *testing.T) {
 	env := setupPlatformEnrollmentRouterEnv(t)
 
-	secondUser, err := env.userSvc.CreateUser()
+	secondUser, err := env.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, env.ownerID, secondUser.ID, "second user must be a different user")
 
@@ -428,7 +428,7 @@ func TestPlatformEnrollmentRouter_OwnerRoutesDenyInactiveOwner(t *testing.T) {
 	// exists but the user is inactive when the request is made.
 	cookie := createWebSessionCookie(t, env, env.ownerID)
 
-	require.NoError(t, env.userSvc.Disable(env.ownerID, "test-inactive", "test-actor", ""))
+	require.NoError(t, env.userSvc.Disable(t.Context(), env.ownerID, "test-inactive", "test-actor", ""))
 
 	t.Run("pending denies inactive owner", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentPending, nil)
@@ -792,7 +792,7 @@ func TestPlatformEnrollmentRouter_RevokeAuthorizationAndRequestStates(t *testing
 	})
 
 	t.Run("non-owner identity is rejected", func(t *testing.T) {
-		secondUser, err := env.userSvc.CreateUser()
+		secondUser, err := env.userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 		rr := postPlatformEnrollmentRevoke(t, env, createWebSessionCookie(t, env, secondUser.ID), "missing-request")
 		assert.Equal(t, http.StatusForbidden, rr.Code)
@@ -868,7 +868,7 @@ func TestPlatformEnrollmentRouter_BatchDecisionAuthorizationAndAtomicResult(t *t
 	}
 	body, err := json.Marshal(batch)
 	require.NoError(t, err)
-	outsider, err := env.userSvc.CreateUser()
+	outsider, err := env.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name, user string

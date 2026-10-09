@@ -278,7 +278,7 @@ func TestPlatformEnrollmentIssuingRollback_LeaseExpiresBeforeArtifactsCommitted(
 		LastTransitionAt:     time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	applied, err := env.docStore.DocConditionalUpdate(
+	applied, err := env.docStore.DocConditionalUpdate(t.Context(),
 		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
@@ -291,7 +291,7 @@ func TestPlatformEnrollmentIssuingRollback_LeaseExpiresBeforeArtifactsCommitted(
 	assert.Nil(t, stored.Issued, "no artifacts must be committed before lease expiry")
 
 	// Reconciliation must recover the expired lease.
-	err = env.enrollSvc.ReconcileExpiredLeases()
+	err = env.enrollSvc.ReconcileExpiredLeases(t.Context())
 	require.NoError(t, err)
 
 	stored = loadStoredRequest(t, env, approved.ID)
@@ -341,7 +341,7 @@ func TestPlatformEnrollmentIssuingRollback_ExpiredLeaseWithExpiredRequest(t *tes
 		LastTransitionAt:     time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	applied, err := env.docStore.DocConditionalUpdate(
+	applied, err := env.docStore.DocConditionalUpdate(t.Context(),
 		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
@@ -349,7 +349,7 @@ func TestPlatformEnrollmentIssuingRollback_ExpiredLeaseWithExpiredRequest(t *tes
 	require.True(t, applied)
 
 	// Reconciliation must transition to expired (not back to approved).
-	err = env.enrollSvc.ReconcileExpiredLeases()
+	err = env.enrollSvc.ReconcileExpiredLeases(t.Context())
 	require.NoError(t, err)
 
 	stored := loadStoredRequest(t, env, approved.ID)
@@ -372,6 +372,6 @@ func backdateExpiry(t *testing.T, env *platformEnrollmentTestEnv, requestID stri
 		ExpiresAt time.Time `json:"expires_at"`
 	}{ExpiresAt: pastTime})
 	require.NoError(t, err)
-	_, err = env.docStore.DocUpdate(platformEnrollmentCollectionName(), requestID, updateBytes)
+	_, err = env.docStore.DocUpdate(t.Context(), platformEnrollmentCollectionName(), requestID, updateBytes)
 	require.NoError(t, err)
 }

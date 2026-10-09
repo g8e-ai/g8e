@@ -150,7 +150,7 @@ func TestPlatformEnrollmentFailureInjection_AfterSigning(t *testing.T) {
 	assert.NotEmpty(t, resp.App.AppCert, "retry must return the issued certificate")
 
 	// Verify the policy was persisted on retry.
-	policyDoc, err := env.docStore.DocGet(
+	policyDoc, err := env.docStore.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
 	require.NoError(t, err)
 	require.NotNil(t, policyDoc, "policy must be persisted after retry")
@@ -246,7 +246,7 @@ func TestPlatformEnrollmentFailureInjection_AfterOperatorDocWrite(t *testing.T) 
 	assert.NotEmpty(t, resp.Operator.OperatorCert)
 
 	// Verify the operator document exists (written by ISSUE, not by retry).
-	opDoc, err := env.docStore.DocGet(
+	opDoc, err := env.docStore.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc, "operator document must exist after retry")
@@ -427,7 +427,7 @@ func TestPlatformEnrollmentFailureInjection_RetryDoesNotConsumeApproval(t *testi
 // countDocsInCollection counts the number of documents in a collection.
 func countDocsInCollection(t *testing.T, env *platformEnrollmentTestEnv, collection string) int {
 	t.Helper()
-	docs, err := env.docStore.DocQuery(collection, nil, "", 0)
+	docs, err := env.docStore.DocQuery(t.Context(), collection, nil, "", 0)
 	require.NoError(t, err)
 	return len(docs)
 }

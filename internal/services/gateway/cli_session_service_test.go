@@ -48,11 +48,11 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		certSerial := "serial-123"
 		loginMethod := "mTLS"
 
-		err := svc.PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod)
+		err := svc.PersistCLISession(t.Context(), cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod)
 		require.NoError(t, err)
 
 		// Verify the session was persisted in the DB
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -101,22 +101,22 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 	})
 
 	t.Run("Empty SessionID", func(t *testing.T) {
-		err := svc.PersistCLISession("", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), "", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err) // Service doesn't validate empty sessionID
 
 		// Verify it was still persisted with empty ID
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), "")
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), "")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 	})
 
 	t.Run("Empty OperatorSessionID", func(t *testing.T) {
 		cliSessionID := "cli-session-empty-operator"
-		err := svc.PersistCLISession(cliSessionID, "", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err) // Service doesn't validate empty operatorSessionID
 
 		// Verify it was persisted
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -130,11 +130,11 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 
 	t.Run("Empty UserID", func(t *testing.T) {
 		cliSessionID := "cli-session-empty-user"
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err) // Service doesn't validate empty userID
 
 		// Verify it was persisted
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -148,11 +148,11 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 
 	t.Run("Empty LoginMethod", func(t *testing.T) {
 		cliSessionID := "cli-session-empty-login"
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "")
 		require.NoError(t, err) // Service doesn't validate empty loginMethod
 
 		// Verify it was persisted
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -169,7 +169,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 
 		// Nil database causes a panic when accessing DocStore
 		assert.Panics(t, func() {
-			svcNilDB.PersistCLISession("cli-session-nil-db", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+			svcNilDB.PersistCLISession(t.Context(), "cli-session-nil-db", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		})
 	})
 
@@ -177,21 +177,21 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		svcNilLogger := NewCLISessionService(infra.DocStore, nil)
 
 		// Should still work without logger (error logging is optional)
-		err := svcNilLogger.PersistCLISession("cli-session-nil-logger", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svcNilLogger.PersistCLISession(t.Context(), "cli-session-nil-logger", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
 		// Verify it was persisted
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-session-nil-logger")
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), "cli-session-nil-logger")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 	})
 
 	t.Run("SessionTypeConstant", func(t *testing.T) {
 		cliSessionID := "cli-session-type-check"
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -205,10 +205,10 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 
 	t.Run("IsActiveFlag", func(t *testing.T) {
 		cliSessionID := "cli-session-active-flag"
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -222,10 +222,10 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 
 	t.Run("ExpiryTimestampsConsistency", func(t *testing.T) {
 		cliSessionID := "cli-session-expiry-consistency"
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -241,10 +241,10 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 
 	t.Run("TimestampOrdering", func(t *testing.T) {
 		cliSessionID := "cli-session-timestamp-order"
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -261,15 +261,15 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		cliSessionID := "cli-session-overwrite"
 
 		// Create first session
-		err := svc.PersistCLISession(cliSessionID, "operator-session-1", "user-1", "system-fp-1", "cert-fp-1", "serial-1", "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-1", "user-1", "system-fp-1", "cert-fp-1", "serial-1", "mTLS")
 		require.NoError(t, err)
 
 		// Overwrite with new session data
-		err = svc.PersistCLISession(cliSessionID, "operator-session-2", "user-2", "system-fp-2", "cert-fp-2", "serial-2", "passkey")
+		err = svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-2", "user-2", "system-fp-2", "cert-fp-2", "serial-2", "passkey")
 		require.NoError(t, err)
 
 		// Verify the session was overwritten
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -292,10 +292,10 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		specialCertFP := "cert-fp-with-特殊-Characters-😀"
 		specialSerial := "serial-with-特殊-Characters-😀"
 
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", specialSystemFP, specialCertFP, specialSerial, "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", specialSystemFP, specialCertFP, specialSerial, "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -316,10 +316,10 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 			longString = longString[:i] + "a" + longString[i+1:]
 		}
 
-		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", longString, longString, longString, "mTLS")
+		err := svc.PersistCLISession(t.Context(), cliSessionID, "operator-session-456", "user-789", longString, longString, longString, "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -342,7 +342,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 // test assertions.
 func loadStoredCLISession(t *testing.T, svc *CLISessionService, sessionID string) models.CLISession {
 	t.Helper()
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	session, err := decodeCLISession(doc)
@@ -354,8 +354,8 @@ func TestCLISessionService_DeactivateCLISession_Success(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("deact-1", "op-1", "user-1", "sys-fp", "cert-fp-1", "serial-1", "mTLS"))
-	require.NoError(t, svc.DeactivateCLISession("deact-1"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "deact-1", "op-1", "user-1", "sys-fp", "cert-fp-1", "serial-1", "mTLS"))
+	require.NoError(t, svc.DeactivateCLISession(t.Context(), "deact-1"))
 
 	stored := loadStoredCLISession(t, svc, "deact-1")
 	assert.False(t, stored.IsActive, "session must be inactive after DeactivateCLISession")
@@ -365,7 +365,7 @@ func TestCLISessionService_DeactivateCLISession_NotFound(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	err := svc.DeactivateCLISession("nonexistent-session")
+	err := svc.DeactivateCLISession(t.Context(), "nonexistent-session")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrCLISessionNotFound), "expected ErrCLISessionNotFound, got %v", err)
 }
@@ -374,10 +374,10 @@ func TestCLISessionService_DeactivateCLISession_AlreadyDeactivated(t *testing.T)
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("deact-2", "op-2", "user-2", "sys-fp", "cert-fp-2", "serial-2", "mTLS"))
-	require.NoError(t, svc.DeactivateCLISession("deact-2"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "deact-2", "op-2", "user-2", "sys-fp", "cert-fp-2", "serial-2", "mTLS"))
+	require.NoError(t, svc.DeactivateCLISession(t.Context(), "deact-2"))
 
-	err := svc.DeactivateCLISession("deact-2")
+	err := svc.DeactivateCLISession(t.Context(), "deact-2")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrCLISessionAlreadyDeactivated), "expected ErrCLISessionAlreadyDeactivated, got %v", err)
 }
@@ -386,7 +386,7 @@ func TestCLISessionService_DeactivateCLISession_EmptyID(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	err := svc.DeactivateCLISession("")
+	err := svc.DeactivateCLISession(t.Context(), "")
 	require.Error(t, err)
 }
 
@@ -394,7 +394,7 @@ func TestCLISessionService_DeactivateCLISession_ConcurrentOnlyOneSucceeds(t *tes
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("deact-concurrent", "op-c", "user-c", "sys-fp", "cert-fp-c", "serial-c", "mTLS"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "deact-concurrent", "op-c", "user-c", "sys-fp", "cert-fp-c", "serial-c", "mTLS"))
 
 	const goroutines = 10
 	var wg sync.WaitGroup
@@ -409,7 +409,7 @@ func TestCLISessionService_DeactivateCLISession_ConcurrentOnlyOneSucceeds(t *tes
 	for i := 0; i < goroutines; i++ {
 		go func() {
 			defer wg.Done()
-			err := svc.DeactivateCLISession("deact-concurrent")
+			err := svc.DeactivateCLISession(t.Context(), "deact-concurrent")
 			mu.Lock()
 			switch {
 			case err == nil:
@@ -437,10 +437,10 @@ func TestCLISessionService_ReplaceCLISession_Success(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("old-1", "op-old-1", "user-1", "sys-fp-old", "cert-fp-old", "serial-old", "mTLS"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "old-1", "op-old-1", "user-1", "sys-fp-old", "cert-fp-old", "serial-old", "mTLS"))
 
 	newSessionID := "new-1"
-	newSession, err := svc.ReplaceCLISession("old-1", newSessionID, "cert-fp-new", "serial-new", CLISessionFields{
+	newSession, err := svc.ReplaceCLISession(t.Context(), "old-1", newSessionID, "cert-fp-new", "serial-new", CLISessionFields{
 		OperatorSessionID: "op-old-1",
 		UserID:            "user-1",
 		SystemFingerprint: "sys-fp-new",
@@ -473,7 +473,7 @@ func TestCLISessionService_ReplaceCLISession_UnknownOldSession(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	_, err := svc.ReplaceCLISession("nonexistent-old", "new-unknown", "cert-fp-new", "serial-new", CLISessionFields{
+	_, err := svc.ReplaceCLISession(t.Context(), "nonexistent-old", "new-unknown", "cert-fp-new", "serial-new", CLISessionFields{
 		OperatorSessionID: "op-1",
 		UserID:            "user-1",
 		LoginMethod:       "mTLS",
@@ -486,10 +486,10 @@ func TestCLISessionService_ReplaceCLISession_AlreadyDeactivatedOld(t *testing.T)
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("old-deact", "op-d", "user-d", "sys-fp", "cert-fp", "serial", "mTLS"))
-	require.NoError(t, svc.DeactivateCLISession("old-deact"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "old-deact", "op-d", "user-d", "sys-fp", "cert-fp", "serial", "mTLS"))
+	require.NoError(t, svc.DeactivateCLISession(t.Context(), "old-deact"))
 
-	_, err := svc.ReplaceCLISession("old-deact", "new-deact", "cert-fp-new", "serial-new", CLISessionFields{
+	_, err := svc.ReplaceCLISession(t.Context(), "old-deact", "new-deact", "cert-fp-new", "serial-new", CLISessionFields{
 		OperatorSessionID: "op-d",
 		UserID:            "user-d",
 		LoginMethod:       "mTLS",
@@ -502,17 +502,17 @@ func TestCLISessionService_ReplaceCLISession_MissingUserBinding(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("old-bind", "op-b", "user-b", "sys-fp", "cert-fp", "serial", "mTLS"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "old-bind", "op-b", "user-b", "sys-fp", "cert-fp", "serial", "mTLS"))
 
 	// Missing UserID.
-	_, err := svc.ReplaceCLISession("old-bind", "new-bind-1", "cert-fp-new", "serial-new", CLISessionFields{
+	_, err := svc.ReplaceCLISession(t.Context(), "old-bind", "new-bind-1", "cert-fp-new", "serial-new", CLISessionFields{
 		OperatorSessionID: "op-b",
 		LoginMethod:       "mTLS",
 	})
 	require.Error(t, err)
 
 	// Missing OperatorSessionID.
-	_, err = svc.ReplaceCLISession("old-bind", "new-bind-2", "cert-fp-new", "serial-new", CLISessionFields{
+	_, err = svc.ReplaceCLISession(t.Context(), "old-bind", "new-bind-2", "cert-fp-new", "serial-new", CLISessionFields{
 		UserID:      "user-b",
 		LoginMethod: "mTLS",
 	})
@@ -527,7 +527,7 @@ func TestCLISessionService_ReplaceCLISession_EmptyOldID(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	_, err := svc.ReplaceCLISession("", "new-empty-old", "cert-fp-new", "serial-new", CLISessionFields{
+	_, err := svc.ReplaceCLISession(t.Context(), "", "new-empty-old", "cert-fp-new", "serial-new", CLISessionFields{
 		OperatorSessionID: "op-1",
 		UserID:            "user-1",
 		LoginMethod:       "mTLS",
@@ -549,7 +549,7 @@ func TestCLISessionService_ReplaceCLISession_ConcurrentOnlyOneSucceeds(t *testin
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("old-concurrent", "op-c", "user-c", "sys-fp", "cert-fp-old", "serial-old", "mTLS"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "old-concurrent", "op-c", "user-c", "sys-fp", "cert-fp-old", "serial-old", "mTLS"))
 
 	const goroutines = 10
 	var wg sync.WaitGroup
@@ -566,7 +566,7 @@ func TestCLISessionService_ReplaceCLISession_ConcurrentOnlyOneSucceeds(t *testin
 		go func(idx int) {
 			defer wg.Done()
 			newSessionID := fmt.Sprintf("new-concurrent-%d", idx)
-			newSession, err := svc.ReplaceCLISession("old-concurrent", newSessionID, "cert-fp-new", "serial-new", CLISessionFields{
+			newSession, err := svc.ReplaceCLISession(t.Context(), "old-concurrent", newSessionID, "cert-fp-new", "serial-new", CLISessionFields{
 				OperatorSessionID: "op-c",
 				UserID:            "user-c",
 				SystemFingerprint: "sys-fp-new",
@@ -618,9 +618,9 @@ func TestCLISessionService_ReplaceCLISession_RevocationWriteFailureRollback(t *t
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	require.NoError(t, svc.PersistCLISession("old-rollback", "op-rb", "user-rb", "sys-fp", "cert-fp-old", "serial-old", "mTLS"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), "old-rollback", "op-rb", "user-rb", "sys-fp", "cert-fp-old", "serial-old", "mTLS"))
 
-	newSession, err := svc.ReplaceCLISession("old-rollback", "new-rollback", "cert-fp-new", "serial-new", CLISessionFields{
+	newSession, err := svc.ReplaceCLISession(t.Context(), "old-rollback", "new-rollback", "cert-fp-new", "serial-new", CLISessionFields{
 		OperatorSessionID: "op-rb",
 		UserID:            "user-rb",
 		SystemFingerprint: "sys-fp-new",
@@ -642,7 +642,7 @@ func TestCLISessionService_ReplaceCLISession_RevocationWriteFailureRollback(t *t
 	// A second ReplaceCLISession on the now-deactivated old session must
 	// fail with constants.ErrCLISessionAlreadyDeactivated — the caller
 	// cannot accidentally double-replace.
-	_, err = svc.ReplaceCLISession("old-rollback", "new-rollback-2", "cert-fp-new-2", "serial-new-2", CLISessionFields{
+	_, err = svc.ReplaceCLISession(t.Context(), "old-rollback", "new-rollback-2", "cert-fp-new-2", "serial-new-2", CLISessionFields{
 		OperatorSessionID: "op-rb",
 		UserID:            "user-rb",
 		LoginMethod:       "mTLS",
@@ -660,7 +660,7 @@ func TestCLISessionService_ReplaceCLISession_RevocationWriteFailureRollback(t *t
 // up the "old session" state.
 func persistCLISessionForRefresh(t *testing.T, svc *CLISessionService, sessionID, userID, operatorSessionID string) {
 	t.Helper()
-	require.NoError(t, svc.PersistCLISession(sessionID, operatorSessionID, userID, "sys-fp", "cert-fp", "serial", "mTLS"))
+	require.NoError(t, svc.PersistCLISession(t.Context(), sessionID, operatorSessionID, userID, "sys-fp", "cert-fp", "serial", "mTLS"))
 }
 
 // TestCLISessionService_RefreshCLISession_OldSessionActive_DeactivatedAndNewPersisted
@@ -674,7 +674,7 @@ func TestCLISessionService_RefreshCLISession_OldSessionActive_DeactivatedAndNewP
 
 	persistCLISessionForRefresh(t, svc, "refresh-old-active", "user-refresh-1", "op-refresh-1")
 
-	newSession, err := svc.RefreshCLISession("refresh-old-active", "refresh-new-1", CLISessionFields{
+	newSession, err := svc.RefreshCLISession(t.Context(), "refresh-old-active", "refresh-new-1", CLISessionFields{
 		OperatorSessionID: "op-refresh-1",
 		UserID:            "user-refresh-1",
 		SystemFingerprint: "sys-fp-new",
@@ -709,9 +709,9 @@ func TestCLISessionService_RefreshCLISession_OldSessionAlreadyDeactivated_NewPer
 	svc := infra.CLISessionSvc
 
 	persistCLISessionForRefresh(t, svc, "refresh-old-deact", "user-refresh-2", "op-refresh-2")
-	require.NoError(t, svc.DeactivateCLISession("refresh-old-deact"))
+	require.NoError(t, svc.DeactivateCLISession(t.Context(), "refresh-old-deact"))
 
-	newSession, err := svc.RefreshCLISession("refresh-old-deact", "refresh-new-2", CLISessionFields{
+	newSession, err := svc.RefreshCLISession(t.Context(), "refresh-old-deact", "refresh-new-2", CLISessionFields{
 		OperatorSessionID: "op-refresh-2",
 		UserID:            "user-refresh-2",
 		LoginMethod:       "mTLS",
@@ -740,7 +740,7 @@ func TestCLISessionService_RefreshCLISession_OldSessionMissing_NewPersisted(t *t
 	svc := infra.CLISessionSvc
 
 	// No old session persisted — simulate a volume reset.
-	newSession, err := svc.RefreshCLISession("refresh-old-missing", "refresh-new-3", CLISessionFields{
+	newSession, err := svc.RefreshCLISession(t.Context(), "refresh-old-missing", "refresh-new-3", CLISessionFields{
 		OperatorSessionID: "op-refresh-3",
 		UserID:            "user-refresh-3",
 		LoginMethod:       "mTLS",
@@ -765,7 +765,7 @@ func TestCLISessionService_RefreshCLISession_EmptyOldSessionID_NewPersisted(t *t
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	newSession, err := svc.RefreshCLISession("", "refresh-new-4", CLISessionFields{
+	newSession, err := svc.RefreshCLISession(t.Context(), "", "refresh-new-4", CLISessionFields{
 		OperatorSessionID: "op-refresh-4",
 		UserID:            "user-refresh-4",
 		LoginMethod:       "mTLS",
@@ -786,14 +786,14 @@ func TestCLISessionService_RefreshCLISession_MissingUserBinding_ReturnsError(t *
 	svc := infra.CLISessionSvc
 
 	// Missing UserID.
-	_, err := svc.RefreshCLISession("refresh-old-bind", "refresh-new-bind-1", CLISessionFields{
+	_, err := svc.RefreshCLISession(t.Context(), "refresh-old-bind", "refresh-new-bind-1", CLISessionFields{
 		OperatorSessionID: "op-bind",
 		LoginMethod:       "mTLS",
 	})
 	require.Error(t, err)
 
 	// Missing OperatorSessionID.
-	_, err = svc.RefreshCLISession("refresh-old-bind", "refresh-new-bind-2", CLISessionFields{
+	_, err = svc.RefreshCLISession(t.Context(), "refresh-old-bind", "refresh-new-bind-2", CLISessionFields{
 		UserID:      "user-bind",
 		LoginMethod: "mTLS",
 	})
@@ -808,7 +808,7 @@ func TestCLISessionService_RefreshCLISession_MissingNewSessionID_ReturnsError(t 
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 
-	_, err := svc.RefreshCLISession("refresh-old-noid", "", CLISessionFields{
+	_, err := svc.RefreshCLISession(t.Context(), "refresh-old-noid", "", CLISessionFields{
 		OperatorSessionID: "op-noid",
 		UserID:            "user-noid",
 		LoginMethod:       "mTLS",

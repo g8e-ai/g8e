@@ -36,7 +36,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		}
 		opBytes, err := models.MarshalOperatorDocument(opDoc)
 		require.NoError(t, err)
-		err = ls.GetDocStore().DocSet("operators", "op-123", opBytes)
+		err = ls.GetDocStore().DocSet(t.Context(), "operators", "op-123", opBytes)
 		require.NoError(t, err)
 
 		heartbeat := &operatorv1.HeartbeatResult{
@@ -58,7 +58,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 
 		ls.handleHeartbeatPublish("test-channel", heartbeatBytes)
 
-		updatedDoc, err := ls.GetDocStore().DocGet("operators", "op-123")
+		updatedDoc, err := ls.GetDocStore().DocGet(t.Context(), "operators", "op-123")
 		require.NoError(t, err)
 		assert.NotNil(t, updatedDoc)
 		assert.Contains(t, updatedDoc.Data, "latest_heartbeat_snapshot")
@@ -122,7 +122,7 @@ func TestGatewayModeService_HandleHeartbeatPublish_LeavesBoundRootUnchanged(t *t
 	assert.Equal(t, boundBefore, boundAfter, "heartbeats must not move the bound root")
 	assert.NotEqual(t, observedBefore, observedAfter, "heartbeat telemetry is committed in the observed root")
 
-	doc, err := store.DocGet(operatorsCollection, "op-root")
+	doc, err := store.DocGet(t.Context(), operatorsCollection, "op-root")
 	require.NoError(t, err)
 	assert.Contains(t, doc.Data, "last_heartbeat_at")
 	assert.Contains(t, doc.Data, "latest_heartbeat_snapshot")
@@ -139,7 +139,7 @@ func TestGatewayModeService_HandleHeartbeatPublish_StampsGatewayClockAndRestores
 	before := time.Now().UTC()
 	publishTestHeartbeat(t, ls, "op-stale")
 
-	doc, err := store.DocGet(operatorsCollection, "op-stale")
+	doc, err := store.DocGet(t.Context(), operatorsCollection, "op-stale")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 

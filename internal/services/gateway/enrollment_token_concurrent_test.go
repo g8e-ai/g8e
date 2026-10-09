@@ -31,7 +31,7 @@ import (
 func TestEnrollmentToken_ConcurrentValidateAndConsume(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 
-	token, err := svc.GenerateToken("user-concurrent", "cli-concurrent")
+	token, err := svc.GenerateToken(t.Context(), "user-concurrent", "cli-concurrent")
 	require.NoError(t, err)
 
 	const numConcurrent = 10
@@ -43,7 +43,7 @@ func TestEnrollmentToken_ConcurrentValidateAndConsume(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			consumed, err := svc.ValidateAndConsumeToken(token.Token)
+			consumed, err := svc.ValidateAndConsumeToken(t.Context(), token.Token)
 			if err != nil {
 				errs <- err
 			} else {
@@ -83,7 +83,7 @@ func TestEnrollmentToken_PersistenceFailureDuringGenerate(t *testing.T) {
 	// Close the DB to simulate a persistence failure.
 	db.Close()
 
-	_, err := svc.GenerateToken("user-persist-fail", "cli-persist-fail")
+	_, err := svc.GenerateToken(t.Context(), "user-persist-fail", "cli-persist-fail")
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenPersistenceFailed),
 		"expected ErrEnrollmentTokenPersistenceFailed, got %v", err)
 }
@@ -99,10 +99,10 @@ func TestEnrollmentToken_MalformedTokenInStorage(t *testing.T) {
 	// The "token" field is a number instead of a string, and "consumed"
 	// is a string instead of a bool. This simulates storage corruption.
 	malformedData := json.RawMessage(`{"token": 12345, "user_id": "user-x", "cli_session_id": "cli-x", "consumed": "not-a-bool", "expires_at": "2099-01-01T00:00:00Z", "created_at": "2026-01-01T00:00:00Z"}`)
-	err := svc.db.DocSet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), "malformedtoken1234567890abcdef1234567890ab", malformedData)
+	err := svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionEnrollmentTokens), "malformedtoken1234567890abcdef1234567890ab", malformedData)
 	require.NoError(t, err)
 
-	_, err = svc.ValidateAndConsumeToken("malformedtoken1234567890abcdef1234567890ab")
+	_, err = svc.ValidateAndConsumeToken(t.Context(), "malformedtoken1234567890abcdef1234567890ab")
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenInvalid),
 		"expected ErrEnrollmentTokenInvalid for malformed token in storage, got %v", err)
 }

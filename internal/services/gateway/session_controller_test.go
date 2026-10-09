@@ -146,7 +146,7 @@ func seedActiveCLISession(t *testing.T, infra *TestInfrastructure, userID, cliSe
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 }
 
 // TestHandleSessionInfo_ReturnsPersistedBinding drives GET
@@ -156,12 +156,12 @@ func seedActiveCLISession(t *testing.T, infra *TestInfrastructure, userID, cliSe
 func TestHandleSessionInfo_ReturnsPersistedBinding(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	// Claim the embedded operator for the user so its session is the
 	// persisted binding the CLI session carries.
-	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(t.Context(), user.ID)
 	require.NoError(t, err)
 
 	cliSessionID := "cli-session-info-bound"
@@ -194,7 +194,7 @@ func TestHandleSessionInfo_ReturnsPersistedBinding(t *testing.T) {
 func TestHandleSessionInfo_UnboundSessionReturnsEmptyOperatorFields(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	cliSessionID := "cli-session-info-unbound"
@@ -228,10 +228,10 @@ func TestHandleSessionInfo_UnboundSessionReturnsEmptyOperatorFields(t *testing.T
 func TestHandleSessionInfo_NonCLIIdentityReturns401(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
-	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(t.Context(), user.ID)
 	require.NoError(t, err)
 
 	t.Run("operator certificate without CLI session", func(t *testing.T) {

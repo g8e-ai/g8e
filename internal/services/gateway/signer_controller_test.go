@@ -11,6 +11,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,7 +85,7 @@ func TestSignerControllerHandleGovernanceSigners(t *testing.T) {
 		rr := httptest.NewRecorder()
 		signerController.handleGovernanceSigners(rr, req)
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		t.Cleanup(func() { docStore.DocDelete("trusted_signers", "test-signer-1") })
+		t.Cleanup(func() { docStore.DocDelete(context.Background(), "trusted_signers", "test-signer-1") })
 	})
 
 	t.Run("POST - missing id", func(t *testing.T) {
@@ -155,9 +156,9 @@ func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := docStore.DocSet("trusted_signers", "test-signer-get", signerBytes)
+		err := docStore.DocSet(t.Context(), "trusted_signers", "test-signer-get", signerBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { docStore.DocDelete("trusted_signers", "test-signer-get") })
+		t.Cleanup(func() { docStore.DocDelete(context.Background(), "trusted_signers", "test-signer-get") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/test-signer-get", nil)
 		rr := httptest.NewRecorder()
@@ -174,7 +175,7 @@ func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := docStore.DocSet("trusted_signers", "test-signer-delete", signerBytes)
+		err := docStore.DocSet(t.Context(), "trusted_signers", "test-signer-delete", signerBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/test-signer-delete", nil)

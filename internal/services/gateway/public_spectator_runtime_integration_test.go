@@ -38,7 +38,7 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(ctx))
 
-	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
+	requireBootstrapHealthy(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
 	require.Len(t, runtime.mirror.trustedProxyNetworks, 1)
 
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -63,8 +63,8 @@ func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(ctx))
 
-	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
-	waitForExplorerRuntime(t, "http://127.0.0.1:"+explorerPort+"/runtime.json", "http://127.0.0.1:"+publicPort)
+	requireBootstrapHealthy(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
+	requireExplorerRuntime(t, "http://127.0.0.1:"+explorerPort+"/runtime.json", "http://127.0.0.1:"+publicPort)
 
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stopCancel()

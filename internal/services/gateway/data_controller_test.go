@@ -149,8 +149,8 @@ func TestDataControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		infra.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
-		infra.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
+		infra.DocStore.DocSet(t.Context(), "items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
+		infra.DocStore.DocSet(t.Context(), "items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
 
 		query := models.DocQueryRequest{
 			Limit: 1,
@@ -482,15 +482,15 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 	// The first user created is the gateway admin (IsFirstUser). The second
 	// user is a non-admin regular user.
-	adminUser, err := userSvc.CreateUser()
+	adminUser, err := userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, adminUser)
-	t.Cleanup(func() { infra.DocStore.DocDelete("users", adminUser.ID) })
+	t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "users", adminUser.ID) })
 
-	regularUser, err := userSvc.CreateUser()
+	regularUser, err := userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { infra.DocStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "users", regularUser.ID) })
 
 	t.Run("reject app revocation without admin authorization", func(t *testing.T) {
 		appID := "spiffe://g8e.local/app/test-no-auth"
@@ -503,9 +503,9 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet(t.Context(), "app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { infra.DocStore.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -530,9 +530,9 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet(t.Context(), "app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { infra.DocStore.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -569,10 +569,10 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet(t.Context(), "app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := infra.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := infra.DocStore.DocGet(t.Context(), "app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
@@ -586,7 +586,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = infra.DocStore.DocGet("app_policies", appID)
+		policyDoc, err = infra.DocStore.DocGet(t.Context(), "app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 	})
@@ -602,7 +602,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet(t.Context(), "app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -612,14 +612,14 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = infra.DocStore.DocSet("trusted_signers", appID, signerBytes)
+		err = infra.DocStore.DocSet(t.Context(), "trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := infra.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := infra.DocStore.DocGet(t.Context(), "app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
-		signerDoc, err := infra.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err := infra.DocStore.DocGet(t.Context(), "trusted_signers", appID)
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 
@@ -633,11 +633,11 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = infra.DocStore.DocGet("app_policies", appID)
+		policyDoc, err = infra.DocStore.DocGet(t.Context(), "app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err = infra.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err = infra.DocStore.DocGet(t.Context(), "trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -653,7 +653,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet(t.Context(), "app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -663,7 +663,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = infra.DocStore.DocSet("trusted_signers", appID, signerBytes)
+		err = infra.DocStore.DocSet(t.Context(), "trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
 		reqBody := map[string]string{"app_id": appID}
@@ -676,11 +676,11 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err := infra.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := infra.DocStore.DocGet(t.Context(), "app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err := infra.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err := infra.DocStore.DocGet(t.Context(), "trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -760,9 +760,9 @@ func TestDataControllerHandleDataSettings(t *testing.T) {
 
 	t.Run("GET - success", func(t *testing.T) {
 		settings := map[string]string{"mode": "test"}
-		err := infra.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := infra.DocStore.DocSet(t.Context(), "settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
-		t.Cleanup(func() { infra.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "settings", "platform_settings") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/settings", nil)
 		rr := httptest.NewRecorder()
@@ -777,12 +777,12 @@ func TestDataControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dataController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { infra.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "settings", "platform_settings") })
 	})
 
 	t.Run("PATCH - success", func(t *testing.T) {
 		settings := map[string]string{"mode": "test"}
-		err := infra.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := infra.DocStore.DocSet(t.Context(), "settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
 
 		patch := map[string]string{"mode": "production"}
@@ -790,7 +790,7 @@ func TestDataControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dataController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { infra.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { infra.DocStore.DocDelete(context.Background(), "settings", "platform_settings") })
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {

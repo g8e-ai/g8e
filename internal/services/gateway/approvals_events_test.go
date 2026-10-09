@@ -140,7 +140,7 @@ func TestApprovalsChanged_TransactionsReachOnlyTheOwnersLiveSessions(t *testing.
 	expired := tapWebSession(t, f.ws, "web-expired")
 	other := tapWebSession(t, f.ws, "web-other")
 
-	f.notifier.TransactionsChanged("user-a")
+	f.notifier.TransactionsChanged(t.Context(), "user-a")
 
 	assert.Equal(t, []models.ApprovalsChangedSubject{models.ApprovalsChangedTransactions}, owner.subjects(t))
 	assert.Empty(t, expired.subjects(t))
@@ -149,16 +149,16 @@ func TestApprovalsChanged_TransactionsReachOnlyTheOwnersLiveSessions(t *testing.
 
 func TestApprovalsChanged_EnrollmentsGoToThePlatformOwnerOnly(t *testing.T) {
 	f := newApprovalsFixture(t)
-	first, err := f.users.CreateUser()
+	first, err := f.users.CreateUser(t.Context())
 	require.NoError(t, err)
-	second, err := f.users.CreateUser()
+	second, err := f.users.CreateUser(t.Context())
 	require.NoError(t, err)
 	putWebSession(t, f.store, "web-first", first.ID, time.Hour)
 	putWebSession(t, f.store, "web-second", second.ID, time.Hour)
 	firstTap := tapWebSession(t, f.ws, "web-first")
 	secondTap := tapWebSession(t, f.ws, "web-second")
 
-	f.notifier.EnrollmentsChanged()
+	f.notifier.EnrollmentsChanged(t.Context())
 
 	assert.Equal(t, []models.ApprovalsChangedSubject{models.ApprovalsChangedEnrollments}, firstTap.subjects(t))
 	assert.Empty(t, secondTap.subjects(t))

@@ -173,7 +173,7 @@ func setupObserveProducerEndpointEnv(t *testing.T) *observeProducerEndpointEnv {
 			StateRootSvc:      infra.StateRootSvc,
 			Responder:         infra.Responder,
 			IsReady:           func() bool { return true },
-			IsGovernanceReady: func() bool { return true },
+			IsGovernanceReady: func(context.Context) bool { return true },
 		},
 		GovernanceControllerDeps: GovernanceControllerDeps{
 			Cfg:       infra.Cfg,
@@ -219,7 +219,7 @@ func seedActiveUser(t *testing.T, infra *TestInfrastructure, userID string) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 }
 
@@ -235,7 +235,7 @@ func seedAppPolicy(t *testing.T, infra *TestInfrastructure, _ string) {
 	}
 	policyBytes, err := json.Marshal(policy)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionAppPolicies), protocol.EnsembleAppID, policyBytes))
 }
 
@@ -244,7 +244,7 @@ func seedAppPolicy(t *testing.T, infra *TestInfrastructure, _ string) {
 // user_id and apply ownership scoping.
 func seedWebSession(t *testing.T, infra *TestInfrastructure, userID string) string {
 	t.Helper()
-	session, err := infra.WebSessionSvc.CreateWebSession(userID)
+	session, err := infra.WebSessionSvc.CreateWebSession(t.Context(), userID)
 	require.NoError(t, err)
 	require.NotNil(t, session)
 	return session.ID
@@ -759,7 +759,7 @@ func seedCLISessionForProducer(t *testing.T, infra *TestInfrastructure, userID s
 	cliSessionID := "cli-session-producer"
 	body, err := json.Marshal(&models.CLISession{ID: cliSessionID, UserID: userID, ExpiresAt: time.Now().Add(time.Hour), IsActive: true})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, body))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, body))
 	return cliSessionID, cliMTLSCert(t, userID, cliSessionID)
 }
 

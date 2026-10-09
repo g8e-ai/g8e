@@ -34,12 +34,12 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 
 		userSvc := NewUserService(db.GetDocStore(), logger)
-		newUser, err := userSvc.CreateUser()
+		newUser, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 		require.NotNil(t, newUser)
 		require.Equal(t, constants.UserStatusActive, newUser.Status)
 		require.NotEmpty(t, newUser.OrganizationID)
-		organization, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionOrganizations), newUser.OrganizationID)
+		organization, err := db.GetDocStore().DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOrganizations), newUser.OrganizationID)
 		require.NoError(t, err)
 		require.NotNil(t, organization)
 		organizationData, err := json.Marshal(organization.ForWire())
@@ -71,14 +71,14 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a user to disable
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
-		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
+		err = userSvc.Disable(t.Context(), user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.NoError(t, err)
 
 		// Verify user is disabled
-		disabledUser, err := userSvc.GetByID(user.ID)
+		disabledUser, err := userSvc.GetByID(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, disabledUser)
 		require.Equal(t, constants.UserStatusDisabled, disabledUser.Status)
@@ -88,7 +88,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", user.ID))},
 		}
-		results, err := db.GetDocStore().DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+		results, err := db.GetDocStore().DocQuery(t.Context(), marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 
@@ -111,20 +111,20 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create and disable a user
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
-		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
+		err = userSvc.Disable(t.Context(), user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.NoError(t, err)
 
 		// Disable again (should be idempotent)
-		err = userSvc.Disable(user.ID, "test_reason_2", "actor_user_id_2", "operator_id_2")
+		err = userSvc.Disable(t.Context(), user.ID, "test_reason_2", "actor_user_id_2", "operator_id_2")
 		require.NoError(t, err)
 
 		// Verify audit entry was created for the noop
 		filters := []models.DocFilter{
 			{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", user.ID))},
 		}
-		results, err := db.GetDocStore().DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+		results, err := db.GetDocStore().DocQuery(t.Context(), marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 		require.NoError(t, err)
 		require.Len(t, results, 2) // Two audit entries
 	})
@@ -143,14 +143,14 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc.SetAuthService(mockAuthSvc)
 
 		// Create a user to disable
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
-		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
+		err = userSvc.Disable(t.Context(), user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.NoError(t, err)
 
 		// Verify user is disabled
-		disabledUser, err := userSvc.GetByID(user.ID)
+		disabledUser, err := userSvc.GetByID(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, disabledUser)
 		require.Equal(t, constants.UserStatusDisabled, disabledUser.Status)
@@ -166,13 +166,13 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a user to disable
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
 		// Close DB to force GetByID error
 		db.Close()
 
-		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
+		err = userSvc.Disable(t.Context(), user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.Error(t, err)
 	})
 }
@@ -191,14 +191,14 @@ func TestUserService_DeleteUser_Integration(t *testing.T) {
 		mockAuthSvc := &AuthService{}
 		userSvc.SetAuthService(mockAuthSvc)
 
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
-		err = userSvc.DeleteUser(user.ID)
+		err = userSvc.DeleteUser(t.Context(), user.ID)
 		require.NoError(t, err)
 
 		// Verify user was deleted
-		deletedUser, err := userSvc.GetByID(user.ID)
+		deletedUser, err := userSvc.GetByID(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.Nil(t, deletedUser)
 	})
@@ -214,7 +214,7 @@ func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 
 		userSvc := NewUserService(db.GetDocStore(), logger)
 
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
 		// Close DB to force DocUpdate error
@@ -231,7 +231,7 @@ func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 			},
 		}
 
-		err = userSvc.UpdatePasskeyCredentials(user.ID, newCredentials)
+		err = userSvc.UpdatePasskeyCredentials(t.Context(), user.ID, newCredentials)
 		require.Error(t, err)
 	})
 }
@@ -272,10 +272,10 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 			Description: "A test persona",
 			Roles:       []string{"admin", "administrator"},
 		}
-		err = personaSvc.CreatePersona(persona)
+		err = personaSvc.CreatePersona(t.Context(), persona)
 		require.NoError(t, err)
 
-		personaID, err := personaSvc.MapRolesToPersona([]string{"admin"})
+		personaID, err := personaSvc.MapRolesToPersona(t.Context(), []string{"admin"})
 		require.NoError(t, err)
 		require.Equal(t, "test-persona", personaID)
 	})
@@ -289,7 +289,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 
 		personaSvc := NewPersonaService(db.GetDocStore(), logger)
 
-		personaID, err := personaSvc.MapRolesToPersona([]string{})
+		personaID, err := personaSvc.MapRolesToPersona(t.Context(), []string{})
 		require.NoError(t, err)
 		require.Equal(t, "default", personaID)
 	})
@@ -303,7 +303,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 
 		personaSvc := NewPersonaService(db.GetDocStore(), logger)
 
-		personaID, err := personaSvc.MapRolesToPersona([]string{"non-existent-role"})
+		personaID, err := personaSvc.MapRolesToPersona(t.Context(), []string{"non-existent-role"})
 		require.NoError(t, err)
 		require.Equal(t, "default", personaID)
 	})
@@ -320,7 +320,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 		// Close DB to force error
 		db.Close()
 
-		personaID, err := personaSvc.MapRolesToPersona([]string{"admin"})
+		personaID, err := personaSvc.MapRolesToPersona(t.Context(), []string{"admin"})
 		require.NoError(t, err)
 		require.Equal(t, "default", personaID)
 	})
@@ -336,10 +336,10 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 
 		userSvc := NewUserService(db.GetDocStore(), logger)
 
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
-		doc, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionUsers), user.ID)
+		doc, err := db.GetDocStore().DocGet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 

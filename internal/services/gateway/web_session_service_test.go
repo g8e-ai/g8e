@@ -28,7 +28,7 @@ func TestWebSessionService_CreateWebSession(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		userID := "user-123"
-		session, err := svc.CreateWebSession(userID)
+		session, err := svc.CreateWebSession(t.Context(), userID)
 		require.NoError(t, err)
 		require.NotNil(t, session)
 
@@ -38,7 +38,7 @@ func TestWebSessionService_CreateWebSession(t *testing.T) {
 		assert.True(t, session.ExpiresAtUnixMs > session.CreatedAtUnixMs)
 
 		// Verify it's actually in the DB
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), session.ID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), session.ID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -53,7 +53,7 @@ func TestWebSessionService_CreateWebSession(t *testing.T) {
 	})
 
 	t.Run("Empty UserID", func(t *testing.T) {
-		session, err := svc.CreateWebSession("")
+		session, err := svc.CreateWebSession(t.Context(), "")
 		require.NoError(t, err) // Service currently doesn't validate empty userID
 		require.NotNil(t, session)
 		assert.Equal(t, "", session.UserID)
@@ -66,10 +66,10 @@ func TestWebSessionService_ValidateWebSession(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		userID := "user-456"
-		created, err := svc.CreateWebSession(userID)
+		created, err := svc.CreateWebSession(t.Context(), userID)
 		require.NoError(t, err)
 
-		validated, err := svc.ValidateWebSession(created.ID)
+		validated, err := svc.ValidateWebSession(t.Context(), created.ID)
 		require.NoError(t, err)
 		require.NotNil(t, validated)
 		assert.Equal(t, created.ID, validated.ID)
@@ -77,7 +77,7 @@ func TestWebSessionService_ValidateWebSession(t *testing.T) {
 	})
 
 	t.Run("Not Found", func(t *testing.T) {
-		validated, err := svc.ValidateWebSession("non-existent-id")
+		validated, err := svc.ValidateWebSession(t.Context(), "non-existent-id")
 		require.Error(t, err)
 		assert.Nil(t, validated)
 	})
@@ -95,10 +95,10 @@ func TestWebSessionService_ValidateWebSession(t *testing.T) {
 
 		data, err := json.Marshal(expiredSession)
 		require.NoError(t, err)
-		err = infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID, data)
+		err = infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), sessionID, data)
 		require.NoError(t, err)
 
-		validated, err := svc.ValidateWebSession(sessionID)
+		validated, err := svc.ValidateWebSession(t.Context(), sessionID)
 		require.Error(t, err)
 		assert.Nil(t, validated)
 	})
@@ -106,10 +106,10 @@ func TestWebSessionService_ValidateWebSession(t *testing.T) {
 	t.Run("Malformed Data in DB", func(t *testing.T) {
 		sessionID := "malformed-session"
 		// Set some invalid data that cannot be unmarshaled into models.WebSession
-		err := infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID, []byte(`{"expires_at_unix_ms": "invalid-type"}`))
+		err := infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), sessionID, []byte(`{"expires_at_unix_ms": "invalid-type"}`))
 		require.NoError(t, err)
 
-		validated, err := svc.ValidateWebSession(sessionID)
+		validated, err := svc.ValidateWebSession(t.Context(), sessionID)
 		require.Error(t, err)
 		assert.Nil(t, validated)
 	})

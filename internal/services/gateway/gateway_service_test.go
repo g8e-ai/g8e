@@ -45,6 +45,8 @@ func newTestGatewayService(t *testing.T, opts testGatewayOpts) *GatewayModeServi
 
 	ls, err := NewGatewayModeService(cfg, fileSvc, logger)
 	require.NoError(t, err)
+	// Pub/sub callbacks run without a request context and use serviceCtx.
+	ls.serviceCtx = context.Background()
 	t.Cleanup(func() { ls.Stop(context.Background()) })
 	return ls
 }

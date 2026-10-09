@@ -90,7 +90,7 @@ func TestCLIRecovery_CreateRequest_Success(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, expectedFingerprint := generateTestCSR(t, "g8e-cli-recovery")
 
-	requestID, token, expiresAt, err := svc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	requestID, token, expiresAt, err := svc.CreateRequest(t.Context(), csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
 	require.NoError(t, err)
 	assert.NotEmpty(t, requestID)
 	assert.NotEmpty(t, token)
@@ -98,7 +98,7 @@ func TestCLIRecovery_CreateRequest_Success(t *testing.T) {
 
 	// Verify the request was persisted with a hashed token (not the raw token).
 	tokenHash := hashToken(token)
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -119,14 +119,14 @@ func TestCLIRecovery_CreateRequest_Success(t *testing.T) {
 func TestCLIRecovery_CreateRequest_InvalidCSR(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 
-	_, _, _, err := svc.CreateRequest("not-a-csr", "", nil)
+	_, _, _, err := svc.CreateRequest(t.Context(), "not-a-csr", "", nil)
 	assert.Error(t, err)
 }
 
 func TestCLIRecovery_CreateRequest_EmptyCSR(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 
-	_, _, _, err := svc.CreateRequest("", "", nil)
+	_, _, _, err := svc.CreateRequest(t.Context(), "", "", nil)
 	assert.Error(t, err)
 }
 
@@ -138,10 +138,10 @@ func TestCLIRecovery_GetStatus_Pending(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-status")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	state, err := svc.GetStatus(token)
+	state, err := svc.GetStatus(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, models.CLIRecoveryStatePending, state)
 }
@@ -149,7 +149,7 @@ func TestCLIRecovery_GetStatus_Pending(t *testing.T) {
 func TestCLIRecovery_GetStatus_UnknownToken(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 
-	_, err := svc.GetStatus("nonexistent-token-abcdef1234567890")
+	_, err := svc.GetStatus(t.Context(), "nonexistent-token-abcdef1234567890")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestNotFound))
 }
 
@@ -157,12 +157,12 @@ func TestCLIRecovery_GetByToken_ExpiredAutoTransitions(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-expired")
 
-	requestID, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	requestID, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
 	// Manually backdate the request to simulate expiry.
 	tokenHash := hashToken(token)
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 
@@ -172,13 +172,13 @@ func TestCLIRecovery_GetByToken_ExpiredAutoTransitions(t *testing.T) {
 	require.NoError(t, json.Unmarshal(dataBytes, &req))
 	req.ExpiresAt = pastTime
 	updatedData, _ := json.Marshal(&req)
-	require.NoError(t, svc.db.DocSet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, updatedData))
+	require.NoError(t, svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, updatedData))
 
-	_, err = svc.GetByToken(token)
+	_, err = svc.GetByToken(t.Context(), token)
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestExpired))
 
 	// Verify the state was atomically transitioned to expired.
-	doc2, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc2, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	require.NoError(t, err)
 	require.NotNil(t, doc2)
 	dataBytes2, _ := json.Marshal(doc2.Data)
@@ -197,18 +197,18 @@ func TestCLIRecovery_Approve_Success(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-approve")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	err = svc.Approve(token, "user-approver-1")
+	err = svc.Approve(t.Context(), token, "user-approver-1")
 	require.NoError(t, err)
 
-	state, err := svc.GetStatus(token)
+	state, err := svc.GetStatus(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, models.CLIRecoveryStateApproved, state)
 
 	// Verify the approving user was persisted.
-	req, err := svc.GetByToken(token)
+	req, err := svc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, "user-approver-1", req.ApprovingUserID)
 	assert.NotNil(t, req.ApprovedAt)
@@ -218,17 +218,17 @@ func TestCLIRecovery_Deny_Success(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-deny")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	err = svc.Deny(token, "user-denier-1")
+	err = svc.Deny(t.Context(), token, "user-denier-1")
 	require.NoError(t, err)
 
-	state, err := svc.GetStatus(token)
+	state, err := svc.GetStatus(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, models.CLIRecoveryStateDenied, state)
 
-	req, err := svc.GetByToken(token)
+	req, err := svc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, "user-denier-1", req.ApprovingUserID)
 	assert.NotNil(t, req.DeniedAt)
@@ -238,7 +238,7 @@ func TestCLIRecovery_Deny_Success(t *testing.T) {
 func TestCLIRecovery_Approve_UnknownToken(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 
-	err := svc.Approve("nonexistent-token-abcdef1234567890", "user-1")
+	err := svc.Approve(t.Context(), "nonexistent-token-abcdef1234567890", "user-1")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestNotFound))
 }
 
@@ -246,11 +246,11 @@ func TestCLIRecovery_Approve_AlreadyApproved(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-double-approve")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	require.NoError(t, svc.Approve(token, "user-1"))
-	err = svc.Approve(token, "user-2")
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
+	err = svc.Approve(t.Context(), token, "user-2")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestConsumed))
 }
 
@@ -258,11 +258,11 @@ func TestCLIRecovery_Approve_AlreadyDenied(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-approve-denied")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	require.NoError(t, svc.Deny(token, "user-1"))
-	err = svc.Approve(token, "user-2")
+	require.NoError(t, svc.Deny(t.Context(), token, "user-1"))
+	err = svc.Approve(t.Context(), token, "user-2")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestDenied))
 }
 
@@ -270,11 +270,11 @@ func TestCLIRecovery_Deny_AlreadyApproved(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-deny-approved")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	require.NoError(t, svc.Approve(token, "user-1"))
-	err = svc.Deny(token, "user-2")
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
+	err = svc.Deny(t.Context(), token, "user-2")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestConsumed))
 }
 
@@ -282,21 +282,21 @@ func TestCLIRecovery_Approve_ExpiredRequest(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-approve-expired")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
 	// Backdate expiry.
 	tokenHash := hashToken(token)
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	require.NoError(t, err)
 	dataBytes, _ := json.Marshal(doc.Data)
 	var req models.CLIRecoveryRequest
 	require.NoError(t, json.Unmarshal(dataBytes, &req))
 	req.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
 	updatedData, _ := json.Marshal(&req)
-	require.NoError(t, svc.db.DocSet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, updatedData))
+	require.NoError(t, svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, updatedData))
 
-	err = svc.Approve(token, "user-1")
+	err = svc.Approve(t.Context(), token, "user-1")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestExpired))
 }
 
@@ -308,12 +308,12 @@ func TestCLIRecovery_Complete_Success(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, priv, _ := generateTestCSR(t, "g8e-cli-complete")
 
-	requestID, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	requestID, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	require.NoError(t, svc.Approve(token, "user-approver"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-approver"))
 
-	req, err := svc.Complete(token)
+	req, err := svc.Complete(t.Context(), token)
 	require.NoError(t, err)
 	assert.Equal(t, models.CLIRecoveryStateCompleted, req.State)
 	assert.Equal(t, requestID, req.ID)
@@ -332,10 +332,10 @@ func TestCLIRecovery_Complete_NotApproved(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-complete-pending")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	_, err = svc.Complete(token)
+	_, err = svc.Complete(t.Context(), token)
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryNotApproved))
 }
 
@@ -343,14 +343,14 @@ func TestCLIRecovery_Complete_AlreadyCompleted(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-complete-twice")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Approve(token, "user-1"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
 
-	_, err = svc.Complete(token)
+	_, err = svc.Complete(t.Context(), token)
 	require.NoError(t, err)
 
-	_, err = svc.Complete(token)
+	_, err = svc.Complete(t.Context(), token)
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestConsumed))
 }
 
@@ -358,18 +358,18 @@ func TestCLIRecovery_Complete_DeniedRequest(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-complete-denied")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Deny(token, "user-1"))
+	require.NoError(t, svc.Deny(t.Context(), token, "user-1"))
 
-	_, err = svc.Complete(token)
+	_, err = svc.Complete(t.Context(), token)
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestDenied))
 }
 
 func TestCLIRecovery_Complete_UnknownToken(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 
-	_, err := svc.Complete("nonexistent-token-abcdef1234567890")
+	_, err := svc.Complete(t.Context(), "nonexistent-token-abcdef1234567890")
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestNotFound))
 }
 
@@ -377,22 +377,22 @@ func TestCLIRecovery_Complete_ExpiredRequest(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-complete-expired")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Approve(token, "user-1"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
 
 	// Backdate expiry.
 	tokenHash := hashToken(token)
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	require.NoError(t, err)
 	dataBytes, _ := json.Marshal(doc.Data)
 	var req models.CLIRecoveryRequest
 	require.NoError(t, json.Unmarshal(dataBytes, &req))
 	req.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
 	updatedData, _ := json.Marshal(&req)
-	require.NoError(t, svc.db.DocSet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, updatedData))
+	require.NoError(t, svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash, updatedData))
 
-	_, err = svc.Complete(token)
+	_, err = svc.Complete(t.Context(), token)
 	assert.True(t, errors.Is(err, constants.ErrCLIRecoveryRequestExpired))
 }
 
@@ -404,11 +404,11 @@ func TestCLIRecovery_VerifyProofOfPossession_ValidSignature(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, priv, _ := generateTestCSR(t, "g8e-cli-pop-valid")
 
-	requestID, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	requestID, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Approve(token, "user-1"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
 
-	req, err := svc.Complete(token)
+	req, err := svc.Complete(t.Context(), token)
 	require.NoError(t, err)
 
 	sig := signProofOfPossession(t, priv, requestID)
@@ -419,11 +419,11 @@ func TestCLIRecovery_VerifyProofOfPossession_WrongKey(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-pop-wrongkey")
 
-	requestID, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	requestID, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Approve(token, "user-1"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
 
-	req, err := svc.Complete(token)
+	req, err := svc.Complete(t.Context(), token)
 	require.NoError(t, err)
 
 	// Sign with a different key.
@@ -439,11 +439,11 @@ func TestCLIRecovery_VerifyProofOfPossession_WrongMessage(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, priv, _ := generateTestCSR(t, "g8e-cli-pop-wrongmsg")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Approve(token, "user-1"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
 
-	req, err := svc.Complete(token)
+	req, err := svc.Complete(t.Context(), token)
 	require.NoError(t, err)
 
 	// Sign a different message (not the request ID).
@@ -470,10 +470,10 @@ func TestCLIRecovery_VerifyTokenCSRMatch_MatchingCSR(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-csrmatch-ok")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	req, err := svc.GetByToken(token)
+	req, err := svc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 
 	assert.NoError(t, svc.VerifyTokenCSRMatch(req, csrPEM))
@@ -484,10 +484,10 @@ func TestCLIRecovery_VerifyTokenCSRMatch_DifferentCSR(t *testing.T) {
 	csrPEM1, _, _ := generateTestCSR(t, "g8e-cli-csrmatch-orig")
 	csrPEM2, _, _ := generateTestCSR(t, "g8e-cli-csrmatch-different")
 
-	_, token, _, err := svc.CreateRequest(csrPEM1, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM1, "", nil)
 	require.NoError(t, err)
 
-	req, err := svc.GetByToken(token)
+	req, err := svc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 
 	err = svc.VerifyTokenCSRMatch(req, csrPEM2)
@@ -498,10 +498,10 @@ func TestCLIRecovery_VerifyTokenCSRMatch_InvalidCSR(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-csrmatch-invalid")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
-	req, err := svc.GetByToken(token)
+	req, err := svc.GetByToken(t.Context(), token)
 	require.NoError(t, err)
 
 	err = svc.VerifyTokenCSRMatch(req, "not-a-csr")
@@ -516,9 +516,9 @@ func TestCLIRecovery_Complete_ConcurrentOnlyOneSucceeds(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-concurrent")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
-	require.NoError(t, svc.Approve(token, "user-1"))
+	require.NoError(t, svc.Approve(t.Context(), token, "user-1"))
 
 	const goroutines = 10
 	var wg sync.WaitGroup
@@ -529,7 +529,7 @@ func TestCLIRecovery_Complete_ConcurrentOnlyOneSucceeds(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func() {
 			defer wg.Done()
-			_, err := svc.Complete(token)
+			_, err := svc.Complete(t.Context(), token)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil {
@@ -549,7 +549,7 @@ func TestCLIRecovery_Approve_ConcurrentOnlyOneSucceeds(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-concurrent-approve")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
 	const goroutines = 10
@@ -561,7 +561,7 @@ func TestCLIRecovery_Approve_ConcurrentOnlyOneSucceeds(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func() {
 			defer wg.Done()
-			err := svc.Approve(token, "user-concurrent")
+			err := svc.Approve(t.Context(), token, "user-concurrent")
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil {
@@ -587,33 +587,33 @@ func TestCLIRecovery_CleanupExpired(t *testing.T) {
 	csrPEM2, _, _ := generateTestCSR(t, "g8e-cli-cleanup-valid")
 
 	// Create a request and backdate it to be expired.
-	_, token1, _, err := svc.CreateRequest(csrPEM1, "", nil)
+	_, token1, _, err := svc.CreateRequest(t.Context(), csrPEM1, "", nil)
 	require.NoError(t, err)
 	tokenHash1 := hashToken(token1)
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash1)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash1)
 	require.NoError(t, err)
 	dataBytes, _ := json.Marshal(doc.Data)
 	var req1 models.CLIRecoveryRequest
 	require.NoError(t, json.Unmarshal(dataBytes, &req1))
 	req1.ExpiresAt = time.Now().UTC().Add(-5 * time.Minute)
 	updatedData, _ := json.Marshal(&req1)
-	require.NoError(t, svc.db.DocSet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash1, updatedData))
+	require.NoError(t, svc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash1, updatedData))
 
 	// Create a valid (non-expired) request.
-	_, token2, _, err := svc.CreateRequest(csrPEM2, "", nil)
+	_, token2, _, err := svc.CreateRequest(t.Context(), csrPEM2, "", nil)
 	require.NoError(t, err)
 	tokenHash2 := hashToken(token2)
 
 	// Run cleanup.
-	require.NoError(t, svc.CleanupExpired())
+	require.NoError(t, svc.CleanupExpired(t.Context()))
 
 	// Expired request should be deleted.
-	doc, err = svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash1)
+	doc, err = svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash1)
 	require.NoError(t, err)
 	assert.Nil(t, doc, "expired request should be deleted")
 
 	// Valid request should remain.
-	doc, err = svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash2)
+	doc, err = svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash2)
 	require.NoError(t, err)
 	assert.NotNil(t, doc, "valid request should remain")
 }
@@ -621,7 +621,7 @@ func TestCLIRecovery_CleanupExpired(t *testing.T) {
 func TestCLIRecovery_CleanupExpired_EmptyCollection(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 
-	err := svc.CleanupExpired()
+	err := svc.CleanupExpired(t.Context())
 	assert.NoError(t, err)
 }
 
@@ -633,17 +633,17 @@ func TestCLIRecovery_TokenHashIsNotRawToken(t *testing.T) {
 	svc := newTestCLIRecoveryService(t)
 	csrPEM, _, _ := generateTestCSR(t, "g8e-cli-hash-safety")
 
-	_, token, _, err := svc.CreateRequest(csrPEM, "", nil)
+	_, token, _, err := svc.CreateRequest(t.Context(), csrPEM, "", nil)
 	require.NoError(t, err)
 
 	// The raw token must not be a document ID in the collection.
-	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), token)
+	doc, err := svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), token)
 	require.NoError(t, err)
 	assert.Nil(t, doc, "raw token must not be usable as a lookup key")
 
 	// The hash of the token must be the document ID.
 	tokenHash := hashToken(token)
-	doc, err = svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
+	doc, err = svc.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), tokenHash)
 	require.NoError(t, err)
 	assert.NotNil(t, doc, "token hash must be the lookup key")
 }
@@ -653,9 +653,9 @@ func TestCLIRecovery_TwoRequestsHaveDifferentTokens(t *testing.T) {
 	csrPEM1, _, _ := generateTestCSR(t, "g8e-cli-unique-1")
 	csrPEM2, _, _ := generateTestCSR(t, "g8e-cli-unique-2")
 
-	_, token1, _, err := svc.CreateRequest(csrPEM1, "", nil)
+	_, token1, _, err := svc.CreateRequest(t.Context(), csrPEM1, "", nil)
 	require.NoError(t, err)
-	_, token2, _, err := svc.CreateRequest(csrPEM2, "", nil)
+	_, token2, _, err := svc.CreateRequest(t.Context(), csrPEM2, "", nil)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, token1, token2, "each request must have a unique token")

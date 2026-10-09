@@ -45,7 +45,7 @@ func seedRunProjection(t *testing.T, svc *ObserveService, userID, runID string, 
 	}
 	b, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveRuns), runID, b))
+	require.NoError(t, svc.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionObserveRuns), runID, b))
 }
 
 func seedEvalProjection(t *testing.T, svc *ObserveService, userID, runID string, observedAt time.Time) {
@@ -71,7 +71,7 @@ func seedEvalProjection(t *testing.T, svc *ObserveService, userID, runID string,
 	}
 	b, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveEvals), runID, b))
+	require.NoError(t, svc.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionObserveEvals), runID, b))
 }
 
 func seedDownloadProjection(t *testing.T, svc *ObserveService, userID, artifactID string, generatedAt time.Time) {
@@ -93,7 +93,7 @@ func seedDownloadProjection(t *testing.T, svc *ObserveService, userID, artifactI
 	}
 	b, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID, b))
+	require.NoError(t, svc.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID, b))
 }
 
 func seedAgentStateProjection(t *testing.T, svc *ObserveService, userID, agentID string, observedAt time.Time, status models.AgentLifecycleStatus) {
@@ -112,7 +112,7 @@ func seedAgentStateProjection(t *testing.T, svc *ObserveService, userID, agentID
 	}
 	b, err := json.Marshal(proj)
 	require.NoError(t, err)
-	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveAgentStates), agentID, b))
+	require.NoError(t, svc.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionObserveAgentStates), agentID, b))
 }
 
 // newObserveServiceWithRealStore creates an ObserveService backed by a real

@@ -414,7 +414,7 @@ func TestPKIAuthority_VerifyCertificate_Unit(t *testing.T) {
 
 	t.Run("Returns error for nil certificate", func(t *testing.T) {
 		pki := &PKIAuthority{}
-		err := pki.VerifyCertificate(nil)
+		err := pki.VerifyCertificate(t.Context(), nil)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrPKINoCertificate)
 	})
@@ -424,7 +424,7 @@ func TestPKIAuthority_RevokeCertificate(t *testing.T) {
 
 	t.Run("Returns error when database is nil", func(t *testing.T) {
 		pki := &PKIAuthority{db: nil}
-		err := pki.RevokeCertificate("123", "test reason")
+		err := pki.RevokeCertificate(t.Context(), "123", "test reason")
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrPKIDatabaseNotAvailable)
 	})
@@ -434,7 +434,7 @@ func TestPKIAuthority_GenerateCRL_Unit(t *testing.T) {
 
 	t.Run("Returns error when database is nil", func(t *testing.T) {
 		pki := &PKIAuthority{db: nil}
-		_, err := pki.GenerateCRL()
+		_, err := pki.GenerateCRL(t.Context())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrPKIDatabaseNotAvailable)
 	})

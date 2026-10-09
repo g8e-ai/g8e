@@ -354,14 +354,12 @@ func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
 	op := &operatorv1.OperatorDocument{Id: "op-001", OperatorSessionId: "sess-001"}
 	svc, broker := newTestDispatchService(t, "root-abc", op)
 
-	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	// The caller cancels once the operator has received the command, so the
+	// dispatch is provably in flight, awaiting a result that never comes.
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) { cancel() })
 	defer unreg()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
 
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
@@ -485,14 +483,11 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 	t.Run("after caller cancellation", func(t *testing.T) {
 		op := newOp()
 		svc, broker := newTestDispatchService(t, "root-abc", op)
-		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) {})
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.Id, op.OperatorSessionId), func(_ string, _ []byte) { cancel() })
 		defer unreg()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			time.Sleep(50 * time.Millisecond)
-			cancel()
-		}()
 		_, err := svc.Dispatch(ctx, DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionId,
 			EventType:               string(constants.Event.Operator.FsRead.Requested),

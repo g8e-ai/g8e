@@ -60,7 +60,7 @@ func TestStateRoot_OneWriteCostAtGrowingHistory(t *testing.T) {
 			const rounds = 20
 			var total, worst time.Duration
 			for i := 0; i < rounds; i++ {
-				require.NoError(t, db.GetDocStore().DocSet("operators", "op-1", json.RawMessage(fmt.Sprintf(`{"heartbeat":%d}`, i))))
+				require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op-1", json.RawMessage(fmt.Sprintf(`{"heartbeat":%d}`, i))))
 				start := time.Now()
 				_, err := svc.GetCurrentStateRoot(t.Context())
 				require.NoError(t, err)

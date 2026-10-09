@@ -98,7 +98,7 @@ func TestEnrollmentAdmissionHistoryAndResume(t *testing.T) {
 			ComponentKind: models.PlatformComponentDashboard, State: state, ExpiresAt: now.Add(-time.Minute),
 		})
 		require.NoError(t, err)
-		require.NoError(t, store.DocSet(platformEnrollmentCollectionName(), fmt.Sprintf("history-%d", i), data))
+		require.NoError(t, store.DocSet(t.Context(), platformEnrollmentCollectionName(), fmt.Sprintf("history-%d", i), data))
 	}
 	for i := 0; i < constants.PlatformEnrollmentMaxLiveRequestsPerComponent; i++ {
 		req := &models.PlatformEnrollmentRequest{
@@ -184,7 +184,7 @@ func TestFindOperatorLeases_IdentityScopeAndReadOnly(t *testing.T) {
 	}
 	// An unrelated malformed runtime configuration must not be decoded by
 	// lease replacement or cause an unrelated identity's enrollment to fail.
-	require.NoError(t, store.DocSet(operatorsCollection, "malformed-other", json.RawMessage(
+	require.NoError(t, store.DocSet(t.Context(), operatorsCollection, "malformed-other", json.RawMessage(
 		`{"user_id":"other","system_fingerprint":"other","status":"active","operator_type":"remote","runtime_config":"invalid"}`)))
 	rootSvc := NewStateRootService(store.db, store.logger)
 	before, err := rootSvc.GetCurrentStateRoot(t.Context())
@@ -200,7 +200,7 @@ func TestFindOperatorLeases_IdentityScopeAndReadOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, after, "lease lookup must neither reconcile heartbeat state nor write")
 
-	_, err = store.DocQuery(operatorsCollection, nil, "", 0)
+	_, err = store.DocQuery(t.Context(), operatorsCollection, nil, "", 0)
 	require.Error(t, err, "the fixture must exercise a malformed fleet record that reconciliation would decode")
 }
 
@@ -216,7 +216,7 @@ func TestEnrollmentDecisionAtomicAuthorityAndRollback(t *testing.T) {
 			}
 			data, err := json.Marshal(owner)
 			require.NoError(t, err)
-			require.NoError(t, store.DocSet(marshaler.CollectionName(constants.CollectionUsers), "owner", data))
+			require.NoError(t, store.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), "owner", data))
 			req := models.PlatformEnrollmentBatchDecisionRequest{Decision: models.PlatformEnrollmentDecisionApprove, Reason: "reviewed cohort"}
 			if scenario == "deny" {
 				req.Decision = models.PlatformEnrollmentDecisionDeny
@@ -234,7 +234,7 @@ func TestEnrollmentDecisionAtomicAuthorityAndRollback(t *testing.T) {
 				}
 				data, err := json.Marshal(record)
 				require.NoError(t, err)
-				require.NoError(t, store.DocSet(platformEnrollmentCollectionName(), record.ID, data))
+				require.NoError(t, store.DocSet(t.Context(), platformEnrollmentCollectionName(), record.ID, data))
 				req.Requests = append(req.Requests, models.PlatformEnrollmentDecisionTarget{RequestID: record.ID, Fingerprints: record.Fingerprints})
 			}
 			if scenario == "fingerprints" {
@@ -270,7 +270,7 @@ func TestEnrollmentDecisionAtomicAuthorityAndRollback(t *testing.T) {
 			default:
 				require.ErrorIs(t, err, constants.ErrPlatformEnrollmentInvalidDecision)
 			}
-			doc, err := store.DocGet(platformEnrollmentCollectionName(), "request-0")
+			doc, err := store.DocGet(t.Context(), platformEnrollmentCollectionName(), "request-0")
 			require.NoError(t, err)
 			record, err := decodePlatformEnrollmentRequest(doc)
 			require.NoError(t, err)
@@ -301,7 +301,7 @@ func TestEnrollmentBatchDecisionGovernedReceipt(t *testing.T) {
 	require.Len(t, result.Requests, 2)
 	require.NotEmpty(t, result.ReceiptID)
 	for _, target := range req.Requests {
-		stored, err := env.enrollSvc.loadByID(target.RequestID)
+		stored, err := env.enrollSvc.loadByID(t.Context(), target.RequestID)
 		require.NoError(t, err)
 		require.Equal(t, models.PlatformEnrollmentStateApproved, stored.State)
 		require.Equal(t, result.ReceiptID, stored.DecisionReceiptID)
@@ -313,12 +313,12 @@ func TestEnrollmentBatchDecisionPreservesPosturePolicy(t *testing.T) {
 	for _, posture := range []config.GatewayPosture{config.PostureConsensus, config.PostureRatify, config.PostureNotary} {
 		t.Run(string(posture), func(t *testing.T) {
 			gateway := newTestGatewayService(t, testGatewayOpts{posture: posture})
-			owner, err := gateway.GetUserService().CreateUser()
+			owner, err := gateway.GetUserService().CreateUser(t.Context())
 			require.NoError(t, err)
 			record := models.PlatformEnrollmentRequest{State: models.PlatformEnrollmentStatePending, ExpiresAt: time.Now().Add(time.Hour), Fingerprints: models.PlatformEnrollmentCSRFingerprints{App: "key"}}
 			data, err := json.Marshal(record)
 			require.NoError(t, err)
-			require.NoError(t, gateway.GetDocStore().DocSet(platformEnrollmentCollectionName(), "request", data))
+			require.NoError(t, gateway.GetDocStore().DocSet(t.Context(), platformEnrollmentCollectionName(), "request", data))
 			_, err = gateway.GetPlatformEnrollmentService().DecideBatch(t.Context(), owner.ID, models.PlatformEnrollmentBatchDecisionRequest{
 				Decision: models.PlatformEnrollmentDecisionApprove, Requests: []models.PlatformEnrollmentDecisionTarget{{RequestID: "request", Fingerprints: record.Fingerprints}},
 			})
@@ -330,7 +330,7 @@ func TestEnrollmentBatchDecisionPreservesPosturePolicy(t *testing.T) {
 			} else {
 				require.ErrorIs(t, err, constants.ErrPlatformEnrollmentGovernanceRejected)
 			}
-			doc, err := gateway.GetDocStore().DocGet(platformEnrollmentCollectionName(), "request")
+			doc, err := gateway.GetDocStore().DocGet(t.Context(), platformEnrollmentCollectionName(), "request")
 			require.NoError(t, err)
 			stored, err := decodePlatformEnrollmentRequest(doc)
 			require.NoError(t, err)

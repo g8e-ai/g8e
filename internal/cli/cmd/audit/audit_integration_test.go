@@ -129,7 +129,7 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 	require.NoError(t, auth.SaveCredentials(files, cliConfig, &auth.Credentials{OperatorSessionID: bootstrap.OperatorSessionID, OperatorID: bootstrap.OperatorID, CLISessionID: bootstrap.CLISessionID, UserID: bootstrap.UserID}))
 	policy, err := json.Marshal(&models.AppPolicy{AppID: "spiffe://g8e.local/app/g8ee", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 	require.NoError(t, err)
-	require.NoError(t, svc.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ee", policy))
+	require.NoError(t, svc.GetDocStore().DocSet(ctx, marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ee", policy))
 	cert, err := tls.X509KeyPair([]byte(certPEM), keyPEM)
 	require.NoError(t, err)
 	roots := x509.NewCertPool()
@@ -203,7 +203,7 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 		name, flag, value string
 		receipts, events  int
 	}{
-		{"all", "", "", 2, 6}, {"app", "app", "g8ee", 2, 6}, {"different app", "app", "other-app", 0, 0}, {"bound Operator session", "session", bootstrap.OperatorSessionID, 0, 0},
+		{"all", "", "", 2, 4}, {"app", "app", "g8ee", 2, 4}, {"different app", "app", "other-app", 0, 0}, {"bound Operator session", "session", bootstrap.OperatorSessionID, 0, 0},
 	} {
 		t.Run(scope.name, func(t *testing.T) {
 			for _, name := range []string{"receipts", "events", "export", "summary", "report"} {
@@ -262,7 +262,7 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 							require.Empty(t, e.OperatorSessionID)
 						}
 					case "summary":
-						require.Contains(t, out.String(), map[bool]string{true: "No audit records found", false: "Total records: 8"}[scope.events == 0])
+						require.Contains(t, out.String(), map[bool]string{true: "No audit records found", false: fmt.Sprintf("Total records: %d", scope.events+scope.receipts)}[scope.events == 0])
 					case "report":
 						require.Contains(t, out.String(), fmt.Sprintf("Events:   %d", scope.events))
 						require.Contains(t, out.String(), fmt.Sprintf("Receipts: %d", scope.receipts))
@@ -291,7 +291,8 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 	t.Run("event pagination and local report include sessionless records", func(t *testing.T) {
 		events, err := svc.GetAuditStore().ListEvents("", 100, 0)
 		require.NoError(t, err)
-		require.Len(t, events, 6)
+		// One receipt.recorded event per stage write: EXECUTING and the final receipt, for each of two transactions.
+		require.Len(t, events, 4)
 		first, err := svc.GetAuditStore().GetEvents(models.AuditScope{ActingAppID: "g8ee"}, 1, 0)
 		require.NoError(t, err)
 		second, err := svc.GetAuditStore().GetEvents(models.AuditScope{ActingAppID: "g8ee"}, 1, 1)

@@ -10,6 +10,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -53,7 +54,7 @@ func TestHandleHealth_NotReadyReturns503(t *testing.T) {
 
 func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
-	h.healthController.isGovernanceReady = func() bool { return true }
+	h.healthController.isGovernanceReady = func(context.Context) bool { return true }
 
 	settings := models.SettingsDocument{
 		Settings:  &models.PlatformSettings{ActuatorKeyID: "test-key-id"},
@@ -62,7 +63,7 @@ func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -81,7 +82,7 @@ func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 
 func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
-	h.healthController.isGovernanceReady = func() bool { return false }
+	h.healthController.isGovernanceReady = func(context.Context) bool { return false }
 
 	settings := models.SettingsDocument{
 		Settings:  &models.PlatformSettings{ActuatorKeyID: "test-key-id"},
@@ -90,7 +91,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -118,7 +119,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -147,7 +148,7 @@ func TestHandleHealth_VersionAndStateRootPopulated(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -172,7 +173,7 @@ func TestHandleHealth_IsReadyNilProceedsToDBCheck(t *testing.T) {
 	h.healthController.isReady = nil
 
 	// Ensure platform_settings does not exist so we hit the 503 path
-	infra.DocStore.DocDelete(
+	infra.DocStore.DocDelete(t.Context(),
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 	)
@@ -190,7 +191,7 @@ func TestHandleHealth_IsReadyNilProceedsToDBCheck(t *testing.T) {
 func TestHandleBootstrapHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	h.healthController.isReady = func() bool { return true }
-	h.healthController.isGovernanceReady = func() bool { return true }
+	h.healthController.isGovernanceReady = func(context.Context) bool { return true }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
@@ -206,7 +207,7 @@ func TestHandleBootstrapHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T)
 func TestHandleBootstrapHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	h.healthController.isReady = func() bool { return true }
-	h.healthController.isGovernanceReady = func() bool { return false }
+	h.healthController.isGovernanceReady = func(context.Context) bool { return false }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()

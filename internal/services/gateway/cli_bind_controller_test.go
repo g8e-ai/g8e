@@ -54,7 +54,7 @@ func persistOperatorForBindController(t *testing.T, c *CLIRefreshController, use
 	}
 	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 }
 
 func TestCLIRefreshController_Bind_Success(t *testing.T) {
@@ -174,7 +174,7 @@ func TestCLIRefreshController_Bind_MultipleOperatorsInOneCall(t *testing.T) {
 		assert.Equal(t, sessionID, resp.Bound[i].OperatorSessionID)
 	}
 
-	persisted, err := c.cliSessionSvc.loadCLISession(resp.CLISessionID)
+	persisted, err := c.cliSessionSvc.loadCLISession(t.Context(), resp.CLISessionID)
 	require.NoError(t, err)
 	assert.Equal(t, sessionIDs[0], persisted.OperatorSessionID)
 	assert.Equal(t, sessionIDs, persisted.BoundOperatorSessionIDs)
@@ -217,7 +217,7 @@ func TestCLIRefreshController_Bind_OneBadTargetBindsNothing(t *testing.T) {
 	c.handleBind(rr, multiBindRequestWithContext(t, user.ID, oldSessionID, []string{goodSessionID, foreignSessionID}))
 
 	require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
-	old, err := c.cliSessionSvc.loadCLISession(oldSessionID)
+	old, err := c.cliSessionSvc.loadCLISession(t.Context(), oldSessionID)
 	require.NoError(t, err)
 	assert.True(t, old.IsActive, "a rejected bind must leave the existing CLI session active")
 	assert.Equal(t, "bind-ctrl-stale-partial", old.OperatorSessionID)

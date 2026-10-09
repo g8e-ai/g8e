@@ -40,8 +40,8 @@ import (
 const DispatchTimeout = 30 * time.Second
 
 // InferenceProgressResultBuffer is the in-process results-channel capacity
-// while streaming inference progress. Overflow is a typed backpressure
-// failure, not a dropped event.
+// while streaming inference progress. Embedded publishers wait for capacity;
+// remote overflow is a typed backpressure failure, not a dropped event.
 const InferenceProgressResultBuffer = 64
 
 // EnvelopeExpiry is the lifetime of a dispatched GovernanceEnvelope from
@@ -365,6 +365,22 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 
 	// 6. Register an in-process handler on the operator's results channel to
 	//    correlate the result by transaction ID.
+	deadline := req.Timeout
+	if deadline <= 0 {
+		deadline = DispatchTimeout
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	dispatchContextError := func() error {
+		if err := ctx.Err(); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return fmt.Errorf("dispatch: %w: %w", constants.ErrInferenceCanceled, err)
+			}
+			return fmt.Errorf("dispatch: %w", err)
+		}
+		return fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)
+	}
+	isEmbedded := constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded
 	resultsChannel := pubsub.ResultsChannel(operatorID, operatorSessionID)
 	resultBuffer := 1
 	if req.OnInferenceProgress != nil {
@@ -389,6 +405,16 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 				constants.ActionType(resultEnv.GetActionType()),
 			); err != nil {
 				d.logger.Warn("dispatch: reject result envelope", "error", err, "transaction_id", txHash)
+				return
+			}
+			if isEmbedded {
+				// Publish invokes handlers synchronously. Waiting here bounds
+				// the queue and slows the local producer to the consumer's pace,
+				// without depending on goroutine scheduling to avoid overflow.
+				select {
+				case resultCh <- resultEnv:
+				case <-timeoutCtx.Done():
+				}
 				return
 			}
 			select {
@@ -419,7 +445,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
 	var delivered int
 	var embeddedDone chan error
-	if constants.OperatorType(op.OperatorType) == constants.OperatorTypeEmbedded {
+	if isEmbedded {
 		// The embedded Operator runs in-process and emits results while
 		// ProcessEnvelope is still executing, so it must run beside the wait
 		// loop below: draining concurrently is what keeps long inference
@@ -428,8 +454,14 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			return nil, fmt.Errorf("dispatch embedded operator: %w", constants.ErrDispatchNoDelivery)
 		}
 		embeddedDone = make(chan error, 1)
+		defer func() {
+			cancel()
+			if embeddedDone != nil {
+				<-embeddedDone
+			}
+		}()
 		go func() {
-			_, perr := d.embeddedProcessor.ProcessEnvelope(ctx, wire)
+			_, perr := d.embeddedProcessor.ProcessEnvelope(timeoutCtx, wire)
 			embeddedDone <- perr
 		}()
 		delivered = 1
@@ -442,12 +474,19 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		if embeddedDone == nil {
 			return nil
 		}
-		perr := <-embeddedDone
-		embeddedDone = nil
-		if perr != nil {
-			return fmt.Errorf("dispatch embedded operator: %w", perr)
+		select {
+		case perr := <-embeddedDone:
+			embeddedDone = nil
+			if timeoutCtx.Err() != nil {
+				return dispatchContextError()
+			}
+			if perr != nil {
+				return fmt.Errorf("dispatch embedded operator: %w", perr)
+			}
+			return nil
+		case <-timeoutCtx.Done():
+			return dispatchContextError()
 		}
-		return nil
 	}
 	d.logger.Info("dispatch: published command",
 		"transaction_id", txHash,
@@ -461,13 +500,6 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	// 8. Wait for the result with the request deadline. The caller sets
 	//    Timeout explicitly (inference sets its provider-aware deadline);
 	//    zero applies DispatchTimeout.
-	deadline := req.Timeout
-	if deadline <= 0 {
-		deadline = DispatchTimeout
-	}
-	timeoutCtx, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
-
 	var progressEvents []*operatorv1.InferenceProgressEvent
 	for {
 		select {
@@ -475,6 +507,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			return nil, fmt.Errorf("dispatch: %w", overflowErr)
 		case perr := <-embeddedDone:
 			embeddedDone = nil
+			if timeoutCtx.Err() != nil {
+				return nil, dispatchContextError()
+			}
 			if perr != nil {
 				return nil, fmt.Errorf("dispatch embedded operator: %w", perr)
 			}
@@ -516,13 +551,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 				ResultEnvelope: resultEnv,
 			}, nil
 		case <-timeoutCtx.Done():
-			if err := ctx.Err(); err != nil {
-				if errors.Is(err, context.Canceled) {
-					return nil, fmt.Errorf("dispatch: %w: %w", constants.ErrInferenceCanceled, err)
-				}
-				return nil, fmt.Errorf("dispatch: %w", err)
-			}
-			return nil, fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)
+			return nil, dispatchContextError()
 		}
 	}
 }

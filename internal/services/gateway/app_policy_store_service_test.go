@@ -24,7 +24,7 @@ func TestAppPolicyStoreService_GetAppPolicy(t *testing.T) {
 	svc := NewAppPolicyStoreService(ts.DB.db, ts.Logger, ts.DocStore)
 
 	// Test non-existent policy
-	policy, err := svc.GetAppPolicy("non-existent")
+	policy, err := svc.GetAppPolicy(t.Context(), "non-existent")
 	require.NoError(t, err)
 	require.Nil(t, policy)
 
@@ -38,10 +38,10 @@ func TestAppPolicyStoreService_GetAppPolicy(t *testing.T) {
 	data, err := json.Marshal(expectedPolicy)
 	require.NoError(t, err)
 
-	err = svc.docSvc.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data)
+	err = svc.docSvc.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionAppPolicies), appID, data)
 	require.NoError(t, err)
 
-	policy, err = svc.GetAppPolicy(appID)
+	policy, err = svc.GetAppPolicy(t.Context(), appID)
 	require.NoError(t, err)
 	require.NotNil(t, policy)
 	require.Equal(t, appID, policy.AppID)

@@ -146,10 +146,10 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
-		existing, err := personaSvc.GetByID(persona.ID)
+		existing, err := personaSvc.GetByID(t.Context(), persona.ID)
 		require.NoError(t, err)
 		if existing == nil {
-			require.NoError(t, personaSvc.CreatePersona(&persona))
+			require.NoError(t, personaSvc.CreatePersona(t.Context(), &persona))
 		}
 	}
 
@@ -283,7 +283,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 			StateRootSvc:      db.GetStateRootSvc(),
 			Responder:         resp,
 			IsReady:           func() bool { return true },
-			IsGovernanceReady: func() bool { return true },
+			IsGovernanceReady: func(context.Context) bool { return true },
 		},
 		GovernanceControllerDeps: GovernanceControllerDeps{
 			Cfg:       cfg,
@@ -349,7 +349,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	assert.Equal(t, "admin", envelope.BindingPersona, "Should map admin to admin persona")
 
 	// Validate JIT user provisioning
-	user, err := userSvc.GetByID("user-1234")
+	user, err := userSvc.GetByID(t.Context(), "user-1234")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "user-1234", user.ID)
@@ -384,10 +384,10 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
-		existing, err := personaSvc.GetByID(persona.ID)
+		existing, err := personaSvc.GetByID(t.Context(), persona.ID)
 		require.NoError(t, err)
 		if existing == nil {
-			require.NoError(t, personaSvc.CreatePersona(&persona))
+			require.NoError(t, personaSvc.CreatePersona(t.Context(), &persona))
 		}
 	}
 
@@ -521,7 +521,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 			StateRootSvc:      db.GetStateRootSvc(),
 			Responder:         resp,
 			IsReady:           func() bool { return true },
-			IsGovernanceReady: func() bool { return true },
+			IsGovernanceReady: func(context.Context) bool { return true },
 		},
 		GovernanceControllerDeps: GovernanceControllerDeps{
 			Cfg:       cfg,
@@ -637,10 +637,10 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
-		existing, err := personaSvc.GetByID(persona.ID)
+		existing, err := personaSvc.GetByID(t.Context(), persona.ID)
 		require.NoError(t, err)
 		if existing == nil {
-			require.NoError(t, personaSvc.CreatePersona(&persona))
+			require.NoError(t, personaSvc.CreatePersona(t.Context(), &persona))
 		}
 	}
 
@@ -774,7 +774,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 			StateRootSvc:      db.GetStateRootSvc(),
 			Responder:         resp,
 			IsReady:           func() bool { return true },
-			IsGovernanceReady: func() bool { return true },
+			IsGovernanceReady: func(context.Context) bool { return true },
 		},
 		GovernanceControllerDeps: GovernanceControllerDeps{
 			Cfg:       cfg,
@@ -819,7 +819,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	// Retrieve the now-provisioned user
-	user, err := userSvc.GetBySub("stepup-user-001")
+	user, err := userSvc.GetBySub(t.Context(), "stepup-user-001")
 	require.NoError(t, err)
 	require.NotNil(t, user, "user should be JIT-provisioned after initial challenge request")
 
@@ -836,7 +836,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 			},
 		},
 	}
-	err = userSvc.UpdatePasskeyCredentials(user.ID, credentials)
+	err = userSvc.UpdatePasskeyCredentials(t.Context(), user.ID, credentials)
 	require.NoError(t, err)
 
 	t.Run("After one credential exists, JWT-only path is rejected and step-up required", func(t *testing.T) {
@@ -885,10 +885,10 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
-		existing, err := personaSvc.GetByID(persona.ID)
+		existing, err := personaSvc.GetByID(t.Context(), persona.ID)
 		require.NoError(t, err)
 		if existing == nil {
-			require.NoError(t, personaSvc.CreatePersona(&persona))
+			require.NoError(t, personaSvc.CreatePersona(t.Context(), &persona))
 		}
 	}
 

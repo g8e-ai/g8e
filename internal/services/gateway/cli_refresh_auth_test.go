@@ -43,7 +43,7 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 	infra := setupTestInfrastructure(t, false)
 	auth = infra.Auth
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	userID = user.ID
 
@@ -61,7 +61,7 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 		}
 		operatorBytes, err := models.MarshalOperatorDocument(operatorDoc)
 		require.NoError(t, err)
-		require.NoError(t, infra.DocStore.DocSet(
+		require.NoError(t, infra.DocStore.DocSet(t.Context(),
 			marshaler.CollectionName(constants.CollectionOperators), operatorDoc.Id, operatorBytes,
 		))
 
@@ -86,7 +86,7 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 		}
 		b, err := json.Marshal(doc)
 		require.NoError(t, err)
-		require.NoError(t, infra.DocStore.DocSet(
+		require.NoError(t, infra.DocStore.DocSet(t.Context(),
 			marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b,
 		))
 	}
@@ -175,7 +175,7 @@ func TestHandleCLIRefreshAuth_UserDisabled_Rejected(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 	auth := infra.Auth
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	cliSessionID := "refresh-auth-disabled"
@@ -194,12 +194,12 @@ func TestHandleCLIRefreshAuth_UserDisabled_Rejected(t *testing.T) {
 	}
 	b, err := json.Marshal(doc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b,
 	))
 
 	// Disable the user after the session was created.
-	require.NoError(t, infra.UserSvc.Disable(user.ID, "test", "actor", "op"))
+	require.NoError(t, infra.UserSvc.Disable(t.Context(), user.ID, "test", "actor", "op"))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -306,7 +306,7 @@ func TestHandleCLIAuth_MissingSessionOnNonRefreshEndpoint_FailClosed(t *testing.
 	infra := setupTestInfrastructure(t, false)
 	auth := infra.Auth
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +333,7 @@ func TestHandleCLIRefreshAuth_MissingSessionOnRefreshEndpoint_Admitted(t *testin
 	infra := setupTestInfrastructure(t, false)
 	auth := infra.Auth
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -356,7 +356,7 @@ func TestHandleCLIRefreshAuth_MissingSessionOnRefreshEndpoint_Admitted(t *testin
 
 func TestHandleCLIRefreshAuth_StaleOperatorBinding_Admitted(t *testing.T) {
 	auth, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-stale-operator", false, "cert-fp")
-	operatorDoc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator")
+	operatorDoc, err := auth.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator")
 	require.NoError(t, err)
 	require.NotNil(t, operatorDoc)
 	operator, err := models.OperatorDocumentFromStore(operatorDoc)
@@ -364,7 +364,7 @@ func TestHandleCLIRefreshAuth_StaleOperatorBinding_Admitted(t *testing.T) {
 	operator.Status = string(constants.OperatorStatusTerminated)
 	data, err := models.MarshalOperatorDocument(operator)
 	require.NoError(t, err)
-	require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator", data))
+	require.NoError(t, auth.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator", data))
 
 	req := cliRefreshMTLSRequest(t, constants.APIPaths.AuthCLIRefresh, cliSessionID, userID)
 	rr := httptest.NewRecorder()
@@ -387,7 +387,7 @@ func TestHandleCLIRefreshAuth_ServerInvalidSessionStates_Admitted(t *testing.T) 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			auth, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-server-invalid", false, "cert-fp")
-			doc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+			doc, err := auth.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 			require.NoError(t, err)
 			require.NotNil(t, doc)
 			var session models.CLISession
@@ -397,7 +397,7 @@ func TestHandleCLIRefreshAuth_ServerInvalidSessionStates_Admitted(t *testing.T) 
 			tt.mutate(&session)
 			data, err = json.Marshal(session)
 			require.NoError(t, err)
-			require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, data))
+			require.NoError(t, auth.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, data))
 
 			req := cliRefreshMTLSRequest(t, constants.APIPaths.AuthCLIRefresh, cliSessionID, userID)
 			rr := httptest.NewRecorder()
@@ -423,7 +423,7 @@ func TestHandleCLIAuth_ServerInvalidSessionStatesOnNonRefreshEndpoint_FailClosed
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			auth, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "nonrefresh-auth-server-invalid", false, "cert-fp")
-			doc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+			doc, err := auth.db.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 			require.NoError(t, err)
 			require.NotNil(t, doc)
 			var session models.CLISession
@@ -433,7 +433,7 @@ func TestHandleCLIAuth_ServerInvalidSessionStatesOnNonRefreshEndpoint_FailClosed
 			tt.mutate(&session)
 			data, err = json.Marshal(session)
 			require.NoError(t, err)
-			require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, data))
+			require.NoError(t, auth.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, data))
 
 			req := cliRefreshMTLSRequest(t, constants.APIPaths.AuditReceipts, cliSessionID, userID)
 			rr := httptest.NewRecorder()

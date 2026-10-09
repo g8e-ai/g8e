@@ -91,10 +91,10 @@ func newTestDB(t *testing.T) *CanonicalDBService {
 func TestDocSetAndGet(t *testing.T) {
 	db := newTestDB(t)
 
-	err := db.GetDocStore().DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "admin"}))
+	err := db.GetDocStore().DocSet(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "admin"}))
 	require.NoError(t, err)
 
-	doc, err := db.GetDocStore().DocGet("users", "u1")
+	doc, err := db.GetDocStore().DocGet(t.Context(), "users", "u1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, "alice", docField(t, doc, "name"))
@@ -107,7 +107,7 @@ func TestDocSetAndGet(t *testing.T) {
 func TestDocGetNotFound(t *testing.T) {
 	db := newTestDB(t)
 
-	doc, err := db.GetDocStore().DocGet("users", "nonexistent")
+	doc, err := db.GetDocStore().DocGet(t.Context(), "users", "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 }
@@ -115,10 +115,10 @@ func TestDocGetNotFound(t *testing.T) {
 func TestDocUpdate(t *testing.T) {
 	db := newTestDB(t)
 
-	err := db.GetDocStore().DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "user"}))
+	err := db.GetDocStore().DocSet(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "user"}))
 	require.NoError(t, err)
 
-	updated, err := db.GetDocStore().DocUpdate("users", "u1", mustDocJSON(t, map[string]string{"role": "admin"}))
+	updated, err := db.GetDocStore().DocUpdate(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"role": "admin"}))
 	require.NoError(t, err)
 	assert.Equal(t, "admin", docField(t, updated, "role"))
 	assert.Equal(t, "alice", docField(t, updated, "name"))
@@ -127,7 +127,7 @@ func TestDocUpdate(t *testing.T) {
 func TestDocUpdateNotFound(t *testing.T) {
 	db := newTestDB(t)
 
-	_, err := db.GetDocStore().DocUpdate("users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
+	_, err := db.GetDocStore().DocUpdate(t.Context(), "users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -135,10 +135,10 @@ func TestDocUpdateNotFound(t *testing.T) {
 func TestDocUpdateDeleteField(t *testing.T) {
 	db := newTestDB(t)
 
-	err := db.GetDocStore().DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
+	err := db.GetDocStore().DocSet(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
 	require.NoError(t, err)
 
-	updated, err := db.GetDocStore().DocUpdate("users", "u1", mustDocJSON(t, map[string]json.RawMessage{"temp": nil}))
+	updated, err := db.GetDocStore().DocUpdate(t.Context(), "users", "u1", mustDocJSON(t, map[string]json.RawMessage{"temp": nil}))
 	require.NoError(t, err)
 	_, hasTmp := updated.Data["temp"]
 	assert.False(t, hasTmp)
@@ -147,14 +147,14 @@ func TestDocUpdateDeleteField(t *testing.T) {
 func TestDocDelete(t *testing.T) {
 	db := newTestDB(t)
 
-	err := db.GetDocStore().DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
+	err := db.GetDocStore().DocSet(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
 	require.NoError(t, err)
 
-	deleted, err := db.GetDocStore().DocDeleteWithResult("users", "u1")
+	deleted, err := db.GetDocStore().DocDeleteWithResult(t.Context(), "users", "u1")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
-	doc, err := db.GetDocStore().DocGet("users", "u1")
+	doc, err := db.GetDocStore().DocGet(t.Context(), "users", "u1")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 }
@@ -162,7 +162,7 @@ func TestDocDelete(t *testing.T) {
 func TestDocDeleteNotFound(t *testing.T) {
 	db := newTestDB(t)
 
-	deleted, err := db.GetDocStore().DocDeleteWithResult("users", "non-existent-id")
+	deleted, err := db.GetDocStore().DocDeleteWithResult(t.Context(), "users", "non-existent-id")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }
@@ -170,15 +170,15 @@ func TestDocDeleteNotFound(t *testing.T) {
 func TestDocQuery(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op1", mustDocJSON(t, map[string]string{"status": "active", "name": "op-a"})))
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op2", mustDocJSON(t, map[string]string{"status": "offline", "name": "op-b"})))
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op3", mustDocJSON(t, map[string]string{"status": "active", "name": "op-c"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op1", mustDocJSON(t, map[string]string{"status": "active", "name": "op-a"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op2", mustDocJSON(t, map[string]string{"status": "offline", "name": "op-b"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op3", mustDocJSON(t, map[string]string{"status": "active", "name": "op-c"})))
 
 	filters := []models.DocFilter{
 		{Field: "status", Op: "==", Value: json.RawMessage(`"active"`)},
 	}
 
-	results, err := db.GetDocStore().DocQuery("operators", filters, "", 0)
+	results, err := db.GetDocStore().DocQuery(t.Context(), "operators", filters, "", 0)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }
@@ -186,11 +186,11 @@ func TestDocQuery(t *testing.T) {
 func TestDocQueryWithOrderAndLimit(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("items", "a", mustDocJSON(t, map[string]int{"priority": 3})))
-	require.NoError(t, db.GetDocStore().DocSet("items", "b", mustDocJSON(t, map[string]int{"priority": 1})))
-	require.NoError(t, db.GetDocStore().DocSet("items", "c", mustDocJSON(t, map[string]int{"priority": 2})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "a", mustDocJSON(t, map[string]int{"priority": 3})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "b", mustDocJSON(t, map[string]int{"priority": 1})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "c", mustDocJSON(t, map[string]int{"priority": 2})))
 
-	results, err := db.GetDocStore().DocQuery("items", nil, "priority DESC", 2)
+	results, err := db.GetDocStore().DocQuery(t.Context(), "items", nil, "priority DESC", 2)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }
@@ -198,7 +198,7 @@ func TestDocQueryWithOrderAndLimit(t *testing.T) {
 func TestDocQueryEmptyCollection(t *testing.T) {
 	db := newTestDB(t)
 
-	results, err := db.GetDocStore().DocQuery("empty_collection", nil, "", 0)
+	results, err := db.GetDocStore().DocQuery(t.Context(), "empty_collection", nil, "", 0)
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
@@ -206,12 +206,12 @@ func TestDocQueryEmptyCollection(t *testing.T) {
 func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
-	require.NoError(t, db.GetDocStore().DocSet("things", "t2", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"bar"`), "count": json.RawMessage(`10`)})))
-	require.NoError(t, db.GetDocStore().DocSet("things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "things", "t2", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"bar"`), "count": json.RawMessage(`10`)})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
 
 	t.Run("string equality", func(t *testing.T) {
-		results, err := db.GetDocStore().DocQuery("things", []models.DocFilter{
+		results, err := db.GetDocStore().DocQuery(t.Context(), "things", []models.DocFilter{
 			{Field: "label", Op: "==", Value: json.RawMessage(`"foo"`)},
 		}, "", 0)
 		require.NoError(t, err)
@@ -219,7 +219,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	})
 
 	t.Run("numeric greater-than", func(t *testing.T) {
-		results, err := db.GetDocStore().DocQuery("things", []models.DocFilter{
+		results, err := db.GetDocStore().DocQuery(t.Context(), "things", []models.DocFilter{
 			{Field: "count", Op: ">", Value: json.RawMessage(`7`)},
 		}, "", 0)
 		require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	})
 
 	t.Run("numeric equality", func(t *testing.T) {
-		results, err := db.GetDocStore().DocQuery("things", []models.DocFilter{
+		results, err := db.GetDocStore().DocQuery(t.Context(), "things", []models.DocFilter{
 			{Field: "count", Op: "==", Value: json.RawMessage(`10`)},
 		}, "", 0)
 		require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestSchemaIdempotent(t *testing.T) {
 	ks1 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
 	db1, err := OpenCanonicalDBService(logger, "", ks1, fileSvc)
 	require.NoError(t, err)
-	require.NoError(t, db1.GetDocStore().DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
+	require.NoError(t, db1.GetDocStore().DocSet(t.Context(), "test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
@@ -256,7 +256,7 @@ func TestSchemaIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
-	doc, err := db2.GetDocStore().DocGet("test", "1")
+	doc, err := db2.GetDocStore().DocGet(t.Context(), "test", "1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, "first", docField(t, doc, "val"))
@@ -286,19 +286,18 @@ func TestOpenCanonicalDBService_CreatesDatabaseAtRuntimePath(t *testing.T) {
 func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"})))
+	// Stamp the first write in the past so updated_at must advance.
+	past := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.GetDocStore().DocSetWithTimestamps(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}), past, past))
 
-	doc1, err := db.GetDocStore().DocGet("users", "u1")
+	doc1, err := db.GetDocStore().DocGet(t.Context(), "users", "u1")
 	require.NoError(t, err)
 	createdAt1 := doc1.CreatedAt
 	updatedAt1 := doc1.UpdatedAt
 
-	// Small delay to ensure timestamp changes
-	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "users", "u1", mustDocJSON(t, map[string]string{"name": "admin"})))
 
-	require.NoError(t, db.GetDocStore().DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "admin"})))
-
-	doc2, err := db.GetDocStore().DocGet("users", "u1")
+	doc2, err := db.GetDocStore().DocGet(t.Context(), "users", "u1")
 	require.NoError(t, err)
 
 	assert.Equal(t, "admin", docField(t, doc2, "name"))
@@ -313,16 +312,14 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("things", "t1", mustDocJSON(t, map[string]string{"x": "original"})))
+	past := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.GetDocStore().DocSetWithTimestamps(t.Context(), "things", "t1", mustDocJSON(t, map[string]string{"x": "original"}), past, past))
 
-	doc1, err := db.GetDocStore().DocGet("things", "t1")
+	doc1, err := db.GetDocStore().DocGet(t.Context(), "things", "t1")
 	require.NoError(t, err)
 	createdAt := doc1.CreatedAt
 
-	// Small delay to ensure timestamp changes
-	time.Sleep(10 * time.Millisecond)
-
-	doc2, err := db.GetDocStore().DocUpdate("things", "t1", mustDocJSON(t, map[string]string{"x": "updated"}))
+	doc2, err := db.GetDocStore().DocUpdate(t.Context(), "things", "t1", mustDocJSON(t, map[string]string{"x": "updated"}))
 	require.NoError(t, err)
 
 	assert.True(t, doc2.CreatedAt.Equal(createdAt), "created_at must not change on update")
@@ -336,9 +333,9 @@ func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
 
-	_, err := db.GetDocStore().DocQuery("items", []models.DocFilter{
+	_, err := db.GetDocStore().DocQuery(t.Context(), "items", []models.DocFilter{
 		{Field: "name; DROP TABLE documents--", Op: "==", Value: json.RawMessage(`"x"`)},
 	}, "", 0)
 	require.Error(t, err)
@@ -348,9 +345,9 @@ func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
 func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
 
-	_, err := db.GetDocStore().DocQuery("items", nil, "name; DROP TABLE documents--", 0)
+	_, err := db.GetDocStore().DocQuery(t.Context(), "items", nil, "name; DROP TABLE documents--", 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid orderBy field")
 }
@@ -358,10 +355,10 @@ func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
 func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.GetDocStore().DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
-	require.NoError(t, db.GetDocStore().DocSet("items", "i2", mustDocJSON(t, map[string]string{"name": "y"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "items", "i2", mustDocJSON(t, map[string]string{"name": "y"})))
 
-	results, err := db.GetDocStore().DocQuery("items", []models.DocFilter{
+	results, err := db.GetDocStore().DocQuery(t.Context(), "items", []models.DocFilter{
 		{Field: "name", Op: "LIKE", Value: json.RawMessage(`"x"`)},
 	}, "", 0)
 	require.NoError(t, err)
@@ -450,7 +447,7 @@ func TestHasTrustedSigners(t *testing.T) {
 	db := newTestDB(t)
 
 	// Initially no signers
-	has, err := db.GetSignerStore().HasTrustedSigners()
+	has, err := db.GetSignerStore().HasTrustedSigners(t.Context())
 	require.NoError(t, err)
 	assert.False(t, has)
 
@@ -463,10 +460,10 @@ func TestHasTrustedSigners(t *testing.T) {
 	}
 	signerBytes, err := json.Marshal(signer)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocSet("trusted_signers", "test-signer-1", signerBytes)
+	err = db.GetDocStore().DocSet(t.Context(), "trusted_signers", "test-signer-1", signerBytes)
 	require.NoError(t, err)
 
-	has, err = db.GetSignerStore().HasTrustedSigners()
+	has, err = db.GetSignerStore().HasTrustedSigners(t.Context())
 	require.NoError(t, err)
 	assert.True(t, has)
 
@@ -479,20 +476,20 @@ func TestHasTrustedSigners(t *testing.T) {
 	}
 	disabledSignerBytes, err := json.Marshal(disabledSigner)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocSet("trusted_signers", "test-signer-2", disabledSignerBytes)
+	err = db.GetDocStore().DocSet(t.Context(), "trusted_signers", "test-signer-2", disabledSignerBytes)
 	require.NoError(t, err)
 
 	// Should still have signers (enabled one exists)
-	has, err = db.GetSignerStore().HasTrustedSigners()
+	has, err = db.GetSignerStore().HasTrustedSigners(t.Context())
 	require.NoError(t, err)
 	assert.True(t, has)
 
 	// Delete the enabled signer
-	err = db.GetDocStore().DocDelete("trusted_signers", "test-signer-1")
+	err = db.GetDocStore().DocDelete(t.Context(), "trusted_signers", "test-signer-1")
 	require.NoError(t, err)
 
 	// Now only disabled signer exists - should return false
-	has, err = db.GetSignerStore().HasTrustedSigners()
+	has, err = db.GetSignerStore().HasTrustedSigners(t.Context())
 	require.NoError(t, err)
 	assert.False(t, has)
 }
@@ -500,7 +497,7 @@ func TestHasTrustedSigners(t *testing.T) {
 func TestHasTrustedSigners_EmptyCollection(t *testing.T) {
 	db := newTestDB(t)
 
-	has, err := db.GetSignerStore().HasTrustedSigners()
+	has, err := db.GetSignerStore().HasTrustedSigners(t.Context())
 	require.NoError(t, err)
 	assert.False(t, has)
 }
@@ -516,23 +513,23 @@ func TestGetField(t *testing.T) {
 	}
 	docBytes, err := json.Marshal(doc)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocSet("test_collection", "doc1", docBytes)
+	err = db.GetDocStore().DocSet(t.Context(), "test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Get existing field
-	field, err := db.GetDocStore().GetField("test_collection", "doc1", "name")
+	field, err := db.GetDocStore().GetField(t.Context(), "test_collection", "doc1", "name")
 	require.NoError(t, err)
 	require.NotNil(t, field.Str)
 	assert.Equal(t, "test-doc", *field.Str)
 
 	// Get another field
-	field, err = db.GetDocStore().GetField("test_collection", "doc1", "value")
+	field, err = db.GetDocStore().GetField(t.Context(), "test_collection", "doc1", "value")
 	require.NoError(t, err)
 	require.NotNil(t, field.Float64)
 	assert.InEpsilon(t, float64(42), *field.Float64, 0.0) // JSON numbers are unmarshaled as float64
 
 	// Get field from non-existent document
-	_, err = db.GetDocStore().GetField("test_collection", "nonexistent-doc", "name")
+	_, err = db.GetDocStore().GetField(t.Context(), "test_collection", "nonexistent-doc", "name")
 	require.Error(t, err)
 }
 
@@ -544,7 +541,7 @@ func TestDocDeleteNamespace(t *testing.T) {
 		doc := map[string]string{"id": fmt.Sprintf("doc%d", i)}
 		docBytes, err := json.Marshal(doc)
 		require.NoError(t, err)
-		err = db.GetDocStore().DocSet("test_namespace", fmt.Sprintf("doc%d", i), docBytes)
+		err = db.GetDocStore().DocSet(t.Context(), "test_namespace", fmt.Sprintf("doc%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
@@ -553,27 +550,27 @@ func TestDocDeleteNamespace(t *testing.T) {
 		doc := map[string]string{"id": fmt.Sprintf("other%d", i)}
 		docBytes, err := json.Marshal(doc)
 		require.NoError(t, err)
-		err = db.GetDocStore().DocSet("other_namespace", fmt.Sprintf("other%d", i), docBytes)
+		err = db.GetDocStore().DocSet(t.Context(), "other_namespace", fmt.Sprintf("other%d", i), docBytes)
 		require.NoError(t, err)
 	}
 
 	// Delete namespace
-	deleted, err := db.GetDocStore().DocDeleteNamespace("test_namespace")
+	deleted, err := db.GetDocStore().DocDeleteNamespace(t.Context(), "test_namespace")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), deleted)
 
 	// Verify documents are deleted
-	doc, err := db.GetDocStore().DocGet("test_namespace", "doc0")
+	doc, err := db.GetDocStore().DocGet(t.Context(), "test_namespace", "doc0")
 	require.NoError(t, err)
 	assert.Nil(t, doc)
 
 	// Verify other namespace is untouched
-	doc, err = db.GetDocStore().DocGet("other_namespace", "other0")
+	doc, err = db.GetDocStore().DocGet(t.Context(), "other_namespace", "other0")
 	require.NoError(t, err)
 	assert.NotNil(t, doc)
 
 	// Delete non-existent namespace
-	deleted, err = db.GetDocStore().DocDeleteNamespace("nonexistent_namespace")
+	deleted, err = db.GetDocStore().DocDeleteNamespace(t.Context(), "nonexistent_namespace")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
@@ -581,7 +578,7 @@ func TestDocDeleteNamespace(t *testing.T) {
 func TestDocDeleteNamespace_Empty(t *testing.T) {
 	db := newTestDB(t)
 
-	deleted, err := db.GetDocStore().DocDeleteNamespace("empty_namespace")
+	deleted, err := db.GetDocStore().DocDeleteNamespace(t.Context(), "empty_namespace")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
 }
@@ -593,17 +590,17 @@ func TestDocCreate(t *testing.T) {
 	doc := map[string]string{"name": "test-doc"}
 	docBytes, err := json.Marshal(doc)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocCreate("test_collection", "doc1", docBytes)
+	err = db.GetDocStore().DocCreate(t.Context(), "test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify document was created
-	retrievedDoc, err := db.GetDocStore().DocGet("test_collection", "doc1")
+	retrievedDoc, err := db.GetDocStore().DocGet(t.Context(), "test_collection", "doc1")
 	require.NoError(t, err)
 	require.NotNil(t, retrievedDoc)
 	assert.Equal(t, "doc1", retrievedDoc.ID)
 
 	// Attempt to create duplicate - should fail
-	err = db.GetDocStore().DocCreate("test_collection", "doc1", docBytes)
+	err = db.GetDocStore().DocCreate(t.Context(), "test_collection", "doc1", docBytes)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 }
@@ -620,11 +617,11 @@ func TestDocCreate_WithSystemFields(t *testing.T) {
 	}
 	docBytes, err := json.Marshal(doc)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocCreate("test_collection", "doc1", docBytes)
+	err = db.GetDocStore().DocCreate(t.Context(), "test_collection", "doc1", docBytes)
 	require.NoError(t, err)
 
 	// Verify system fields were stripped
-	retrievedDoc, err := db.GetDocStore().DocGet("test_collection", "doc1")
+	retrievedDoc, err := db.GetDocStore().DocGet(t.Context(), "test_collection", "doc1")
 	require.NoError(t, err)
 	require.NotNil(t, retrievedDoc)
 	assert.Equal(t, "doc1", retrievedDoc.ID)

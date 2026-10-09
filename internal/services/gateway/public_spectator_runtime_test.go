@@ -151,37 +151,34 @@ func TestValidatePublicMirrorListenAddresses_AllowsContainerBind(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
 }
 
-func waitForBootstrap(t *testing.T, url string) {
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		response, err := http.Get(url)
-		if err == nil {
-			io.Copy(io.Discard, response.Body)
-			response.Body.Close()
-			if response.StatusCode == http.StatusOK {
-				return
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("bootstrap never became healthy at %s", url)
+// getSpectatorBody issues one GET against a listener PublicSpectatorRuntime.Start
+// has already bound. Start returning is the readiness signal, so there is
+// nothing to poll: the connection queues on the socket until it is served.
+func getSpectatorBody(t *testing.T, url string) (int, []byte) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	require.NoError(t, err)
+	response, err := http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	return response.StatusCode, body
 }
 
-func waitForExplorerRuntime(t *testing.T, url, expectedMirrorOrigin string) {
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		response, err := http.Get(url)
-		if err == nil {
-			body, readErr := io.ReadAll(response.Body)
-			response.Body.Close()
-			if response.StatusCode == http.StatusOK && readErr == nil {
-				var payload map[string]string
-				if json.Unmarshal(body, &payload) == nil && payload["mirror_origin"] == expectedMirrorOrigin {
-					return
-				}
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("explorer runtime never became healthy at %s", url)
+func requireBootstrapHealthy(t *testing.T, url string) {
+	t.Helper()
+	status, body := getSpectatorBody(t, url)
+	require.Equal(t, http.StatusOK, status, "bootstrap at %s: %s", url, body)
+}
+
+func requireExplorerRuntime(t *testing.T, url, expectedMirrorOrigin string) {
+	t.Helper()
+	status, body := getSpectatorBody(t, url)
+	require.Equal(t, http.StatusOK, status, "explorer runtime at %s: %s", url, body)
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, expectedMirrorOrigin, payload["mirror_origin"])
 }

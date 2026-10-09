@@ -60,7 +60,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
 		c := setupTestBootstrapController(t)
-		c.userSvc.CreateUser()
+		c.userSvc.CreateUser(t.Context())
 
 		body := map[string]string{
 			"name": "Superadmin",
@@ -94,7 +94,7 @@ func TestHandleBootstrapStatus(t *testing.T) {
 
 	t.Run("Bootstrapped after creating the first user", func(t *testing.T) {
 		c := setupTestBootstrapController(t)
-		_, err := c.userSvc.CreateUser()
+		_, err := c.userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)

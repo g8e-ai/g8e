@@ -163,14 +163,14 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 	// Verify the operator document was persisted with the approving owner's
 	// user_id, active status, system operator type, and claimed flag —
 	// identical to the standalone operator path.
-	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), completionResp.Operator.OperatorID)
+	opDoc, err := env.docStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), completionResp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
 	op, err := models.OperatorDocumentFromStore(opDoc)
 	require.NoError(t, err)
 	assert.Equal(t, env.ownerID, op.UserId,
 		"gateway-as-operator doc must carry the approving owner's user_id")
-	owner, err := env.userSvc.GetByID(env.ownerID)
+	owner, err := env.userSvc.GetByID(t.Context(), env.ownerID)
 	require.NoError(t, err)
 	require.NotNil(t, owner)
 	require.NotEmpty(t, owner.OrganizationID)
@@ -237,7 +237,7 @@ func TestPlatformEnrollment_Deny_GatewayOriginTerminalNoActiveOperator(t *testin
 	// never runs for a denied request. Assert the operators collection has
 	// no active operators.
 	regSvc := env.svc.GetRegistrationService()
-	operators, err := regSvc.ListUserOperators(env.ownerID)
+	operators, err := regSvc.ListUserOperators(t.Context(), env.ownerID)
 	require.NoError(t, err)
 	for _, op := range operators {
 		assert.NotEqual(t, string(constants.OperatorStatusActive), op.Status,
@@ -258,7 +258,7 @@ func TestPlatformEnrollment_NonFirstUserCannotApproveGatewayOriginRequest(t *tes
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	// Create a second user (non-owner).
-	secondUser, err := env.userSvc.CreateUser()
+	secondUser, err := env.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotEqual(t, env.ownerID, secondUser.ID)
 

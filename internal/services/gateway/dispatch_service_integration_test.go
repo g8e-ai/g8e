@@ -69,7 +69,7 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	now := time.Now().UTC()
 	opDoc := &operatorv1.OperatorDocument{
@@ -83,7 +83,7 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	}
 	opBytes, err := models.MarshalOperatorDocument(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
 	return operatorID, operatorSessionID, userID
 }
@@ -103,7 +103,7 @@ func seedCLISessionForDispatch(t *testing.T, infra *TestInfrastructure, userID s
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 
 	wid := protocol.NewWorkloadIdentity()
 	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
@@ -238,7 +238,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(publicKey)
-	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{ID: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(t.Context(), models.TrustedSigner{ID: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
 	client := pubsub.NewInProcessPubSubClient(infra.Pubsub, infra.Logger)
 	results, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
 	require.NoError(t, err)
@@ -460,8 +460,8 @@ func seedInferenceOperator(t *testing.T, infra *TestInfrastructure, userID, oper
 	}
 	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, body))
-	require.NoError(t, infra.OperatorSessionSvc.PersistOperatorSession(sessionID, userID, op.OrganizationId, operatorID, "mTLS"))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), operatorID, body))
+	require.NoError(t, infra.OperatorSessionSvc.PersistOperatorSession(t.Context(), sessionID, userID, op.OrganizationId, operatorID, "mTLS"))
 }
 
 type boundaryTamperingResultsService struct {
@@ -499,7 +499,7 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(pubKey)
-	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(t.Context(), models.TrustedSigner{
 		ID:        keyID,
 		PublicKey: keyID,
 		AddedAt:   time.Now().UTC(),
@@ -559,7 +559,7 @@ func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, 
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(pubKey)
-	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(t.Context(), models.TrustedSigner{
 		ID:        keyID,
 		PublicKey: keyID,
 		AddedAt:   time.Now().UTC(),

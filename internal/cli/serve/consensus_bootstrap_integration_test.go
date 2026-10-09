@@ -94,7 +94,7 @@ func (f bootstrapFixture) memberKeySeed(t *testing.T, consensusID, appID string)
 
 func (f bootstrapFixture) signerPublicKeys(t *testing.T) map[string]string {
 	t.Helper()
-	signers, err := f.signers.ListTrustedSigners()
+	signers, err := f.signers.ListTrustedSigners(t.Context())
 	require.NoError(t, err)
 	out := make(map[string]string, len(signers))
 	for _, s := range signers {
@@ -109,14 +109,14 @@ func TestConsensusPolicyBootstrap_SharedSeedRegistersEveryMemberWithTheSameKey(t
 	seed := seedHexOf(0x11)
 	path := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha","beta"],"quorum":2,"seed_hex":%q}`, seed))
 
-	require.NoError(t, consensusPolicyBootstrap(f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, path, f.fileSvc, testutil.NewTestLogger()))
 
 	wantPub := publicHexOfSeed(t, seed)
 	assert.Equal(t, map[string]string{"alpha": wantPub, "beta": wantPub}, f.signerPublicKeys(t))
 	assert.Equal(t, seed, f.memberKeySeed(t, "tribunal", "alpha"))
 	assert.Equal(t, seed, f.memberKeySeed(t, "tribunal", "beta"))
 
-	policy, err := f.consensus.GetConsensus("tribunal")
+	policy, err := f.consensus.GetConsensus(t.Context(), "tribunal")
 	require.NoError(t, err)
 	require.NotNil(t, policy)
 	assert.Equal(t, []string{"alpha", "beta"}, policy.MemberAppIDs)
@@ -133,7 +133,7 @@ func TestConsensusPolicyBootstrap_PerMemberSeedsGiveEachMemberADistinctKeyAndWin
 			`"seed_hex":%q,"member_seeds":{"alpha":%q,"beta":%q,"gamma":%q}}`,
 		seedHexOf(0xEE), alphaSeed, betaSeed, gammaSeed))
 
-	require.NoError(t, consensusPolicyBootstrap(f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, path, f.fileSvc, testutil.NewTestLogger()))
 
 	keys := f.signerPublicKeys(t)
 	assert.Equal(t, publicHexOfSeed(t, alphaSeed), keys["alpha"])
@@ -151,7 +151,7 @@ func TestConsensusPolicyBootstrap_GeneratesOneSharedKeyWhenNoSeedIsConfigured(t 
 	f := newBootstrapFixture(t)
 	path := writeConsensusBootstrapFile(t, `{"consensus_id":"ephemeral","member_app_ids":["solo-a","solo-b"],"quorum":1}`)
 
-	require.NoError(t, consensusPolicyBootstrap(f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, path, f.fileSvc, testutil.NewTestLogger()))
 
 	keys := f.signerPublicKeys(t)
 	require.Len(t, keys, 2)
@@ -165,11 +165,11 @@ func TestConsensusPolicyBootstrap_IsIdempotentAndNeverRotatesExistingKeys(t *tes
 	f := newBootstrapFixture(t)
 	firstSeed := seedHexOf(0x31)
 	first := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha"],"quorum":1,"seed_hex":%q}`, firstSeed))
-	require.NoError(t, consensusPolicyBootstrap(f.consensus, f.signers, first, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, first, f.fileSvc, testutil.NewTestLogger()))
 	keysBefore := f.signerPublicKeys(t)
 
 	rotated := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha"],"quorum":1,"seed_hex":%q}`, seedHexOf(0x32)))
-	require.NoError(t, consensusPolicyBootstrap(f.consensus, f.signers, rotated, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, rotated, f.fileSvc, testutil.NewTestLogger()))
 
 	assert.Equal(t, keysBefore, f.signerPublicKeys(t), "an existing consensus must not have its signers replaced")
 	assert.Equal(t, firstSeed, f.memberKeySeed(t, "tribunal", "alpha"), "an existing consensus must not have its member key overwritten")
@@ -232,13 +232,13 @@ func TestConsensusPolicyBootstrap_FailsClosedWithoutCreatingAPolicy(t *testing.T
 			f := newBootstrapFixture(t)
 			path := writeConsensusBootstrapFile(t, tt.body)
 
-			err := consensusPolicyBootstrap(f.consensus, f.signers, path, f.fileSvc, testutil.NewTestLogger())
+			err := consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, path, f.fileSvc, testutil.NewTestLogger())
 
 			require.ErrorIs(t, err, tt.wantErr)
 			if tt.wantText != "" {
 				assert.True(t, strings.Contains(err.Error(), tt.wantText), "error %q should mention %q", err.Error(), tt.wantText)
 			}
-			policies, listErr := f.consensus.ListConsensus()
+			policies, listErr := f.consensus.ListConsensus(t.Context())
 			require.NoError(t, listErr)
 			assert.Empty(t, policies, "a failed bootstrap must not leave a consensus policy that would be skipped as already-bootstrapped on retry")
 		})
@@ -249,12 +249,12 @@ func TestConsensusPolicyBootstrap_RetryAfterFailureCompletesTheBootstrap(t *test
 	f := newBootstrapFixture(t)
 	seed := seedHexOf(0x51)
 	bad := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha","beta"],"quorum":3,"seed_hex":%q}`, seed))
-	require.Error(t, consensusPolicyBootstrap(f.consensus, f.signers, bad, f.fileSvc, testutil.NewTestLogger()))
+	require.Error(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, bad, f.fileSvc, testutil.NewTestLogger()))
 
 	good := writeConsensusBootstrapFile(t, fmt.Sprintf(`{"consensus_id":"tribunal","member_app_ids":["alpha","beta"],"quorum":2,"seed_hex":%q}`, seed))
-	require.NoError(t, consensusPolicyBootstrap(f.consensus, f.signers, good, f.fileSvc, testutil.NewTestLogger()))
+	require.NoError(t, consensusPolicyBootstrap(t.Context(), f.consensus,f.signers, good, f.fileSvc, testutil.NewTestLogger()))
 
-	policy, err := f.consensus.GetConsensus("tribunal")
+	policy, err := f.consensus.GetConsensus(t.Context(), "tribunal")
 	require.NoError(t, err)
 	require.NotNil(t, policy)
 	assert.Equal(t, 2, policy.Quorum)

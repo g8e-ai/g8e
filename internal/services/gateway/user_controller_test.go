@@ -32,7 +32,7 @@ func TestHandleUsers(t *testing.T) {
 
 	t.Run("Success - lists users", func(t *testing.T) {
 		c := setupTestUserController(t)
-		_, err := c.userSvc.CreateUser()
+		_, err := c.userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
@@ -87,7 +87,7 @@ func TestHandleUserMe(t *testing.T) {
 
 	t.Run("Success - returns user data", func(t *testing.T) {
 		c := setupTestUserController(t)
-		user, err := c.userSvc.CreateUser()
+		user, err := c.userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)

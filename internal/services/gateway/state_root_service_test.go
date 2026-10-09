@@ -193,12 +193,12 @@ func TestStateRootService_StateChangeDetection(t *testing.T) {
 	root1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
-	require.NoError(t, db.GetDocStore().DocSet("test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
 	root2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.NotEqual(t, root1, root2, "state root should change after document insertion")
 
-	require.NoError(t, db.GetDocStore().DocDelete("test", "doc1"))
+	require.NoError(t, db.GetDocStore().DocDelete(t.Context(), "test", "doc1"))
 	root3, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, root1, root3, "deleting the only change must restore the previous root")
@@ -216,13 +216,13 @@ func TestStateRootService_IncrementalMatchesOracle(t *testing.T) {
 		k := rng.Intn(40)
 		switch rng.Intn(8) {
 		case 0, 1:
-			require.NoError(t, db.GetDocStore().DocSet("oracle", fmt.Sprintf("d%d", k), json.RawMessage(fmt.Sprintf(`{"v":%d}`, rng.Int()))))
+			require.NoError(t, db.GetDocStore().DocSet(t.Context(), "oracle", fmt.Sprintf("d%d", k), json.RawMessage(fmt.Sprintf(`{"v":%d}`, rng.Int()))))
 		case 2:
-			_ = db.GetDocStore().DocDelete("oracle", fmt.Sprintf("d%d", k))
+			_ = db.GetDocStore().DocDelete(t.Context(), "oracle", fmt.Sprintf("d%d", k))
 		case 3:
-			require.NoError(t, db.GetKVStore().KVSet(fmt.Sprintf("k%d", k), fmt.Sprint(rng.Int()), 0))
+			require.NoError(t, db.GetKVStore().KVSet(t.Context(), fmt.Sprintf("k%d", k), fmt.Sprint(rng.Int()), 0))
 		case 4:
-			require.NoError(t, db.GetKVStore().KVSetObserved(fmt.Sprintf("k%d", k), fmt.Sprint(rng.Int()), 0))
+			require.NoError(t, db.GetKVStore().KVSetObserved(t.Context(), fmt.Sprintf("k%d", k), fmt.Sprint(rng.Int()), 0))
 		case 5:
 			_, err := db.db.Exec("DELETE FROM kv_store WHERE key = ?", fmt.Sprintf("k%d", k))
 			require.NoError(t, err)
@@ -242,13 +242,13 @@ func TestStateRootService_IncrementalMatchesOracle(t *testing.T) {
 func TestStateRootService_TierMoveUpdatesBothRoots(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
-	require.NoError(t, db.GetKVStore().KVSet("move:me", "v", 0))
+	require.NoError(t, db.GetKVStore().KVSet(t.Context(), "move:me", "v", 0))
 	bound1, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	observed1, err := svc.GetObservedStateRoot(t.Context())
 	require.NoError(t, err)
 
-	require.NoError(t, db.GetKVStore().KVSetObserved("move:me", "v", 0))
+	require.NoError(t, db.GetKVStore().KVSetObserved(t.Context(), "move:me", "v", 0))
 	bound2, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	observed2, err := svc.GetObservedStateRoot(t.Context())
@@ -286,7 +286,7 @@ func TestStateRootService_RolledBackWriteChangesNothing(t *testing.T) {
 func TestStateRootService_MetadataOnlyUpdateIsNotDirty(t *testing.T) {
 	db := newTestDB(t)
 	svc := db.GetStateRootSvc()
-	require.NoError(t, db.GetDocStore().DocSet("t", "x", json.RawMessage(`{"a":1}`)))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "t", "x", json.RawMessage(`{"a":1}`)))
 	_, err := svc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 
@@ -309,7 +309,7 @@ func TestStateRootService_OneWriteWorkIsIndependentOfHistory(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		before := svc.flushedLeaves.Load()
-		require.NoError(t, db.GetDocStore().DocSet("operators", "op-1", json.RawMessage(fmt.Sprintf(`{"n":%d}`, i))))
+		require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op-1", json.RawMessage(fmt.Sprintf(`{"n":%d}`, i))))
 		_, err := svc.GetCurrentStateRoot(t.Context())
 		require.NoError(t, err)
 		assert.EqualValues(t, 1, svc.flushedLeaves.Load()-before)
@@ -327,8 +327,8 @@ func TestStateRootService_LegacyDatabaseIsRebuiltOnOpen(t *testing.T) {
 
 	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSet("legacy", "d1", json.RawMessage(`{"v":1}`)))
-	require.NoError(t, db.GetKVStore().KVSet("legacy:k", "v", 0))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "legacy", "d1", json.RawMessage(`{"v":1}`)))
+	require.NoError(t, db.GetKVStore().KVSet(t.Context(), "legacy:k", "v", 0))
 	want, err := db.GetStateRootSvc().GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
 	for _, stmt := range []string{
@@ -360,7 +360,7 @@ func TestStateRootService_LegacyDatabaseIsRebuiltOnOpen(t *testing.T) {
 	require.NoError(t, reopened.db.QueryRow(
 		"SELECT COUNT(*) FROM sqlite_master WHERE name IN ('state_version', 'state_root', 'trg_documents_insert_version')").Scan(&legacy))
 	assert.Zero(t, legacy, "legacy state_version objects must be dropped")
-	require.NoError(t, reopened.GetDocStore().DocSet("legacy", "d2", json.RawMessage(`{"v":2}`)))
+	require.NoError(t, reopened.GetDocStore().DocSet(t.Context(), "legacy", "d2", json.RawMessage(`{"v":2}`)))
 	requireRootsMatchOracle(t, reopened)
 }
 
@@ -391,7 +391,7 @@ func TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen(t *testing.T) {
 		_, err := db.db.Exec(stmt)
 		require.NoError(t, err, stmt)
 	}
-	require.NoError(t, db.GetKVStore().KVSet("authoritative:key", "value", 0))
+	require.NoError(t, db.GetKVStore().KVSet(t.Context(), "authoritative:key", "value", 0))
 	db.Close()
 
 	reopened, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
@@ -414,7 +414,7 @@ func TestStateRootService_LegacyDocumentCacheIsRemovedOnOpen(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"authoritative:key"}, keys, "only committed KV rows survive")
 
-	require.NoError(t, reopened.GetDocStore().DocSet("test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
+	require.NoError(t, reopened.GetDocStore().DocSet(t.Context(), "test", "doc1", mustDocJSON(t, map[string]interface{}{"key": "value"})))
 	var kvCount int
 	require.NoError(t, reopened.db.QueryRow("SELECT COUNT(*) FROM kv_store").Scan(&kvCount))
 	assert.Equal(t, 1, kvCount, "a document write must not touch kv_store")

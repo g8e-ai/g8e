@@ -62,7 +62,10 @@ func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	req.Header.Set("Origin", "https://example.com")
 
-	rr, _ := runStreamWithCancel(t, h, req, 100*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
+	stream.stop()
+	rr := stream.rec
 
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 	assert.Equal(t, "no-cache", rr.Header().Get("Cache-Control"))
@@ -76,7 +79,10 @@ func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	// No Origin header → SSE headers still set, no CORS headers
 
-	rr, _ := runStreamWithCancel(t, h, req, 100*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
+	stream.stop()
+	rr := stream.rec
 
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 	assert.Equal(t, "no-cache", rr.Header().Get("Cache-Control"))
@@ -104,7 +110,9 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?since_id=0", nil).WithContext(ctx)
 	req.Header.Set("Last-Event-ID", fmt.Sprintf("%d", firstID))
 
-	_, body := runStreamWithCancel(t, h, req, 150*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitReplayed()
+	body := stream.stop()
 
 	// Should have replayed only events after firstID (i.e., event2)
 	assert.Contains(t, body, "event2")
@@ -133,7 +141,9 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 	// Use dummy event ID as Last-Event-ID so replay starts after it
 	req.Header.Set("Last-Event-ID", fmt.Sprintf("%d", dummyID))
 
-	_, body := runStreamWithCancel(t, h, req, 150*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitReplayed()
+	body := stream.stop()
 
 	assert.Contains(t, body, "replay_event")
 	assert.Contains(t, body, fmt.Sprintf("id: %d", replayID))
@@ -151,7 +161,15 @@ func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 	// since_id=0 and no Last-Event-ID → no replay should occur
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?since_id=0", nil).WithContext(ctx)
 
-	_, body := runStreamWithCancel(t, h, req, 150*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
+	// A live marker proves the stream reached its live loop, past any replay.
+	payload := `{"cli_session_id":"` + cliSessionID + `","event":{"type":"live_marker"}}`
+	envelopeJSON, err := json.Marshal(models.SSEPublishedEvent{ID: 0, Payload: json.RawMessage(payload)})
+	require.NoError(t, err)
+	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, envelopeJSON)
+	stream.awaitBody("live_marker")
+	body := stream.stop()
 
 	// Event should NOT be replayed since sinceID=0
 	assert.NotContains(t, body, "no_replay_event")
@@ -162,19 +180,9 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	ctx, _, cliSessionID := seedCLISessionCtx(t, h, "pubsub")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
-	rr := httptest.NewRecorder()
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	req = req.WithContext(streamCtx)
-
-	done := make(chan struct{})
-	go func() {
-		h.sseController.handleInternalSSEStream(rr, req)
-		close(done)
-	}()
-
-	// Wait for stream to start
-	time.Sleep(20 * time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
 
 	// Publish an event to the pubsub channel. The stream handler expects a
 	// models.SSEPublishedEvent envelope (R1) carrying the DB row ID and the
@@ -185,12 +193,8 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	require.NoError(t, err)
 	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, envelopeJSON)
 
-	// Wait for delivery
-	time.Sleep(20 * time.Millisecond)
-	cancel()
-	<-done
-
-	body := rr.Body.String()
+	stream.awaitBody("data: " + payload)
+	body := stream.stop()
 	assert.Contains(t, body, "pubsub_event")
 	assert.Contains(t, body, "data: "+payload)
 	assert.Contains(t, body, "id: 1")
@@ -203,16 +207,9 @@ func TestHandleInternalSSEStream_EphemeralEventDelivered(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	ctx, _, cliSessionID := seedCLISessionCtx(t, h, "ephemeral")
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(streamCtx)
-	rr := httptest.NewRecorder()
-
-	done := make(chan struct{})
-	go func() {
-		h.sseController.handleInternalSSEStream(rr, req)
-		close(done)
-	}()
-	time.Sleep(20 * time.Millisecond)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
 
 	publish := func(id int64, name string) {
 		payload := `{"cli_session_id":"` + cliSessionID + `","event":{"type":"` + name + `"}}`
@@ -224,11 +221,9 @@ func TestHandleInternalSSEStream_EphemeralEventDelivered(t *testing.T) {
 	publish(5, "persisted")
 	publish(0, "ephemeral_after_persisted")
 
-	time.Sleep(40 * time.Millisecond)
-	cancel()
-	<-done
-
-	body := rr.Body.String()
+	// Delivery is FIFO, so the last event arriving means the others did too.
+	stream.awaitBody("ephemeral_after_persisted")
+	body := stream.stop()
 	assert.Contains(t, body, "ephemeral_first")
 	assert.Contains(t, body, "persisted")
 	assert.Contains(t, body, "ephemeral_after_persisted")
@@ -243,8 +238,10 @@ func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 	ctx, _, _ := seedCLISessionCtx(t, h, "heartbeat")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 
-	// Wait long enough for at least one heartbeat tick (50ms interval).
-	rr, body := runStreamWithCancel(t, h, req, 200*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitBody(": heartbeat\n\n")
+	body := stream.stop()
+	rr := stream.rec
 
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 	assert.Contains(t, body, ": heartbeat\n\n", "expected at least one heartbeat comment in SSE stream")
@@ -255,7 +252,10 @@ func TestHandleInternalSSEStream_ClientLabelOperatorSession(t *testing.T) {
 	ctx, _, _ := seedCLISessionCtx(t, h, "label")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 
-	rr, _ := runStreamWithCancel(t, h, req, 100*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
+	stream.stop()
+	rr := stream.rec
 
 	// Stream should be established — just verify it didn't error
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
@@ -272,7 +272,10 @@ func TestHandleInternalSSEStream_ClientLabelWebSession(t *testing.T) {
 	// the context (set by the auth middleware from the session cookie).
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 
-	rr, _ := runStreamWithCancel(t, h, req, 100*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
+	stream.stop()
+	rr := stream.rec
 
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 }
@@ -296,7 +299,9 @@ func TestHandleInternalSSEStream_ReplayEmitsNoEventField(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 
-	_, body := runStreamWithCancel(t, h, req, 150*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitReplayed()
+	body := stream.stop()
 
 	assert.Contains(t, body, fmt.Sprintf("id: %d", eventID))
 	assert.Contains(t, body, "data: ")
@@ -331,19 +336,10 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	// Last-Event-ID=event1.ID so replay returns only event2 and sets lastEmittedID=event2.ID.
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	req.Header.Set("Last-Event-ID", fmt.Sprintf("%d", rows[0].ID))
-	rr := httptest.NewRecorder()
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	req = req.WithContext(streamCtx)
-
-	done := make(chan struct{})
-	go func() {
-		h.sseController.handleInternalSSEStream(rr, req)
-		close(done)
-	}()
-
-	// Wait for replay to complete (event2 is replayed, lastEmittedID = event2ID).
-	time.Sleep(20 * time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	// Replay complete: event2 is replayed, lastEmittedID = event2ID.
+	stream.awaitReplayed()
 
 	// Publish a duplicate event with the same ID as the replayed row.
 	// The stream handler should suppress it via lastEmittedID dedup.
@@ -360,11 +356,10 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	require.NoError(t, err)
 	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, newJSON)
 
-	time.Sleep(20 * time.Millisecond)
-	cancel()
-	<-done
-
-	body := rr.Body.String()
+	// Delivery is FIFO, so the live event arriving means the duplicate before
+	// it was already handled.
+	stream.awaitBody("live_type")
+	body := stream.stop()
 	// event2_type should appear exactly once (via replay, not via pub/sub duplicate).
 	count := strings.Count(body, "event2_type")
 	assert.Equal(t, 1, count, "event2_type should appear exactly once (duplicate suppressed), got %d\nbody: %s", count, body)
@@ -379,17 +374,9 @@ func TestHandleInternalSSEStream_OutOfOrderLiveEventsDelivered(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	ctx, _, cliSessionID := seedCLISessionCtx(t, h, "outoforder")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?since_id=0", nil)
-	rr := httptest.NewRecorder()
-	streamCtx, cancel := context.WithCancel(ctx)
-	req = req.WithContext(streamCtx)
-
-	done := make(chan struct{})
-	go func() {
-		h.sseController.handleInternalSSEStream(rr, req)
-		close(done)
-	}()
-	time.Sleep(20 * time.Millisecond)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?since_id=0", nil).WithContext(ctx)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitSubscribed()
 
 	for _, e := range []struct {
 		id   int64
@@ -400,11 +387,8 @@ func TestHandleInternalSSEStream_OutOfOrderLiveEventsDelivered(t *testing.T) {
 		h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, raw)
 	}
 
-	time.Sleep(20 * time.Millisecond)
-	cancel()
-	<-done
-
-	body := rr.Body.String()
+	stream.awaitBody("lower_type")
+	body := stream.stop()
 	assert.Contains(t, body, "higher_type")
 	assert.Contains(t, body, "lower_type", "an event with a lower ID than one already emitted live must not be dropped as a duplicate\nbody: %s", body)
 }
@@ -466,8 +450,9 @@ func TestHandleInternalSSEStream_TruncationSentinelOnFullReplay(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	req.Header.Set("Last-Event-ID", "0")
 
-	// Allow time for the 1000-row replay + sentinel to be written.
-	_, body := runStreamWithCancel(t, h, req, 500*time.Millisecond)
+	stream := startInternalSSEStream(t, h, req)
+	stream.awaitBody(`"type":"truncated"`)
+	body := stream.stop()
 
 	// R6: the truncation sentinel must be present.
 	assert.Contains(t, body, `"type":"truncated"`)
@@ -490,7 +475,7 @@ func TestSSEStream_BrowserWebSessionCookieThroughRouter(t *testing.T) {
 	webSessionID := "web-browser-sse"
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	sessBytes, err := json.Marshal(&models.WebSession{
 		ID:              webSessionID,
 		UserID:          userID,
@@ -498,22 +483,16 @@ func TestSSEStream_BrowserWebSessionCookieThroughRouter(t *testing.T) {
 		ExpiresAtUnixMs: time.Now().Add(time.Hour).UnixMilli(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, sessBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, sessBytes))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.SSEStream, nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.SSEStream, nil)
 	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
-	rr := httptest.NewRecorder()
 
-	done := make(chan struct{})
-	go func() {
-		h.ServeHTTP(rr, req)
-		close(done)
-	}()
-	time.Sleep(150 * time.Millisecond)
-	cancel()
-	<-done
+	stream := startSSEStream(t, h, req)
+	stream.awaitSubscribed()
+	body := stream.stop()
+	rr := stream.rec
 
-	assert.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+	assert.Equal(t, http.StatusOK, rr.Code(), "body: %s", body)
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 }

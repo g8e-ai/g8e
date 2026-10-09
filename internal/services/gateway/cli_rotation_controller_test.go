@@ -48,7 +48,7 @@ func setupTestCLIRotationController(t *testing.T) (*CLIRotationController, *mode
 		Responder:     infra.Responder,
 	})
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
@@ -96,7 +96,7 @@ func persistActiveCLISession(t *testing.T, c *CLIRotationController, userID stri
 	}
 	b, err := json.Marshal(doc)
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b,
 	))
 	return cliSessionID
@@ -168,7 +168,7 @@ func TestCLIRotationController_Rotate_OldSessionDeactivated(t *testing.T) {
 	require.Equal(t, http.StatusCreated, rr.Code)
 
 	// The old session must now be inactive.
-	oldDoc, err := c.cliSessionSvc.db.DocGet(
+	oldDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
 	require.NoError(t, err)
 	require.NotNil(t, oldDoc)
@@ -190,7 +190,7 @@ func TestCLIRotationController_Rotate_NewCertUsableForMTLS(t *testing.T) {
 	resp := parseRotationResponse(t, rr)
 
 	// The new session must be active and bound to the same user.
-	newDoc, err := c.cliSessionSvc.db.DocGet(
+	newDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)
@@ -300,7 +300,7 @@ func TestCLIRotationController_Rotate_SessionUserMismatch(t *testing.T) {
 	// Persist a session for user A, then try to rotate it as user B.
 	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
-	otherUser, err := c.userSvc.CreateUser()
+	otherUser, err := c.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	csrPEM, _, _ := generateTestCSR(t, "rotation-user-mismatch")
@@ -317,7 +317,7 @@ func TestCLIRotationController_Rotate_UserNotActive(t *testing.T) {
 	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	// Disable the user after the session was created.
-	require.NoError(t, c.userSvc.Disable(user.ID, "test", "actor", "op"))
+	require.NoError(t, c.userSvc.Disable(t.Context(), user.ID, "test", "actor", "op"))
 
 	csrPEM, _, _ := generateTestCSR(t, "rotation-disabled-user")
 	req := rotationRequestWithContext(t, user.ID, oldSessionID, csrPEM)
@@ -333,7 +333,7 @@ func TestCLIRotationController_Rotate_AlreadyDeactivatedSession(t *testing.T) {
 	oldSessionID := persistActiveCLISession(t, c, user.ID)
 
 	// Deactivate the session first.
-	require.NoError(t, c.cliSessionSvc.DeactivateCLISession(oldSessionID))
+	require.NoError(t, c.cliSessionSvc.DeactivateCLISession(t.Context(), oldSessionID))
 
 	csrPEM, _, _ := generateTestCSR(t, "rotation-already-deactivated")
 	req := rotationRequestWithContext(t, user.ID, oldSessionID, csrPEM)

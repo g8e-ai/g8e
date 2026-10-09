@@ -47,7 +47,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(disabledUser)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Create a CLISession linked to the disabled user
@@ -62,18 +62,18 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	}
 	cliSessionBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes)
+	err = db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes)
 	require.NoError(t, err)
 
 	// Verify that the user is marked as disabled
-	user, err := userSvc.GetByID(userID)
+	user, err := userSvc.GetByID(t.Context(), userID)
 	require.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.False(t, user.IsActive(), "Retired user should not be active")
 	assert.Equal(t, constants.UserStatusDisabled, user.Status)
 
 	// Verify that CLISession exists and is linked to the disabled user
-	cliDoc, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	cliDoc, err := db.GetDocStore().DocGet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	require.NoError(t, err)
 	assert.NotNil(t, cliDoc)
 
@@ -111,11 +111,11 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(activeUser)
 	require.NoError(t, err)
-	err = db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Verify that the user is marked as active
-	user, err := userSvc.GetByID(userID)
+	user, err := userSvc.GetByID(t.Context(), userID)
 	require.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.True(t, user.IsActive(), "Active user should be active")

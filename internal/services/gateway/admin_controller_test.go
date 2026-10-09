@@ -37,16 +37,16 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// The first user created is the gateway admin (IsFirstUser).
-	adminUser, err := adminController.userSvc.CreateUser()
+	adminUser, err := adminController.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, adminUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", adminUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "users", adminUser.ID) })
 
 	// A second user is a non-admin regular user.
-	regularUser, err := adminController.userSvc.CreateUser()
+	regularUser, err := adminController.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "users", regularUser.ID) })
 
 	// Create an app policy document for testing
 	now := time.Now()
@@ -63,9 +63,9 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	}
 	policyDoc, err := json.Marshal(appPolicy)
 	require.NoError(t, err)
-	err = adminController.docStore.DocSet("app_policies", "test-app-id", policyDoc)
+	err = adminController.docStore.DocSet(t.Context(), "app_policies", "test-app-id", policyDoc)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.docStore.DocDelete("app_policies", "test-app-id") })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "app_policies", "test-app-id") })
 
 	// Generate a valid Ed25519 public key for testing
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -176,7 +176,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		// Verify the signer was added to the database
-		signerDoc, err := adminController.docStore.DocGet("trusted_signers", "test-app-id")
+		signerDoc, err := adminController.docStore.DocGet(t.Context(), "trusted_signers", "test-app-id")
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 		assert.Equal(t, "test-app-id", signerDoc.ID)
@@ -195,16 +195,16 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// The first user created is the gateway admin (IsFirstUser).
-	adminUser, err := adminController.userSvc.CreateUser()
+	adminUser, err := adminController.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, adminUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", adminUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "users", adminUser.ID) })
 
 	// A second user is a non-admin regular user.
-	regularUser, err := adminController.userSvc.CreateUser()
+	regularUser, err := adminController.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "users", regularUser.ID) })
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -225,13 +225,13 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 		Enabled:   true,
 	}
 
-	err = adminController.signerStore.AddTrustedSigner(signer1)
+	err = adminController.signerStore.AddTrustedSigner(t.Context(), signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("consensus-member-1") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner(context.Background(), "consensus-member-1") })
 
-	err = adminController.signerStore.AddTrustedSigner(signer2)
+	err = adminController.signerStore.AddTrustedSigner(t.Context(), signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("consensus-member-2") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner(context.Background(), "consensus-member-2") })
 
 	t.Run("POST - unauthorized (no user)", func(t *testing.T) {
 		ctx := context.Background()
@@ -278,12 +278,12 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		// Verify the consensus was created
-		consensus, err := adminController.consensusStore.GetConsensus("test-consensus")
+		consensus, err := adminController.consensusStore.GetConsensus(t.Context(), "test-consensus")
 		require.NoError(t, err)
 		require.NotNil(t, consensus)
 		assert.Equal(t, "test-consensus", consensus.ID)
 		assert.Equal(t, 2, consensus.Quorum)
-		t.Cleanup(func() { adminController.consensusStore.DeleteConsensus("test-consensus") })
+		t.Cleanup(func() { adminController.consensusStore.DeleteConsensus(context.Background(), "test-consensus") })
 	})
 
 	t.Run("GET - unauthorized (no user)", func(t *testing.T) {
@@ -331,16 +331,16 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// The first user created is the gateway admin (IsFirstUser).
-	adminUser, err := adminController.userSvc.CreateUser()
+	adminUser, err := adminController.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, adminUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", adminUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "users", adminUser.ID) })
 
 	// A second user is a non-admin regular user.
-	regularUser, err := adminController.userSvc.CreateUser()
+	regularUser, err := adminController.userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete(context.Background(), "users", regularUser.ID) })
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -351,9 +351,11 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = adminController.signerStore.AddTrustedSigner(signer)
+	err = adminController.signerStore.AddTrustedSigner(t.Context(), signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("delete-consensus-member") })
+	t.Cleanup(func() {
+		adminController.signerStore.DeleteTrustedSigner(context.Background(), "delete-consensus-member")
+	})
 
 	// Create a test consensus
 	policy := models.ConsensusPolicy{
@@ -363,7 +365,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = adminController.consensusStore.AddConsensus(policy)
+	err = adminController.consensusStore.AddConsensus(t.Context(), policy)
 	require.NoError(t, err)
 
 	t.Run("DELETE - unauthorized (no user)", func(t *testing.T) {
@@ -406,7 +408,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		// Verify the consensus was deleted
-		consensus, err := adminController.consensusStore.GetConsensus("delete-test-consensus")
+		consensus, err := adminController.consensusStore.GetConsensus(t.Context(), "delete-test-consensus")
 		require.NoError(t, err)
 		assert.Nil(t, consensus)
 	})

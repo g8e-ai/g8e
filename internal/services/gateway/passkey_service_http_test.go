@@ -32,7 +32,7 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionSer
 	t.Helper()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(db.GetDocStore(), logger).CreateUser()
+	user, err := NewUserService(db.GetDocStore(), logger).CreateUser(t.Context())
 	require.NoError(t, err)
 	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 	resp := response.NewWriter(logger)
@@ -402,7 +402,7 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
-			forbidden, _, _ := svc.enforceFirstCred(user.ID)
+			forbidden, _, _ := svc.enforceFirstCred(t.Context(), user.ID)
 			if tc.wantAllow {
 				assert.False(t, forbidden)
 			} else {
@@ -452,7 +452,7 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 func TestPasskeyCookieConsistency(t *testing.T) {
 	svc, webSessionSvc, user := newPasskeyServiceHTTPForTest(t)
 
-	webSession, err := webSessionSvc.CreateWebSession(user.ID)
+	webSession, err := webSessionSvc.CreateWebSession(t.Context(), user.ID)
 	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
@@ -475,7 +475,7 @@ func TestPasskeyCookieCrossOriginSameSiteNone(t *testing.T) {
 	svc, webSessionSvc, user := newPasskeyServiceHTTPForTest(t)
 	svc.crossOrigin = true
 
-	webSession, err := webSessionSvc.CreateWebSession(user.ID)
+	webSession, err := webSessionSvc.CreateWebSession(t.Context(), user.ID)
 	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
@@ -613,7 +613,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 
 	t.Run("valid token returns 200 with challenge options", func(t *testing.T) {
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
-		tok, err := svc.enrollmentTokenSvc.GenerateToken(user.ID, "cli-valid-1")
+		tok, err := svc.enrollmentTokenSvc.GenerateToken(t.Context(), user.ID, "cli-valid-1")
 		require.NoError(t, err)
 
 		handler := svc.RegisterChallenge(cfg)
@@ -636,7 +636,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 	// the regression where challenge consumes, breaking verify.
 	t.Run("challenge does not consume token", func(t *testing.T) {
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
-		tok, err := svc.enrollmentTokenSvc.GenerateToken(user.ID, "cli-replay-1")
+		tok, err := svc.enrollmentTokenSvc.GenerateToken(t.Context(), user.ID, "cli-replay-1")
 		require.NoError(t, err)
 
 		handler := svc.RegisterChallenge(cfg)
@@ -657,7 +657,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 
 		// The token must still be unconsumed in the store so that the
 		// verify step can consume it.
-		tok2, err := svc.enrollmentTokenSvc.ValidateToken(tok.Token)
+		tok2, err := svc.enrollmentTokenSvc.ValidateToken(t.Context(), tok.Token)
 		require.NoError(t, err)
 		assert.False(t, tok2.Consumed)
 	})
@@ -666,7 +666,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		userSvc := NewUserService(db.GetDocStore(), logger)
-		user, err := userSvc.CreateUser()
+		user, err := userSvc.CreateUser(t.Context())
 		require.NoError(t, err)
 		webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 		resp := response.NewWriter(logger)
@@ -680,7 +680,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 			Responder:          resp,
 			MaxPayload:         10 * 1024 * 1024,
 		})
-		tok, err := enrollmentTokenSvc.GenerateToken(user.ID, "cli-exp-1")
+		tok, err := enrollmentTokenSvc.GenerateToken(t.Context(), user.ID, "cli-exp-1")
 		require.NoError(t, err)
 		// Overwrite the persisted token with an expires_at in the past so
 		// ValidateAndConsumeToken rejects it as expired.
@@ -693,7 +693,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 			Consumed:     false,
 		})
 		require.NoError(t, err)
-		require.NoError(t, db.GetDocStore().DocSet(
+		require.NoError(t, db.GetDocStore().DocSet(t.Context(),
 			marshaler.CollectionName(constants.CollectionEnrollmentTokens), tok.Token, expiredDoc))
 
 		hh := handler.RegisterChallenge(cfg)
@@ -708,10 +708,10 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 
 	t.Run("consumed token returns 409", func(t *testing.T) {
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
-		tok, err := svc.enrollmentTokenSvc.GenerateToken(user.ID, "cli-con-1")
+		tok, err := svc.enrollmentTokenSvc.GenerateToken(t.Context(), user.ID, "cli-con-1")
 		require.NoError(t, err)
 		// Consume it once.
-		_, err = svc.enrollmentTokenSvc.ValidateAndConsumeToken(tok.Token)
+		_, err = svc.enrollmentTokenSvc.ValidateAndConsumeToken(t.Context(), tok.Token)
 		require.NoError(t, err)
 
 		handler := svc.RegisterChallenge(cfg)
@@ -760,7 +760,7 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db.GetDocStore(), logger)
-	user, err := userSvc.CreateUser()
+	user, err := userSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 	resp := response.NewWriter(logger)
@@ -781,7 +781,7 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 		Orchestrator:       orchestrator,
 	})
 
-	tok, err := enrollmentTokenSvc.GenerateToken(user.ID, "cli-verify-1")
+	tok, err := enrollmentTokenSvc.GenerateToken(t.Context(), user.ID, "cli-verify-1")
 	require.NoError(t, err)
 
 	cfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
@@ -827,36 +827,36 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 func TestPasskeyHandler_BindEmbeddedOperatorToWebSession(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
-	other, err := infra.UserSvc.CreateUser()
+	other, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 
 	// Claim the embedded operator for the first user — the same state the
 	// first user's bootstrap produces.
-	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(t.Context(), user.ID)
 	require.NoError(t, err)
 
 	t.Run("claimed operator binds to web session", func(t *testing.T) {
-		webSession, err := infra.WebSessionSvc.CreateWebSession(user.ID)
+		webSession, err := infra.WebSessionSvc.CreateWebSession(t.Context(), user.ID)
 		require.NoError(t, err)
 
-		infra.Passkey.bindEmbeddedOperatorSession(user.ID, webSession.ID)
+		infra.Passkey.bindEmbeddedOperatorSession(t.Context(), user.ID, webSession.ID)
 
 		// KV pair: operator session -> web session.
-		boundWebID, found := infra.KVStore.KVGet(sessionOperatorBindKey(operatorSessionID))
+		boundWebID, found := infra.KVStore.KVGet(t.Context(), sessionOperatorBindKey(operatorSessionID))
 		require.True(t, found, "sessionOperatorBind entry must exist")
 		assert.Equal(t, webSession.ID, boundWebID)
 
 		// KV pair: web session -> operator session IDs.
-		raw, found := infra.KVStore.KVGet(sessionWebBindKey(webSession.ID))
+		raw, found := infra.KVStore.KVGet(t.Context(), sessionWebBindKey(webSession.ID))
 		require.True(t, found, "sessionWebBind entry must exist")
 		var sessionIDs []string
 		require.NoError(t, json.Unmarshal([]byte(raw), &sessionIDs))
 		assert.Contains(t, sessionIDs, operatorSessionID)
 
 		// bound_sessions durability document.
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), webSession.ID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionBoundSessions), webSession.ID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		var bDoc models.BoundSessionsDocumentGo
@@ -873,14 +873,14 @@ func TestPasskeyHandler_BindEmbeddedOperatorToWebSession(t *testing.T) {
 	})
 
 	t.Run("different user's web session binds nothing", func(t *testing.T) {
-		webSession, err := infra.WebSessionSvc.CreateWebSession(other.ID)
+		webSession, err := infra.WebSessionSvc.CreateWebSession(t.Context(), other.ID)
 		require.NoError(t, err)
 
-		infra.Passkey.bindEmbeddedOperatorSession(other.ID, webSession.ID)
+		infra.Passkey.bindEmbeddedOperatorSession(t.Context(), other.ID, webSession.ID)
 
-		_, found := infra.KVStore.KVGet(sessionWebBindKey(webSession.ID))
+		_, found := infra.KVStore.KVGet(t.Context(), sessionWebBindKey(webSession.ID))
 		assert.False(t, found, "no binding for a different user's web session")
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), webSession.ID)
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionBoundSessions), webSession.ID)
 		require.NoError(t, err)
 		assert.Nil(t, doc)
 	})

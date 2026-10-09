@@ -72,7 +72,7 @@ func TestObserveProducer_UpdateAgentState_PersistsProjectionBeforeSSEEvent(t *te
 
 	// Projection persisted to the document store.
 	collection := marshaler.CollectionName(constants.CollectionObserveAgentStates)
-	doc, err := docStore.DocGet(collection, "agent-triage")
+	doc, err := docStore.DocGet(t.Context(), collection, "agent-triage")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	var proj agentStateProjection
@@ -156,7 +156,7 @@ func TestObserveProducer_UpdateRunState_PersistsProjectionBeforeSSEEvent(t *test
 
 	// Projection persisted.
 	collection := marshaler.CollectionName(constants.CollectionObserveRuns)
-	doc, err := docStore.DocGet(collection, "run-investigation-1")
+	doc, err := docStore.DocGet(t.Context(), collection, "run-investigation-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	var proj runProjection
@@ -246,7 +246,7 @@ func TestObserveProducer_InvalidTransitionRejected_NoProjectionNoEvent(t *testin
 
 	// Projection remains in completed state.
 	collection := marshaler.CollectionName(constants.CollectionObserveRuns)
-	doc, err := docStore.DocGet(collection, "run-terminal-1")
+	doc, err := docStore.DocGet(t.Context(), collection, "run-terminal-1")
 	require.NoError(t, err)
 	var proj runProjection
 	require.NoError(t, unmarshalDocData(doc, &proj))
@@ -477,7 +477,7 @@ func TestObserveProducer_UpdateRunState_PreservesTasksAndEvidenceFromExisting(t 
 	}
 	b, err := json.Marshal(initialProj)
 	require.NoError(t, err)
-	require.NoError(t, docStore.DocSet(collection, "run-preserve-1", b))
+	require.NoError(t, docStore.DocSet(t.Context(), collection, "run-preserve-1", b))
 
 	// Update run state via producer — tasks and evidence should be preserved.
 	updatePayload := models.RunStatusUpdatedPayload{
@@ -493,7 +493,7 @@ func TestObserveProducer_UpdateRunState_PreservesTasksAndEvidenceFromExisting(t 
 	err = producer.UpdateRunState(ctx, "user-preserve", producerRoute("user-preserve"), updatePayload)
 	require.NoError(t, err)
 
-	doc, err := docStore.DocGet(collection, "run-preserve-1")
+	doc, err := docStore.DocGet(t.Context(), collection, "run-preserve-1")
 	require.NoError(t, err)
 	var proj runProjection
 	require.NoError(t, unmarshalDocData(doc, &proj))

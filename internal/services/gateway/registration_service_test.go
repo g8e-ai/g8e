@@ -160,7 +160,7 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 			CLICSR:            "", // Empty CLI CSR is now allowed for operator-only enrollment
 		}
 
-		resp, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		resp, err := regSvc.RegisterDeviceCSR(t.Context(), "user-123", "org-123", req)
 		require.NoError(t, err, "enrollment without CLI CSR should succeed for operator-only")
 		assert.NotNil(t, resp)
 		assert.True(t, resp.Success)
@@ -177,14 +177,14 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	regSvc := infra.Reg
 
 	t.Run("Empty user_id returns error", func(t *testing.T) {
-		slots, err := regSvc.ListOperatorSlots("")
+		slots, err := regSvc.ListOperatorSlots(t.Context(), "")
 		assert.Error(t, err)
 		assert.Nil(t, slots)
 		assert.Contains(t, err.Error(), "user_id is required")
 	})
 
 	t.Run("Returns empty list for user with no slots", func(t *testing.T) {
-		slots, err := regSvc.ListOperatorSlots("nonexistent-user")
+		slots, err := regSvc.ListOperatorSlots(t.Context(), "nonexistent-user")
 		require.NoError(t, err)
 		assert.NotNil(t, slots)
 		assert.Empty(t, slots)
@@ -192,11 +192,11 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 
 	t.Run("Returns slots filtered by user_id and is_slot", func(t *testing.T) {
 		// Create a slot for the user
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 		require.NotNil(t, slot)
 
-		slots, err := regSvc.ListOperatorSlots("user-123")
+		slots, err := regSvc.ListOperatorSlots(t.Context(), "user-123")
 		require.NoError(t, err)
 		assert.NotEmpty(t, slots)
 		// Find the slot we just created (may not be first due to ordering)
@@ -219,14 +219,14 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 	regSvc := infra.Reg
 
 	t.Run("Empty user_id returns error", func(t *testing.T) {
-		operators, err := regSvc.ListUserOperators("")
+		operators, err := regSvc.ListUserOperators(t.Context(), "")
 		assert.Error(t, err)
 		assert.Nil(t, operators)
 		assert.Contains(t, err.Error(), "user_id is required")
 	})
 
 	t.Run("Returns empty list for user with no operators", func(t *testing.T) {
-		operators, err := regSvc.ListUserOperators("nonexistent-user")
+		operators, err := regSvc.ListUserOperators(t.Context(), "nonexistent-user")
 		require.NoError(t, err)
 		assert.NotNil(t, operators)
 		assert.Empty(t, operators)
@@ -234,7 +234,7 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 
 	t.Run("Returns slots and platform-enrolled operators for the user", func(t *testing.T) {
 		// Create a user-created slot.
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 		require.NotNil(t, slot)
 
@@ -254,9 +254,9 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 		}
 		opBytes, err := models.MarshalOperatorDocument(platformOp)
 		require.NoError(t, err)
-		require.NoError(t, regSvc.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.Id, opBytes))
+		require.NoError(t, regSvc.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), platformOp.Id, opBytes))
 
-		operators, err := regSvc.ListUserOperators("user-123")
+		operators, err := regSvc.ListUserOperators(t.Context(), "user-123")
 		require.NoError(t, err)
 		assert.Len(t, operators, 2, "both the slot and the platform-enrolled operator should be returned")
 
@@ -278,10 +278,10 @@ func TestRegistrationService_ListUserOperators(t *testing.T) {
 	})
 
 	t.Run("Does not return operators owned by another user", func(t *testing.T) {
-		_, err := regSvc.createSlot("user-other", "org-other")
+		_, err := regSvc.createSlot(t.Context(), "user-other", "org-other")
 		require.NoError(t, err)
 
-		operators, err := regSvc.ListUserOperators("user-isolated")
+		operators, err := regSvc.ListUserOperators(t.Context(), "user-isolated")
 		require.NoError(t, err)
 		assert.Empty(t, operators, "no operators should be returned for a user with no operators")
 	})
@@ -293,56 +293,56 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	regSvc := infra.Reg
 
 	t.Run("Missing operator_id returns error", func(t *testing.T) {
-		err := regSvc.TerminateOperator("", "user-123", "test")
+		err := regSvc.TerminateOperator(t.Context(), "", "user-123", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "operator_id is required")
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		err := regSvc.TerminateOperator("op-123", "", "test")
+		err := regSvc.TerminateOperator(t.Context(), "op-123", "", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "user_id is required")
 	})
 
 	t.Run("Non-existent operator returns error", func(t *testing.T) {
-		err := regSvc.TerminateOperator("nonexistent-op", "user-123", "test")
+		err := regSvc.TerminateOperator(t.Context(), "nonexistent-op", "user-123", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "operator not found")
 	})
 
 	t.Run("Wrong owner returns error", func(t *testing.T) {
 		// Create an operator for user-123
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// Try to terminate with different user_id
-		err = regSvc.TerminateOperator(slot.Id, "user-456", "test")
+		err = regSvc.TerminateOperator(t.Context(), slot.Id, "user-456", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "does not belong to user")
 	})
 
 	t.Run("Already terminated operator returns nil", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// First termination
-		err = regSvc.TerminateOperator(slot.Id, "user-123", "test")
+		err = regSvc.TerminateOperator(t.Context(), slot.Id, "user-123", "test")
 		require.NoError(t, err)
 
 		// Second termination should be no-op
-		err = regSvc.TerminateOperator(slot.Id, "user-123", "test")
+		err = regSvc.TerminateOperator(t.Context(), slot.Id, "user-123", "test")
 		assert.NoError(t, err)
 	})
 
 	t.Run("Happy path terminates operator", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
-		err = regSvc.TerminateOperator(slot.Id, "user-123", "test reason")
+		err = regSvc.TerminateOperator(t.Context(), slot.Id, "user-123", "test reason")
 		require.NoError(t, err)
 
 		// Verify status was updated
-		doc, err := infra.DocStore.DocGet("operators", slot.Id)
+		doc, err := infra.DocStore.DocGet(t.Context(), "operators", slot.Id)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -358,10 +358,10 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 	regSvc := infra.Reg
 
 	t.Run("Valid doc round-trips correctly", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
-		doc, err := infra.DocStore.DocGet("operators", slot.Id)
+		doc, err := infra.DocStore.DocGet(t.Context(), "operators", slot.Id)
 		require.NoError(t, err)
 
 		op, err := models.OperatorDocumentFromStore(doc)
@@ -396,7 +396,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:      "user-123",
 			OperatorIDs: []string{"op-123"},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "web_session_id is required")
@@ -407,7 +407,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			WebSessionID: "web-123",
 			OperatorIDs:  []string{"op-123"},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "user_id is required")
@@ -419,7 +419,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "operator_ids required")
@@ -431,7 +431,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{"nonexistent-op"},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
 		assert.Equal(t, 0, resp.BoundCount)
@@ -439,7 +439,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Wrong owner fails", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
@@ -447,7 +447,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:       "user-456", // Different owner
 			OperatorIDs:  []string{slot.Id},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
 		assert.Equal(t, 0, resp.BoundCount)
@@ -455,7 +455,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Operator with no active session fails", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
@@ -463,7 +463,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{slot.Id},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
 		assert.Equal(t, 0, resp.BoundCount)
@@ -472,7 +472,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Happy path binds operator successfully", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// Update the slot to have an active session
@@ -482,7 +482,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot.Id, updateBytes)
+		_, err = infra.DocStore.DocUpdate(t.Context(), "operators", slot.Id, updateBytes)
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
@@ -490,7 +490,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{slot.Id},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		assert.Equal(t, 1, resp.BoundCount)
@@ -499,9 +499,9 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Multiple operators with mixed success", func(t *testing.T) {
-		slot1, err := regSvc.createSlot("user-123", "org-123")
+		slot1, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
-		slot2, err := regSvc.createSlot("user-123", "org-123")
+		slot2, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// Update slot1 to have an active session
@@ -511,7 +511,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot1.Id, updateBytes)
+		_, err = infra.DocStore.DocUpdate(t.Context(), "operators", slot1.Id, updateBytes)
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
@@ -519,7 +519,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{slot1.Id, slot2.Id, "nonexistent"},
 		}
-		resp, err := regSvc.BindOperators(req)
+		resp, err := regSvc.BindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		assert.Equal(t, 1, resp.BoundCount)
@@ -537,7 +537,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			UserID:      "user-123",
 			OperatorIDs: []string{"op-123"},
 		}
-		resp, err := regSvc.UnbindOperators(req)
+		resp, err := regSvc.UnbindOperators(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "web_session_id is required")
@@ -548,7 +548,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			WebSessionID: "web-123",
 			OperatorIDs:  []string{"op-123"},
 		}
-		resp, err := regSvc.UnbindOperators(req)
+		resp, err := regSvc.UnbindOperators(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "user_id is required")
@@ -560,7 +560,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{"nonexistent-op"},
 		}
-		resp, err := regSvc.UnbindOperators(req)
+		resp, err := regSvc.UnbindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.False(t, resp.Success) // Failed to unbind the operator
 		assert.Equal(t, 0, resp.UnboundCount)
@@ -568,7 +568,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Wrong owner fails", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		req := models.UnbindOperatorsRequest{
@@ -576,7 +576,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			UserID:       "user-456", // Different owner
 			OperatorIDs:  []string{slot.Id},
 		}
-		resp, err := regSvc.UnbindOperators(req)
+		resp, err := regSvc.UnbindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
 		assert.Equal(t, 0, resp.UnboundCount)
@@ -584,7 +584,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Happy path unbinds operator successfully", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// First bind the operator
@@ -595,7 +595,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot.Id, updateBytes)
+		_, err = infra.DocStore.DocUpdate(t.Context(), "operators", slot.Id, updateBytes)
 		require.NoError(t, err)
 
 		// Create bound sessions document
@@ -611,7 +611,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		boundBytes, err := json.Marshal(boundDoc)
 		require.NoError(t, err)
-		err = infra.DocStore.DocSet("bound_sessions", "web-123", boundBytes)
+		err = infra.DocStore.DocSet(t.Context(), "bound_sessions", "web-123", boundBytes)
 		require.NoError(t, err)
 
 		req := models.UnbindOperatorsRequest{
@@ -619,7 +619,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{slot.Id},
 		}
-		resp, err := regSvc.UnbindOperators(req)
+		resp, err := regSvc.UnbindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		assert.Equal(t, 1, resp.UnboundCount)
@@ -628,9 +628,9 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Multiple operators with mixed success", func(t *testing.T) {
-		slot1, err := regSvc.createSlot("user-123", "org-123")
+		slot1, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
-		slot2, err := regSvc.createSlot("user-123", "org-123")
+		slot2, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// Update slot1 to have an active session
@@ -641,7 +641,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.DocStore.DocUpdate("operators", slot1.Id, updateBytes)
+		_, err = infra.DocStore.DocUpdate(t.Context(), "operators", slot1.Id, updateBytes)
 		require.NoError(t, err)
 
 		req := models.UnbindOperatorsRequest{
@@ -649,7 +649,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 			UserID:       "user-123",
 			OperatorIDs:  []string{slot1.Id, slot2.Id, "nonexistent"},
 		}
-		resp, err := regSvc.UnbindOperators(req)
+		resp, err := regSvc.UnbindOperators(t.Context(), req)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		// UnbindOperators is lenient - it unbinds operators even if they weren't bound
@@ -668,7 +668,7 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 			UserID:     "user-123",
 			OperatorID: "op-123",
 		}
-		resp, err := regSvc.SetTargetContext(req)
+		resp, err := regSvc.SetTargetContext(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "web_session_id is required")
@@ -679,7 +679,7 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 			WebSessionID: "web-123",
 			OperatorID:   "op-123",
 		}
-		resp, err := regSvc.SetTargetContext(req)
+		resp, err := regSvc.SetTargetContext(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "user_id is required")
@@ -691,14 +691,14 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 			UserID:       "user-123",
 			OperatorID:   "nonexistent-op",
 		}
-		resp, err := regSvc.SetTargetContext(req)
+		resp, err := regSvc.SetTargetContext(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Wrong owner returns error", func(t *testing.T) {
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		req := models.SetTargetContextRequest{
@@ -706,7 +706,7 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 			UserID:       "user-456", // Different owner
 			OperatorID:   slot.Id,
 		}
-		resp, err := regSvc.SetTargetContext(req)
+		resp, err := regSvc.SetTargetContext(t.Context(), req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "does not belong to user")
@@ -722,7 +722,7 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 	regSvc := infra.Reg
 
 	// Create a slot
-	slot, err := regSvc.createSlot("user-123", "org-123")
+	slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 	require.NoError(t, err)
 
 	// Update the slot to have an active session so it exists and can be retrieved
@@ -733,7 +733,7 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 	}
 	updateBytes, err := json.Marshal(update)
 	require.NoError(t, err)
-	_, err = infra.DocStore.DocUpdate("operators", slot.Id, updateBytes)
+	_, err = infra.DocStore.DocUpdate(t.Context(), "operators", slot.Id, updateBytes)
 	require.NoError(t, err)
 
 	req := models.SetTargetContextRequest{
@@ -742,7 +742,7 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 		OperatorID:   slot.Id,
 	}
 
-	res, err := regSvc.SetTargetContext(req)
+	res, err := regSvc.SetTargetContext(t.Context(), req)
 	require.NoError(t, err)
 	assert.NotNil(t, res)
 }
@@ -774,7 +774,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 			CSR:               opCSR,
 		}
 
-		_, err = regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		_, err = regSvc.RegisterDeviceCSR(t.Context(), "user-123", "org-123", req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "system_fingerprint is required")
 	})
@@ -804,7 +804,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 			CSR:               opCSR,
 		}
 
-		_, err = regSvc.RegisterDeviceCSR("", "org-123", req)
+		_, err = regSvc.RegisterDeviceCSR(t.Context(), "", "org-123", req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "user_id is required")
 	})
@@ -833,7 +833,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 			CSR:               "", // Missing
 		}
 
-		_, err = regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		_, err = regSvc.RegisterDeviceCSR(t.Context(), "user-123", "org-123", req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "operator CSR is required")
 	})
@@ -863,7 +863,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 			CSR:               opCSR,
 		}
 
-		_, err = regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		_, err = regSvc.RegisterDeviceCSR(t.Context(), "user-123", "org-123", req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid system_fingerprint")
 	})
@@ -894,13 +894,13 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 			CSR:               opCSR,
 		}
 
-		first, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		first, err := regSvc.RegisterDeviceCSR(t.Context(), "user-123", "org-123", req)
 		require.NoError(t, err)
 		require.NotEmpty(t, first.OperatorID)
 
 		secondCSR := testutil.GenerateTestCSRP256(t, "test-operator-renewed")
 		req.CSR = secondCSR
-		second, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		second, err := regSvc.RegisterDeviceCSR(t.Context(), "user-123", "org-123", req)
 		require.NoError(t, err)
 		assert.Equal(t, first.OperatorID, second.OperatorID, "re-enrollment must resolve the same operator slot")
 		assert.NotEqual(t, first.OperatorSessionID, second.OperatorSessionID, "re-enrollment mints a fresh operator session")
@@ -927,7 +927,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		cfg := &config.GatewayConfig{}
 		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		req := models.OperatorRegistrationRequest{
@@ -936,7 +936,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 			CSR:               "invalid-pem-data",
 		}
 
-		_, err = regSvc.completeRegistration(slot, "user-123", "org-123", req, "test-fingerprint")
+		_, err = regSvc.completeRegistration(t.Context(), slot, "user-123", "org-123", req, "test-fingerprint")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid CSR PEM format")
 	})
@@ -959,7 +959,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		cfg := &config.GatewayConfig{}
 		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		// Generate a real CSR, then change the block type to CERTIFICATE (wrong type)
@@ -972,7 +972,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 			CSR:               wrongTypePEM, // Wrong block type
 		}
 
-		_, err = regSvc.completeRegistration(slot, "user-123", "org-123", req, "test-fingerprint")
+		_, err = regSvc.completeRegistration(t.Context(), slot, "user-123", "org-123", req, "test-fingerprint")
 		assert.Error(t, err)
 		// The error could be either decode failure or wrong block type depending on PEM parsing
 		assert.Contains(t, err.Error(), "invalid CSR PEM format")
@@ -996,7 +996,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		cfg := &config.GatewayConfig{}
 		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
-		slot, err := regSvc.createSlot("user-123", "org-123")
+		slot, err := regSvc.createSlot(t.Context(), "user-123", "org-123")
 		require.NoError(t, err)
 
 		req := models.OperatorRegistrationRequest{
@@ -1005,7 +1005,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 			CSR:               "", // Empty CSR
 		}
 
-		_, err = regSvc.completeRegistration(slot, "user-123", "org-123", req, "test-fingerprint")
+		_, err = regSvc.completeRegistration(t.Context(), slot, "user-123", "org-123", req, "test-fingerprint")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "CSR required")
 	})

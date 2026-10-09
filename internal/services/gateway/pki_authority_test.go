@@ -163,7 +163,7 @@ func parsePEMCertificate(t *testing.T, pemData []byte) *x509.Certificate {
 func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	t.Run("Nil certificate is rejected", func(t *testing.T) {
 		ctx := setupTestPKI(t)
-		err := ctx.pki.VerifyCertificate(nil)
+		err := ctx.pki.VerifyCertificate(t.Context(), nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no certificate provided")
 	})
@@ -172,7 +172,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 		ctx := setupTestPKI(t)
 
 		cert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
-		err := ctx.pki.VerifyCertificate(cert)
+		err := ctx.pki.VerifyCertificate(t.Context(), cert)
 		require.NoError(t, err)
 	})
 
@@ -180,10 +180,10 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 		ctx := setupTestPKI(t)
 
 		cert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
-		err := ctx.pki.RevokeCertificate(cert.SerialNumber.String(), "test revocation")
+		err := ctx.pki.RevokeCertificate(t.Context(), cert.SerialNumber.String(), "test revocation")
 		require.NoError(t, err)
 
-		err = ctx.pki.VerifyCertificate(cert)
+		err = ctx.pki.VerifyCertificate(t.Context(), cert)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "certificate is revoked")
 	})
@@ -676,10 +676,10 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 		require.NoError(t, err)
 
 		cert := parsePEMCertificate(t, []byte(certPEM))
-		err = ctx.pki.RevokeCertificate(cert.SerialNumber.String(), "test revocation")
+		err = ctx.pki.RevokeCertificate(t.Context(), cert.SerialNumber.String(), "test revocation")
 		require.NoError(t, err)
 
-		crlDER, err := ctx.pki.GenerateCRL()
+		crlDER, err := ctx.pki.GenerateCRL(t.Context())
 		require.NoError(t, err)
 		assert.NotNil(t, crlDER)
 
@@ -696,7 +696,7 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 	t.Run("GenerateCRL handles empty revocation list", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		crlDER, err := ctx.pki.GenerateCRL()
+		crlDER, err := ctx.pki.GenerateCRL(t.Context())
 		require.NoError(t, err)
 		assert.NotNil(t, crlDER)
 

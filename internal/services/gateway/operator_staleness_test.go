@@ -39,13 +39,13 @@ func putOperator(t *testing.T, svc *DocumentStoreService, id string, op *operato
 	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
 	createdAt := time.Now().UTC().Add(-createdAgo)
-	require.NoError(t, svc.DocSetWithTimestamps(operatorsCollection, id, body, createdAt, createdAt))
+	require.NoError(t, svc.DocSetWithTimestamps(t.Context(), operatorsCollection, id, body, createdAt, createdAt))
 }
 
 // persistedOperatorStatus reads the stored status without reconciliation.
 func persistedOperatorStatus(t *testing.T, svc *DocumentStoreService, _ string) constants.OperatorStatus {
 	t.Helper()
-	doc, err := svc.docGet(operatorsCollection, "op-1")
+	doc, err := svc.docGet(t.Context(), operatorsCollection, "op-1")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	var status constants.OperatorStatus
@@ -65,19 +65,19 @@ func TestOperatorStaleness_EveryReaderMarksSilentRemoteOperatorStale(t *testing.
 
 	readers := map[string]func(svc *DocumentStoreService) error{
 		"DocGet": func(svc *DocumentStoreService) error {
-			_, err := svc.DocGet(operatorsCollection, "op-1")
+			_, err := svc.DocGet(t.Context(), operatorsCollection, "op-1")
 			return err
 		},
 		"DocQuery": func(svc *DocumentStoreService) error {
-			_, err := svc.DocQuery(operatorsCollection, nil, "", 0)
+			_, err := svc.DocQuery(t.Context(), operatorsCollection, nil, "", 0)
 			return err
 		},
 		"DocList": func(svc *DocumentStoreService) error {
-			_, err := svc.DocList(operatorsCollection)
+			_, err := svc.DocList(t.Context(), operatorsCollection)
 			return err
 		},
 		"GetField": func(svc *DocumentStoreService) error {
-			_, err := svc.GetField(operatorsCollection, "op-1", "status")
+			_, err := svc.GetField(t.Context(), operatorsCollection, "op-1", "status")
 			return err
 		},
 	}
@@ -123,7 +123,7 @@ func TestOperatorStaleness_LastSignOfLife(t *testing.T) {
 			op.ClaimedAt = tt.claimed
 			putOperator(t, svc, "op-1", op, tt.createdAgo)
 
-			doc, err := svc.DocGet(operatorsCollection, "op-1")
+			doc, err := svc.DocGet(t.Context(), operatorsCollection, "op-1")
 			require.NoError(t, err)
 			require.NotNil(t, doc)
 
@@ -156,7 +156,7 @@ func TestOperatorStaleness_OnlyActiveRemoteOperatorsGoStale(t *testing.T) {
 			tt.op.LastHeartbeatAt = timeAgo(silent)
 			putOperator(t, svc, "op-1", tt.op, time.Hour)
 
-			_, err := svc.DocList(operatorsCollection)
+			_, err := svc.DocList(t.Context(), operatorsCollection)
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.want, persistedOperatorStatus(t, svc, "op-1"))
@@ -175,7 +175,7 @@ func TestOperatorStaleness_StatusQuerySeesOnlyLiveOperators(t *testing.T) {
 	silent.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 2)
 	putOperator(t, svc, "op-silent", silent, time.Hour)
 
-	docs, err := svc.DocQuery(operatorsCollection, []models.DocFilter{
+	docs, err := svc.DocQuery(t.Context(), operatorsCollection, []models.DocFilter{
 		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusActive))},
 	}, "", 0)
 	require.NoError(t, err)
@@ -189,12 +189,12 @@ func TestOperatorStaleness_OtherCollectionsAreNotReconciled(t *testing.T) {
 	op.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 10)
 	body, err := models.MarshalOperatorDocument(op)
 	require.NoError(t, err)
-	require.NoError(t, svc.DocSet("settings", "not-an-operator", body))
+	require.NoError(t, svc.DocSet(t.Context(), "settings", "not-an-operator", body))
 
-	_, err = svc.DocList("settings")
+	_, err = svc.DocList(t.Context(), "settings")
 	require.NoError(t, err)
 
-	doc, err := svc.docGet("settings", "not-an-operator")
+	doc, err := svc.docGet(t.Context(), "settings", "not-an-operator")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.JSONEq(t, `"active"`, string(doc.Data["status"]))
@@ -213,14 +213,14 @@ func TestOperatorStaleness_ReadersReturnReconciledDocuments(t *testing.T) {
 	live.LastHeartbeatAt = timeAgo(time.Second)
 	putOperator(t, svc, "op-c", live, time.Hour)
 
-	docs, err := svc.DocQuery(operatorsCollection, []models.DocFilter{
+	docs, err := svc.DocQuery(t.Context(), operatorsCollection, []models.DocFilter{
 		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusActive))},
 	}, "", 1)
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
 	assert.Equal(t, "op-c", docs[0].ID)
 
-	doc, err := svc.DocGet(operatorsCollection, "op-a")
+	doc, err := svc.DocGet(t.Context(), operatorsCollection, "op-a")
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.JSONEq(t, fmt.Sprintf("%q", constants.OperatorStatusStale), string(doc.Data["status"]))
@@ -238,11 +238,11 @@ func TestOperatorStaleness_ReconcileFailureFailsTheRead(t *testing.T) {
 	_, err := svc.db.Exec("PRAGMA query_only = ON")
 	require.NoError(t, err)
 
-	_, err = svc.DocGet(operatorsCollection, "op-1")
+	_, err = svc.DocGet(t.Context(), operatorsCollection, "op-1")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOperatorStalenessReconcile)
 
-	_, err = svc.DocQuery(operatorsCollection, nil, "", 0)
+	_, err = svc.DocQuery(t.Context(), operatorsCollection, nil, "", 0)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrOperatorStalenessReconcile)
 }
@@ -268,7 +268,7 @@ func TestOperatorStaleness_UsesDeclaredHeartbeatInterval(t *testing.T) {
 			op.LastHeartbeatAt = timeAgo(tt.silent)
 			putOperator(t, svc, "op-1", op, time.Hour)
 
-			_, err := svc.DocGet(operatorsCollection, "op-1")
+			_, err := svc.DocGet(t.Context(), operatorsCollection, "op-1")
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.want, persistedOperatorStatus(t, svc, "op-1"))

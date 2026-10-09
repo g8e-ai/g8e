@@ -42,7 +42,7 @@ func newLogoutService(infra *TestInfrastructure, pki cliCertificateRevoker) *Ses
 
 func newLogoutUser(t *testing.T, infra *TestInfrastructure) *models.User {
 	t.Helper()
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	return user
 }
@@ -62,7 +62,7 @@ func persistLogoutOperator(t *testing.T, infra *TestInfrastructure, userID, oper
 		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, b))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), operatorID, b))
 }
 
 // bindLogoutOperatorToWeb persists an operator and binds it to a fresh web
@@ -70,9 +70,9 @@ func persistLogoutOperator(t *testing.T, infra *TestInfrastructure, userID, oper
 func bindLogoutOperatorToWeb(t *testing.T, infra *TestInfrastructure, userID, operatorID, operatorSessionID string) string {
 	t.Helper()
 	persistLogoutOperator(t, infra, userID, operatorID, operatorSessionID)
-	web, err := infra.WebSessionSvc.CreateWebSession(userID)
+	web, err := infra.WebSessionSvc.CreateWebSession(t.Context(), userID)
 	require.NoError(t, err)
-	res, err := infra.Reg.BindOperators(models.BindOperatorsRequest{
+	res, err := infra.Reg.BindOperators(t.Context(), models.BindOperatorsRequest{
 		OperatorIDs:  []string{operatorID},
 		UserID:       userID,
 		WebSessionID: web.ID,
@@ -115,40 +115,40 @@ func persistLogoutCLISession(t *testing.T, infra *TestInfrastructure, userID str
 		IsActive:                !spec.inactive,
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), spec.id, b))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), spec.id, b))
 }
 
 func loadLogoutCLISession(t *testing.T, infra *TestInfrastructure, id string) *models.CLISession {
 	t.Helper()
-	session, err := infra.CLISessionSvc.loadCLISession(id)
+	session, err := infra.CLISessionSvc.loadCLISession(t.Context(), id)
 	require.NoError(t, err)
 	return session
 }
 
 func requireWebSessionGone(t *testing.T, infra *TestInfrastructure, id string) {
 	t.Helper()
-	doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), id)
+	doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), id)
 	require.NoError(t, err)
 	assert.Nil(t, doc, "web session %s should be deleted", id)
 }
 
 func requireWebSessionPresent(t *testing.T, infra *TestInfrastructure, id string) {
 	t.Helper()
-	doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), id)
+	doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionWebSessions), id)
 	require.NoError(t, err)
 	assert.NotNil(t, doc, "web session %s should remain", id)
 }
 
 func operatorBoundWebSession(t *testing.T, infra *TestInfrastructure, operatorID string) string {
 	t.Helper()
-	op, err := infra.Reg.GetOperator(operatorID)
+	op, err := infra.Reg.GetOperator(t.Context(), operatorID)
 	require.NoError(t, err)
 	return op.BoundWebSessionId
 }
 
 func revocationReason(t *testing.T, infra *TestInfrastructure, serial string) string {
 	t.Helper()
-	doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
+	doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
 	require.NoError(t, err)
 	require.NotNil(t, doc, "serial %s should be revoked", serial)
 	var rev revocationDocument
@@ -173,7 +173,7 @@ func TestSessionLogout_All_TerminatesWebAndCLISessionsUnbindsOperatorsAndRevokes
 	persistLogoutCLISession(t, infra, user.ID, logoutCLISessionSpec{id: "logout-cli-old", serial: "7002", bound: []string{"logout-opsess-1"}, inactive: true})
 	persistLogoutCLISession(t, infra, other.ID, logoutCLISessionSpec{id: "logout-cli-other", serial: "7099", bound: []string{"logout-opsess-other"}})
 
-	result, err := svc.Logout(user.ID, "logout-cli-current", "", constants.LogoutScopeAll)
+	result, err := svc.Logout(t.Context(), user.ID, "logout-cli-current", "", constants.LogoutScopeAll)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, result.WebSessionsTerminated)
@@ -183,7 +183,7 @@ func TestSessionLogout_All_TerminatesWebAndCLISessionsUnbindsOperatorsAndRevokes
 
 	requireWebSessionGone(t, infra, webID)
 	assert.Empty(t, operatorBoundWebSession(t, infra, "logout-op-1"), "operator document must no longer name the web session")
-	kvRaw, found := infra.KVStore.KVGet(sessionWebBindKey(webID))
+	kvRaw, found := infra.KVStore.KVGet(t.Context(), sessionWebBindKey(webID))
 	assert.False(t, found, "web bind KV entry should be gone, got %q", kvRaw)
 
 	for _, id := range []string{"logout-cli-a", "logout-cli-current"} {
@@ -197,7 +197,7 @@ func TestSessionLogout_All_TerminatesWebAndCLISessionsUnbindsOperatorsAndRevokes
 	}
 
 	// The operator itself keeps its session: logout only unbinds.
-	op, err := infra.Reg.GetOperator("logout-op-1")
+	op, err := infra.Reg.GetOperator(t.Context(), "logout-op-1")
 	require.NoError(t, err)
 	assert.Equal(t, "logout-opsess-1", op.OperatorSessionId)
 	assert.Equal(t, string(constants.OperatorStatusActive), op.Status)
@@ -208,7 +208,7 @@ func TestSessionLogout_All_TerminatesWebAndCLISessionsUnbindsOperatorsAndRevokes
 	otherSession := loadLogoutCLISession(t, infra, "logout-cli-other")
 	assert.True(t, otherSession.IsActive)
 	assert.Equal(t, "logout-opsess-other", otherSession.OperatorSessionID)
-	revoked, err := infra.PKI.IsRevoked("7099")
+	revoked, err := infra.PKI.IsRevoked(t.Context(), "7099")
 	require.NoError(t, err)
 	assert.False(t, revoked)
 }
@@ -221,7 +221,7 @@ func TestSessionLogout_WebScope_LeavesCLISessionsAndCertsAlone(t *testing.T) {
 	webID := bindLogoutOperatorToWeb(t, infra, user.ID, "logout-web-op", "logout-web-opsess")
 	persistLogoutCLISession(t, infra, user.ID, logoutCLISessionSpec{id: "logout-web-cli", serial: "7101", bound: []string{"logout-web-opsess"}})
 
-	result, err := svc.Logout(user.ID, "logout-web-cli", "", constants.LogoutScopeWeb)
+	result, err := svc.Logout(t.Context(), user.ID, "logout-web-cli", "", constants.LogoutScopeWeb)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, result.WebSessionsTerminated)
@@ -233,7 +233,7 @@ func TestSessionLogout_WebScope_LeavesCLISessionsAndCertsAlone(t *testing.T) {
 	session := loadLogoutCLISession(t, infra, "logout-web-cli")
 	assert.True(t, session.IsActive)
 	assert.Equal(t, "logout-web-opsess", session.OperatorSessionID, "CLI binding survives a web-only logout")
-	revoked, err := infra.PKI.IsRevoked("7101")
+	revoked, err := infra.PKI.IsRevoked(t.Context(), "7101")
 	require.NoError(t, err)
 	assert.False(t, revoked)
 }
@@ -246,7 +246,7 @@ func TestSessionLogout_CLIScope_LeavesWebSessionsAndWebBindingsAlone(t *testing.
 	webID := bindLogoutOperatorToWeb(t, infra, user.ID, "logout-cli-op", "logout-cli-opsess")
 	persistLogoutCLISession(t, infra, user.ID, logoutCLISessionSpec{id: "logout-cli-only", serial: "7201", bound: []string{"logout-cli-opsess"}})
 
-	result, err := svc.Logout(user.ID, "logout-cli-only", "", constants.LogoutScopeCLI)
+	result, err := svc.Logout(t.Context(), user.ID, "logout-cli-only", "", constants.LogoutScopeCLI)
 	require.NoError(t, err)
 
 	assert.Zero(t, result.WebSessionsTerminated)
@@ -266,14 +266,14 @@ func TestSessionLogout_RepeatedLogoutIsIdempotentAndKeepsEarlierRevocation(t *te
 
 	persistLogoutCLISession(t, infra, user.ID, logoutCLISessionSpec{id: "logout-idem-a", serial: "7301", bound: []string{"logout-idem-op"}})
 	persistLogoutCLISession(t, infra, user.ID, logoutCLISessionSpec{id: "logout-idem-b", serial: "7302", inactive: true})
-	require.NoError(t, infra.PKI.RevokeCertificate("7302", "cli_rotation"))
+	require.NoError(t, infra.PKI.RevokeCertificate(t.Context(), "7302", "cli_rotation"))
 
-	first, err := svc.Logout(user.ID, "logout-idem-a", "", constants.LogoutScopeAll)
+	first, err := svc.Logout(t.Context(), user.ID, "logout-idem-a", "", constants.LogoutScopeAll)
 	require.NoError(t, err)
 	assert.Equal(t, 1, first.CLISessionsTerminated)
 	assert.Equal(t, 1, first.CertificatesRevoked, "7302 was already revoked and must be skipped")
 
-	second, err := svc.Logout(user.ID, "logout-idem-a", "", constants.LogoutScopeAll)
+	second, err := svc.Logout(t.Context(), user.ID, "logout-idem-a", "", constants.LogoutScopeAll)
 	require.NoError(t, err)
 	assert.Zero(t, second.CLISessionsTerminated)
 	assert.Zero(t, second.CertificatesRevoked)
@@ -294,7 +294,7 @@ func TestSessionLogout_ExpiredActiveSession_IsTerminatedUnreportedAndItsCertRevo
 		id: "logout-stale", serial: "7401", bound: []string{"logout-stale-opsess"}, expiredAt: time.Now().UTC().Add(-time.Hour),
 	})
 
-	result, err := svc.Logout(user.ID, "", "", constants.LogoutScopeCLI)
+	result, err := svc.Logout(t.Context(), user.ID, "", "", constants.LogoutScopeCLI)
 	require.NoError(t, err)
 
 	assert.Zero(t, result.CLISessionsTerminated, "an already-expired session is not reported as a logout")
@@ -308,7 +308,7 @@ func TestSessionLogout_RevokesPresentedCertificateEvenWithoutSessionDocument(t *
 	svc := newLogoutService(infra, infra.PKI)
 	user := newLogoutUser(t, infra)
 
-	result, err := svc.Logout(user.ID, "missing-session", "7501", constants.LogoutScopeCLI)
+	result, err := svc.Logout(t.Context(), user.ID, "missing-session", "7501", constants.LogoutScopeCLI)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, result.CertificatesRevoked)
@@ -320,10 +320,10 @@ func TestSessionLogout_RejectsInvalidScopeAndMissingUser(t *testing.T) {
 	svc := newLogoutService(infra, infra.PKI)
 	user := newLogoutUser(t, infra)
 
-	_, err := svc.Logout(user.ID, "", "", constants.LogoutScope("everything"))
+	_, err := svc.Logout(t.Context(), user.ID, "", "", constants.LogoutScope("everything"))
 	require.ErrorIs(t, err, constants.ErrLogoutScopeInvalid)
 
-	_, err = svc.Logout("", "", "", constants.LogoutScopeAll)
+	_, err = svc.Logout(t.Context(), "", "", "", constants.LogoutScopeAll)
 	require.ErrorIs(t, err, constants.ErrRegistrationUserIDRequired)
 }
 
@@ -333,9 +333,11 @@ type failingRevoker struct {
 	revoked      []string
 }
 
-func (f *failingRevoker) IsRevoked(string) (bool, error) { return false, f.isRevokedErr }
+func (f *failingRevoker) IsRevoked(context.Context, string) (bool, error) {
+	return false, f.isRevokedErr
+}
 
-func (f *failingRevoker) RevokeCertificate(serial, _ string) error {
+func (f *failingRevoker) RevokeCertificate(_ context.Context, serial, _ string) error {
 	if f.revokeErr != nil {
 		return f.revokeErr
 	}
@@ -352,7 +354,7 @@ func TestSessionLogout_RevocationFailureIsReportedAfterTryingEverySerial(t *test
 	boom := errors.New("crl store unavailable")
 	svc := newLogoutService(infra, &failingRevoker{revokeErr: boom})
 
-	result, err := svc.Logout(user.ID, "logout-fail-a", "", constants.LogoutScopeCLI)
+	result, err := svc.Logout(t.Context(), user.ID, "logout-fail-a", "", constants.LogoutScopeCLI)
 
 	require.ErrorIs(t, err, boom)
 	require.NotNil(t, result, "the partial result is returned with the error")
@@ -371,7 +373,7 @@ func TestSessionLogout_RevocationCheckFailureIsReported(t *testing.T) {
 	revoker := &failingRevoker{isRevokedErr: boom}
 	svc := newLogoutService(infra, revoker)
 
-	_, err := svc.Logout(user.ID, "logout-check-fail", "", constants.LogoutScopeCLI)
+	_, err := svc.Logout(t.Context(), user.ID, "logout-check-fail", "", constants.LogoutScopeCLI)
 
 	require.ErrorIs(t, err, boom)
 	assert.Empty(t, revoker.revoked, "a serial whose status could not be checked is not revoked blindly")
@@ -383,7 +385,7 @@ func TestSessionLogout_CLIScopeWithoutPKIFailsClosed(t *testing.T) {
 	persistLogoutCLISession(t, infra, user.ID, logoutCLISessionSpec{id: "logout-nopki", serial: "7801"})
 	svc := newLogoutService(infra, nil)
 
-	_, err := svc.Logout(user.ID, "logout-nopki", "", constants.LogoutScopeCLI)
+	_, err := svc.Logout(t.Context(), user.ID, "logout-nopki", "", constants.LogoutScopeCLI)
 
 	require.ErrorIs(t, err, constants.ErrPKIDatabaseNotAvailable)
 }

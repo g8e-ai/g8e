@@ -66,7 +66,7 @@ func postBootstrap(t *testing.T, h *HTTPHandler, csrPEM []byte) *httptest.Respon
 func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 
-	require.NoError(t, infra.Embedded.RegisterPending())
+	require.NoError(t, infra.Embedded.RegisterPending(t.Context()))
 
 	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.Id)
@@ -79,15 +79,15 @@ func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 	assert.Empty(t, op.OperatorSessionId)
 
 	// A second registration is a no-op — exactly one operators document.
-	require.NoError(t, infra.Embedded.RegisterPending())
-	docs, err := infra.DocStore.DocList(marshaler.CollectionName(constants.CollectionOperators))
+	require.NoError(t, infra.Embedded.RegisterPending(t.Context()))
+	docs, err := infra.DocStore.DocList(t.Context(), marshaler.CollectionName(constants.CollectionOperators))
 	require.NoError(t, err)
 	assert.Len(t, docs, 1)
 
 	// A claimed document is left untouched by later registrations.
-	_, sessionID, err := infra.Embedded.Claim("user-claim", "fp", time.Now().UTC())
+	_, sessionID, err := infra.Embedded.Claim(t.Context(), "user-claim", "fp", time.Now().UTC())
 	require.NoError(t, err)
-	require.NoError(t, infra.Embedded.RegisterPending())
+	require.NoError(t, infra.Embedded.RegisterPending(t.Context()))
 	claimed := loadEmbeddedOperatorDoc(t, infra.DocStore)
 	assert.True(t, claimed.Claimed)
 	assert.Equal(t, "user-claim", claimed.UserId)
@@ -101,7 +101,7 @@ func TestRegisterPendingEmbeddedOperator_Idempotent(t *testing.T) {
 // and returns both operator fields in the response.
 func TestBootstrap_ClaimsEmbeddedOperatorAndBindsCLISession(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
-	require.NoError(t, infra.Embedded.RegisterPending())
+	require.NoError(t, infra.Embedded.RegisterPending(t.Context()))
 
 	rr := postBootstrap(t, h, generateTestCLICSRPEM(t))
 	require.Equal(t, http.StatusCreated, rr.Code, "bootstrap failed: %s", rr.Body.String())
@@ -123,14 +123,14 @@ func TestBootstrap_ClaimsEmbeddedOperatorAndBindsCLISession(t *testing.T) {
 	assert.Equal(t, string(constants.OperatorTypeEmbedded), op.OperatorType)
 
 	// The operator session document exists for the minted session.
-	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(resp.User.ID)
+	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(t.Context(), resp.User.ID)
 	require.NoError(t, err)
 	require.NotNil(t, opSession)
 	assert.Equal(t, resp.OperatorSessionID, opSession.ID)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), opSession.OperatorID)
 
 	// The CLI session is bound to the minted operator session.
-	cliSession, err := infra.CLISessionSvc.loadCLISession(resp.CLISessionID)
+	cliSession, err := infra.CLISessionSvc.loadCLISession(t.Context(), resp.CLISessionID)
 	require.NoError(t, err)
 	assert.Equal(t, resp.OperatorSessionID, cliSession.OperatorSessionID)
 }
@@ -142,7 +142,7 @@ func TestBootstrap_ClaimsEmbeddedOperatorAndBindsCLISession(t *testing.T) {
 func TestBootstrap_MissingPendingDoc_ClaimsAnyway(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
 
-	doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+	doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	require.NoError(t, err)
 	require.Nil(t, doc, "no pending document is seeded")
 
@@ -168,12 +168,12 @@ func TestClaimEmbeddedOperator_SameUserReclaimIsIdempotent(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 	now := time.Now().UTC()
 
-	operatorID, sessionID, err := infra.Embedded.Claim("user-same", "fp", now)
+	operatorID, sessionID, err := infra.Embedded.Claim(t.Context(), "user-same", "fp", now)
 	require.NoError(t, err)
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
 	assert.NotEmpty(t, sessionID)
 
-	operatorID2, sessionID2, err := infra.Embedded.Claim("user-same", "fp", now)
+	operatorID2, sessionID2, err := infra.Embedded.Claim(t.Context(), "user-same", "fp", now)
 	require.NoError(t, err)
 	assert.Equal(t, operatorID, operatorID2)
 	assert.Equal(t, sessionID, sessionID2, "same-user re-claim returns the existing session without rotation")
@@ -186,10 +186,10 @@ func TestClaimEmbeddedOperator_DifferentUserRejected(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 	now := time.Now().UTC()
 
-	_, _, err := infra.Embedded.Claim("user-owner", "fp", now)
+	_, _, err := infra.Embedded.Claim(t.Context(), "user-owner", "fp", now)
 	require.NoError(t, err)
 
-	_, _, err = infra.Embedded.Claim("user-other", "fp", now)
+	_, _, err = infra.Embedded.Claim(t.Context(), "user-other", "fp", now)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEmbeddedOperatorClaimed)
 }

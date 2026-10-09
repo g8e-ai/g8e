@@ -72,7 +72,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	t.Run("Success - returns 200 with user_id and cli_session_id for valid token", func(t *testing.T) {
 		c := setupTestEnrollmentTokenController(t)
 
-		token, err := c.enrollmentTokenSvc.GenerateToken("user-val-1", "cli-val-1")
+		token, err := c.enrollmentTokenSvc.GenerateToken(t.Context(), "user-val-1", "cli-val-1")
 		require.NoError(t, err)
 
 		body, _ := json.Marshal(map[string]string{"token": token.Token})
@@ -91,7 +91,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	t.Run("Failure - 410 Gone for expired token", func(t *testing.T) {
 		c := setupTestEnrollmentTokenController(t)
 
-		token, err := c.enrollmentTokenSvc.GenerateToken("user-exp-1", "cli-exp-1")
+		token, err := c.enrollmentTokenSvc.GenerateToken(t.Context(), "user-exp-1", "cli-exp-1")
 		require.NoError(t, err)
 
 		expiredToken := &models.EnrollmentToken{
@@ -103,7 +103,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 			Consumed:     false,
 		}
 		expiredData, _ := json.Marshal(expiredToken)
-		c.enrollmentTokenSvc.db.DocSet(
+		c.enrollmentTokenSvc.db.DocSet(t.Context(),
 			marshaler.CollectionName(constants.CollectionEnrollmentTokens),
 			token.Token, expiredData,
 		)
@@ -120,10 +120,10 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	t.Run("Failure - 409 Conflict for consumed token", func(t *testing.T) {
 		c := setupTestEnrollmentTokenController(t)
 
-		token, err := c.enrollmentTokenSvc.GenerateToken("user-con-1", "cli-con-1")
+		token, err := c.enrollmentTokenSvc.GenerateToken(t.Context(), "user-con-1", "cli-con-1")
 		require.NoError(t, err)
 
-		_, err = c.enrollmentTokenSvc.ValidateAndConsumeToken(token.Token)
+		_, err = c.enrollmentTokenSvc.ValidateAndConsumeToken(t.Context(), token.Token)
 		require.NoError(t, err)
 
 		body, _ := json.Marshal(map[string]string{"token": token.Token})

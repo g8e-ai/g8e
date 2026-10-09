@@ -55,7 +55,7 @@ func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(db.GetDocStore(), logger).CreateUser()
+	user, err := NewUserService(db.GetDocStore(), logger).CreateUser(t.Context())
 	require.NoError(t, err)
 
 	svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
@@ -115,7 +115,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) 
 	svc, user := newPasskeyServiceForTest(t)
 
 	// Add a dummy credential
-	err := svc.addCredential(user.ID, testCredential("real-credential-id"))
+	err := svc.addCredential(t.Context(), user.ID, testCredential("real-credential-id"))
 	require.NoError(t, err)
 
 	ok, err := svc.VerifyPasskeyProof(context.Background(), user.ID, "tx-hash", "", &commonv1.L3Proof{
@@ -135,7 +135,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
 	// Add a dummy credential (we won't get to signature verification if challenge check fails first)
 	// Wait, webauthn.ValidateLogin checks the challenge inside clientDataJSON against the one in sessionData.
 	credID := []byte("real-credential-id")
-	err := svc.addCredential(user.ID, testCredential("real-credential-id"))
+	err := svc.addCredential(t.Context(), user.ID, testCredential("real-credential-id"))
 	require.NoError(t, err)
 
 	// Challenge in clientDataJSON is base64 of "tx-hash-1"
@@ -161,7 +161,7 @@ func TestPasskeyService_GenerateRegistrationChallenge(t *testing.T) {
 	t.Run("Success - generates challenge for user", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		challenge, err := svc.GenerateRegistrationChallenge(user.ID, "test-user")
+		challenge, err := svc.GenerateRegistrationChallenge(t.Context(), user.ID, "test-user")
 		require.NoError(t, err)
 		require.NotNil(t, challenge)
 		require.NotEmpty(t, challenge.Response.Challenge)
@@ -170,7 +170,7 @@ func TestPasskeyService_GenerateRegistrationChallenge(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		_, err := svc.GenerateRegistrationChallenge("non-existent-user", "test-user")
+		_, err := svc.GenerateRegistrationChallenge(t.Context(), "non-existent-user", "test-user")
 		require.Error(t, err)
 	})
 }
@@ -180,14 +180,14 @@ func TestPasskeyService_VerifyRegistration(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		_, err := svc.VerifyRegistration("non-existent-user", []byte("{}"))
+		_, err := svc.VerifyRegistration(t.Context(), "non-existent-user", []byte("{}"))
 		require.Error(t, err)
 	})
 
 	t.Run("Error - session not found", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		_, err := svc.VerifyRegistration(user.ID, []byte("{}"))
+		_, err := svc.VerifyRegistration(t.Context(), user.ID, []byte("{}"))
 		require.Error(t, err)
 	})
 }
@@ -198,10 +198,10 @@ func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add a credential
-		err := svc.addCredential(user.ID, testCredential("cred-id"))
+		err := svc.addCredential(t.Context(), user.ID, testCredential("cred-id"))
 		require.NoError(t, err)
 
-		challenge, err := svc.GenerateAuthenticationChallenge(user.ID)
+		challenge, err := svc.GenerateAuthenticationChallenge(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, challenge)
 		require.NotEmpty(t, challenge.Response.Challenge)
@@ -210,14 +210,14 @@ func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		_, err := svc.GenerateAuthenticationChallenge("non-existent-user")
+		_, err := svc.GenerateAuthenticationChallenge(t.Context(), "non-existent-user")
 		require.Error(t, err)
 	})
 
 	t.Run("Error - user has no passkeys", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		_, err := svc.GenerateAuthenticationChallenge(user.ID)
+		_, err := svc.GenerateAuthenticationChallenge(t.Context(), user.ID)
 		require.Error(t, err)
 	})
 }
@@ -227,14 +227,14 @@ func TestPasskeyService_VerifyAuthentication(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		_, err := svc.VerifyAuthentication("non-existent-user", []byte("{}"))
+		_, err := svc.VerifyAuthentication(t.Context(), "non-existent-user", []byte("{}"))
 		require.Error(t, err)
 	})
 
 	t.Run("Error - session not found", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		_, err := svc.VerifyAuthentication(user.ID, []byte("{}"))
+		_, err := svc.VerifyAuthentication(t.Context(), user.ID, []byte("{}"))
 		require.Error(t, err)
 	})
 }
@@ -245,10 +245,10 @@ func TestPasskeyService_GenerateApprovalChallenge(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add a credential
-		err := svc.addCredential(user.ID, testCredential("cred-id"))
+		err := svc.addCredential(t.Context(), user.ID, testCredential("cred-id"))
 		require.NoError(t, err)
 
-		challenge, err := svc.GenerateApprovalChallenge(user.ID, "transaction-hash-123")
+		challenge, err := svc.GenerateApprovalChallenge(t.Context(), user.ID, "transaction-hash-123")
 		require.NoError(t, err)
 		require.NotNil(t, challenge)
 		require.NotEmpty(t, challenge.Response.Challenge)
@@ -257,7 +257,7 @@ func TestPasskeyService_GenerateApprovalChallenge(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		_, err := svc.GenerateApprovalChallenge("non-existent-user", "tx-hash")
+		_, err := svc.GenerateApprovalChallenge(t.Context(), "non-existent-user", "tx-hash")
 		require.Error(t, err)
 	})
 }
@@ -268,13 +268,13 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add credentials
-		err := svc.addCredential(user.ID, testCredential("cred-1"))
+		err := svc.addCredential(t.Context(), user.ID, testCredential("cred-1"))
 		require.NoError(t, err)
 
-		err = svc.addCredential(user.ID, testCredential("cred-2"))
+		err = svc.addCredential(t.Context(), user.ID, testCredential("cred-2"))
 		require.NoError(t, err)
 
-		creds, err := svc.listCredentials(user.ID)
+		creds, err := svc.listCredentials(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.Len(t, creds, 2)
 	})
@@ -282,7 +282,7 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 	t.Run("Success - returns nil for non-existent user", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		creds, err := svc.listCredentials("non-existent-user")
+		creds, err := svc.listCredentials(t.Context(), "non-existent-user")
 		require.NoError(t, err)
 		require.Nil(t, creds)
 	})
@@ -290,7 +290,7 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 	t.Run("Success - returns empty list for user with no credentials", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		creds, err := svc.listCredentials(user.ID)
+		creds, err := svc.listCredentials(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.Empty(t, creds)
 	})
@@ -302,20 +302,20 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add credentials
-		err := svc.addCredential(user.ID, testCredential("cred-1"))
+		err := svc.addCredential(t.Context(), user.ID, testCredential("cred-1"))
 		require.NoError(t, err)
 
-		err = svc.addCredential(user.ID, testCredential("cred-2"))
+		err = svc.addCredential(t.Context(), user.ID, testCredential("cred-2"))
 		require.NoError(t, err)
 
 		// Revoke one credential
-		found, remaining, err := svc.revokeCredential(user.ID, base64.RawURLEncoding.EncodeToString([]byte("cred-1")))
+		found, remaining, err := svc.revokeCredential(t.Context(), user.ID, base64.RawURLEncoding.EncodeToString([]byte("cred-1")))
 		require.NoError(t, err)
 		require.True(t, found)
 		require.Equal(t, 1, remaining)
 
 		// Verify it was revoked
-		creds, err := svc.listCredentials(user.ID)
+		creds, err := svc.listCredentials(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.Len(t, creds, 1)
 	})
@@ -323,7 +323,7 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 	t.Run("Success - credential not found", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		found, remaining, err := svc.revokeCredential(user.ID, "non-existent-cred")
+		found, remaining, err := svc.revokeCredential(t.Context(), user.ID, "non-existent-cred")
 		require.NoError(t, err)
 		require.False(t, found)
 		require.Equal(t, 0, remaining)
@@ -332,7 +332,7 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 	t.Run("Success - returns nil for non-existent user", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		found, remaining, err := svc.revokeCredential("non-existent-user", "cred-id")
+		found, remaining, err := svc.revokeCredential(t.Context(), "non-existent-user", "cred-id")
 		require.NoError(t, err)
 		require.False(t, found)
 		require.Equal(t, 0, remaining)
@@ -344,7 +344,7 @@ func TestPasskeyService_getUser(t *testing.T) {
 	t.Run("Success - retrieves user", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		retrieved, err := svc.getUser(user.ID)
+		retrieved, err := svc.getUser(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, user.ID, retrieved.ID)
@@ -353,7 +353,7 @@ func TestPasskeyService_getUser(t *testing.T) {
 	t.Run("Success - returns nil for non-existent user", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		retrieved, err := svc.getUser("non-existent-user")
+		retrieved, err := svc.getUser(t.Context(), "non-existent-user")
 		require.NoError(t, err)
 		require.Nil(t, retrieved)
 	})
@@ -364,10 +364,10 @@ func TestPasskeyService_addCredential(t *testing.T) {
 	t.Run("Success - adds credential", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
-		err := svc.addCredential(user.ID, testCredential("cred-1"))
+		err := svc.addCredential(t.Context(), user.ID, testCredential("cred-1"))
 		require.NoError(t, err)
 
-		creds, err := svc.listCredentials(user.ID)
+		creds, err := svc.listCredentials(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.Len(t, creds, 1)
 	})
@@ -375,7 +375,7 @@ func TestPasskeyService_addCredential(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		err := svc.addCredential("non-existent-user", testCredential("cred-1"))
+		err := svc.addCredential(t.Context(), "non-existent-user", testCredential("cred-1"))
 		require.Error(t, err)
 	})
 }
@@ -390,10 +390,10 @@ func TestPasskeyService_setCredentials(t *testing.T) {
 			testCredential("cred-2"),
 		}
 
-		err := svc.setCredentials(user.ID, creds)
+		err := svc.setCredentials(t.Context(), user.ID, creds)
 		require.NoError(t, err)
 
-		retrieved, err := svc.listCredentials(user.ID)
+		retrieved, err := svc.listCredentials(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.Len(t, retrieved, 2)
 	})
@@ -401,7 +401,7 @@ func TestPasskeyService_setCredentials(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		err := svc.setCredentials("non-existent-user", []models.PasskeyCredential{})
+		err := svc.setCredentials(t.Context(), "non-existent-user", []models.PasskeyCredential{})
 		require.Error(t, err)
 	})
 }
@@ -412,7 +412,7 @@ func TestPasskeyService_updateUser(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		user.Status = "test-status"
-		err := svc.updateUser(user.ID, user)
+		err := svc.updateUser(t.Context(), user.ID, user)
 		require.NoError(t, err)
 	})
 
@@ -450,7 +450,7 @@ func newPasskeyServiceWithMock(t *testing.T) (*PasskeyService, *models.User) {
 	t.Helper()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(db.GetDocStore(), logger).CreateUser()
+	user, err := NewUserService(db.GetDocStore(), logger).CreateUser(t.Context())
 	require.NoError(t, err)
 	svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
@@ -467,35 +467,35 @@ func newPasskeyServiceWithMock(t *testing.T) (*PasskeyService, *models.User) {
 func TestPasskeyService_PurgeSessionAfterVerifyRegistration(t *testing.T) {
 	svc, user := newPasskeyServiceWithMock(t)
 
-	_, err := svc.GenerateRegistrationChallenge(user.ID, "test-user")
+	_, err := svc.GenerateRegistrationChallenge(t.Context(), user.ID, "test-user")
 	require.NoError(t, err)
 
-	_, err = svc.getWebAuthnSession(user.ID)
+	_, err = svc.getWebAuthnSession(t.Context(), user.ID)
 	require.NoError(t, err)
 
-	_, err = svc.VerifyRegistration(user.ID, []byte(`{"id":"mock","rawId":"mock","response":{"clientDataJSON":"{}","attestationObject":""}}`))
+	_, err = svc.VerifyRegistration(t.Context(), user.ID, []byte(`{"id":"mock","rawId":"mock","response":{"clientDataJSON":"{}","attestationObject":""}}`))
 	require.NoError(t, err)
 
-	_, err = svc.getWebAuthnSession(user.ID)
+	_, err = svc.getWebAuthnSession(t.Context(), user.ID)
 	require.ErrorIs(t, err, constants.ErrExpired)
 }
 
 func TestPasskeyService_PurgeSessionAfterVerifyAuthentication(t *testing.T) {
 	svc, user := newPasskeyServiceWithMock(t)
 
-	err := svc.addCredential(user.ID, testCredential("mock-cred-id"))
+	err := svc.addCredential(t.Context(), user.ID, testCredential("mock-cred-id"))
 	require.NoError(t, err)
 
-	_, err = svc.GenerateAuthenticationChallenge(user.ID)
+	_, err = svc.GenerateAuthenticationChallenge(t.Context(), user.ID)
 	require.NoError(t, err)
 
-	_, err = svc.getWebAuthnSession(user.ID)
+	_, err = svc.getWebAuthnSession(t.Context(), user.ID)
 	require.NoError(t, err)
 
-	_, err = svc.VerifyAuthentication(user.ID, []byte(`{}`))
+	_, err = svc.VerifyAuthentication(t.Context(), user.ID, []byte(`{}`))
 	require.NoError(t, err)
 
-	_, err = svc.getWebAuthnSession(user.ID)
+	_, err = svc.getWebAuthnSession(t.Context(), user.ID)
 	require.ErrorIs(t, err, constants.ErrExpired)
 }
 
@@ -509,7 +509,7 @@ func TestPasskeyService_storeWebAuthnSession(t *testing.T) {
 			UserID:    []byte(user.ID),
 		}
 
-		err := svc.storeWebAuthnSession(user.ID, session)
+		err := svc.storeWebAuthnSession(t.Context(), user.ID, session)
 		require.NoError(t, err)
 	})
 }
@@ -524,10 +524,10 @@ func TestPasskeyService_getWebAuthnSession(t *testing.T) {
 			UserID:    []byte(user.ID),
 		}
 
-		err := svc.storeWebAuthnSession(user.ID, session)
+		err := svc.storeWebAuthnSession(t.Context(), user.ID, session)
 		require.NoError(t, err)
 
-		retrieved, err := svc.getWebAuthnSession(user.ID)
+		retrieved, err := svc.getWebAuthnSession(t.Context(), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		require.Equal(t, "test-challenge", retrieved.Challenge)
@@ -536,7 +536,7 @@ func TestPasskeyService_getWebAuthnSession(t *testing.T) {
 	t.Run("Error - session not found", func(t *testing.T) {
 		svc, _ := newPasskeyServiceForTest(t)
 
-		_, err := svc.getWebAuthnSession("non-existent-user")
+		_, err := svc.getWebAuthnSession(t.Context(), "non-existent-user")
 		require.Error(t, err)
 	})
 }

@@ -50,10 +50,10 @@ func TestBrowserProxyRouter_ActiveEmbeddedOperatorIsBoundInChatContext(t *testin
 
 	const userID = "proxy-binding-user"
 	seedActiveUser(t, infra, userID)
-	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(userID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(t.Context(), userID)
 	require.NoError(t, err)
 	webSessionID := seedWebSession(t, infra, userID)
-	bound, err := infra.Reg.BindEmbeddedOperatorToWebSession(userID, webSessionID)
+	bound, err := infra.Reg.BindEmbeddedOperatorToWebSession(t.Context(), userID, webSessionID)
 	require.NoError(t, err)
 	require.True(t, bound)
 

@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -123,12 +124,13 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 	}
 
 	// Phase 1: synchronized intake.
-	create := runBurstPhase("create", workers, deadline, func(ctx context.Context, w *burstWorker) error {
+	create := runBurstPhase(t, "create", workers, deadline, func(ctx context.Context, w *burstWorker) error {
 		resp, err := svc.CreateRequest(ctx, w.create, "https://gateway.local/console")
-		if err == nil {
-			w.created = resp
+		if err != nil {
+			return fmt.Errorf("create request: %w", err)
 		}
-		return err
+		w.created = resp
+		return nil
 	})
 	t.Logf("enrollment burst n=%d", n)
 	t.Log(create.report())
@@ -142,7 +144,7 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 		})
 	}
 	decideStart := time.Now()
-	decided, err := svc.DecideBatch(context.Background(), env.ownerID, batch)
+	decided, err := svc.DecideBatch(t.Context(), env.ownerID, batch)
 	decideWall := time.Since(decideStart)
 	require.NoError(t, err)
 	require.Len(t, decided.Requests, n)
@@ -157,21 +159,29 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 	t.Logf("  batch decision: %d members in %s", n, decideWall.Round(time.Millisecond))
 
 	// Phase 3: synchronized approval release.
-	complete := runBurstPhase("complete", workers, deadline, func(ctx context.Context, w *burstWorker) error {
+	// Each step wraps its error so a failure names the step it came from, and the
+	// outcome buckets separate completion failures from login (session
+	// validation) failures.
+	complete := runBurstPhase(t, "complete", workers, deadline, func(ctx context.Context, w *burstWorker) error {
 		resp, err := svc.Complete(ctx, w.created.Token, w.proofs)
-		if err == nil {
-			w.completed = resp
-			if scenario.validateSession {
-				_, err = env.svc.auth.ValidateOperatorSession(resp.Operator.OperatorSessionID)
-			}
-			if err == nil && scenario.deploymentEvents {
-				err = env.docStore.OperatorCommandSubscribed(resp.Operator.OperatorID, resp.Operator.OperatorSessionID, w.create.DeploymentID)
-				if err == nil {
-					err = env.docStore.RecordOperatorHeartbeat(resp.Operator.OperatorID, heartbeatUpdate{LastHeartbeatAt: time.Now().UTC()})
-				}
+		if err != nil {
+			return fmt.Errorf("complete: %w", err)
+		}
+		w.completed = resp
+		if scenario.validateSession {
+			if _, err := env.svc.auth.ValidateOperatorSession(ctx, resp.Operator.OperatorSessionID); err != nil {
+				return fmt.Errorf("validate operator session: %w", err)
 			}
 		}
-		return err
+		if scenario.deploymentEvents {
+			if err := env.docStore.OperatorCommandSubscribed(ctx, resp.Operator.OperatorID, resp.Operator.OperatorSessionID, w.create.DeploymentID); err != nil {
+				return fmt.Errorf("command subscribed: %w", err)
+			}
+			if err := env.docStore.RecordOperatorHeartbeat(ctx, resp.Operator.OperatorID, heartbeatUpdate{LastHeartbeatAt: time.Now().UTC()}); err != nil {
+				return fmt.Errorf("record heartbeat: %w", err)
+			}
+		}
+		return nil
 	})
 	t.Log(complete.report())
 	requireBurstContract(t, complete)
@@ -246,11 +256,20 @@ type burstPhase struct {
 	outcomes  map[string]int
 }
 
+// burstLiveFailureLimit caps how many failures a phase logs as they happen. The
+// rest are still counted in the outcome buckets, so a mass failure cannot flood
+// the log.
+const burstLiveFailureLimit = 10
+
 // runBurstPhase starts one goroutine per worker, releases them together, and
-// runs op once per worker under the client deadline.
-func runBurstPhase(name string, workers []*burstWorker, deadline time.Duration, op func(context.Context, *burstWorker) error) burstPhase {
+// runs op once per worker under the client deadline. Calls are bound to the
+// test's context, so a failed or timed-out test cancels in-flight workers. Each
+// failure is logged the moment it happens, up to burstLiveFailureLimit.
+func runBurstPhase(t *testing.T, name string, workers []*burstWorker, deadline time.Duration, op func(context.Context, *burstWorker) error) burstPhase {
+	t.Helper()
 	phase := burstPhase{name: name, deadline: deadline, latencies: make([]time.Duration, len(workers)), outcomes: map[string]int{}}
 	outcomes := make([]string, len(workers))
+	var failures atomic.Int32
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for i, w := range workers {
@@ -258,12 +277,17 @@ func runBurstPhase(name string, workers []*burstWorker, deadline time.Duration, 
 		go func(i int, w *burstWorker) {
 			defer wg.Done()
 			<-start
-			ctx, cancel := context.WithTimeout(context.Background(), deadline)
+			ctx, cancel := context.WithTimeout(t.Context(), deadline)
 			defer cancel()
 			began := time.Now()
 			err := op(ctx, w)
 			phase.latencies[i] = time.Since(began)
 			outcomes[i] = classifyBurstOutcome(err)
+			if err != nil {
+				if seen := failures.Add(1); seen <= burstLiveFailureLimit {
+					t.Logf("  %s FAILED worker=%s after %s: %v", name, w.create.InstanceID, phase.latencies[i].Round(time.Millisecond), err)
+				}
+			}
 		}(i, w)
 	}
 	began := time.Now()
@@ -272,6 +296,9 @@ func runBurstPhase(name string, workers []*burstWorker, deadline time.Duration, 
 	phase.wall = time.Since(began)
 	for _, outcome := range outcomes {
 		phase.outcomes[outcome]++
+	}
+	if seen := int(failures.Load()); seen > burstLiveFailureLimit {
+		t.Logf("  %s: %d more failures not logged individually; see outcome buckets", name, seen-burstLiveFailureLimit)
 	}
 	return phase
 }

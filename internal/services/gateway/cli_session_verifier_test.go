@@ -64,7 +64,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsInactiveUser(t *testing.T) {
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -174,7 +174,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsUnknownFingerprint(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// No CLI session created - verification should fail
 	unknownFingerprint := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -212,7 +212,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a revoked certificate serial
 	cliSessionID := "cli-session-revoked"
@@ -231,10 +231,10 @@ func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	// Revoke the certificate
-	err = pki.RevokeCertificate("1234567890abcdef", "test revocation")
+	err = pki.RevokeCertificate(t.Context(), "1234567890abcdef", "test revocation")
 	require.NoError(t, err)
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -266,7 +266,7 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a known fingerprint
 	cliSessionID := "cli-session-456"
@@ -285,7 +285,7 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -304,7 +304,7 @@ func TestGatewayL3Notary_DelegatesToPasskey(t *testing.T) {
 
 	// Add a dummy credential
 	credID := []byte("real-credential-id")
-	require.NoError(t, passkeyL3.addCredential(userID, testCredential("real-credential-id")))
+	require.NoError(t, passkeyL3.addCredential(t.Context(), userID, testCredential("real-credential-id")))
 
 	// Create a WebAuthn proof (no mtls_cert_fingerprint)
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

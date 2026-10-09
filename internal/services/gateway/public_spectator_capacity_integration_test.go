@@ -354,17 +354,24 @@ func TestPublicSpectatorColdLoad_ThreeHundredDistinctClientsReconcile(t *testing
 
 func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 	env := newCapacityMirrorEnv(t, 5)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
 	const subscribers = 32
 	hold := 1 * time.Second
 	var delivered atomic.Int32
-	var wg sync.WaitGroup
+	var wg, attached sync.WaitGroup
 	wg.Add(subscribers)
+	attached.Add(subscribers)
 	for index := range subscribers {
 		go func(clientIndex int) {
 			defer wg.Done()
+			// The mirror registers the subscriber before it writes response
+			// headers, so a returned response means the client is attached. A
+			// failed attempt also releases the wait; it just never delivers.
+			var attachedOnce sync.Once
+			markAttached := func() { attachedOnce.Do(attached.Done) }
+			defer markAttached()
 			address := capacityEndpoint(env.baseURL, "/stream", url.Values{
 				"source":   {env.sourceID},
 				"since_id": {"5"},
@@ -383,6 +390,7 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 				return
 			}
 			defer response.Body.Close()
+			markAttached()
 			scanner := bufio.NewScanner(response.Body)
 			scanner.Buffer(make([]byte, 64<<10), 1<<20)
 			deadline := time.Now().Add(hold)
@@ -398,7 +406,7 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 		}(index)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	attached.Wait()
 	var snapshot models.PublicFeedSnapshot
 	require.Equal(t, http.StatusOK, env.helper.getJSON("/snapshot?source="+env.sourceID, &snapshot))
 	publishRecord := env.helper.makeRecord(6, applyProjectionDefaults(models.NewPublicFeedObject(map[string]string{

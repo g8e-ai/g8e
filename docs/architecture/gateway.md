@@ -72,6 +72,8 @@ Documents the g8e Governance Gateway (g8eg) architecture: its operational modes,
 
 Starts the Governance Gateway with a specified posture. The binary runs as the platform's central backbone: protocol hub, policy decision point, SQLite persistence owner, pub/sub broker, PKI authority, and audit coordinator. The Gateway constructs or admits governed transactions, owns L1-L3 policy decisions, and runs an in-process Operator substrate for L4-L5 enforcement against its own runtime.
 
+Embedded command dispatch runs the governance processor alongside the result consumer. Its bounded result queue waits for capacity, slowing local inference progress publishers while the consumer is busy. Caller cancellation, the dispatch deadline, or a progress callback failure cancels processing and joins the processor before removing the result handler. A terminal result is returned only after processing succeeds. Remote progress queue overflow remains a typed backpressure failure.
+
 Commands:
 - `g8e gw start [--posture doctrine|consensus|ratify|notary] [--http-port 8080] [--https-port 8443]` — Starts Gateway with optional port overrides.
 - `g8e gw status` — Reports health, an Operators table (one row per connected Operator: type, status, host, port, capabilities, directory), an Operator flags table (the start values each Operator reported), and enrollment counts. See [Getting started](../guides/getting_started.md) for the output.

@@ -48,7 +48,7 @@ func setupTestCLIRefreshController(t *testing.T) (*CLIRefreshController, *models
 		Responder:          infra.Responder,
 	})
 
-	user, err := infra.UserSvc.CreateUser()
+	user, err := infra.UserSvc.CreateUser(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, user)
 
@@ -74,7 +74,7 @@ func persistCLISessionForController(t *testing.T, c *CLIRefreshController, userI
 	}
 	b, err := json.Marshal(doc)
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), sessionID, b,
 	))
 }
@@ -114,7 +114,7 @@ func parseRefreshResponse(t *testing.T, rr *httptest.ResponseRecorder) models.CL
 func TestCLIRefreshController_Refresh_Success(t *testing.T) {
 	c, user := setupTestCLIRefreshController(t)
 	oldSessionID := "refresh-ctrl-old-1"
-	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(t.Context(),
 		"op-ctrl-1", user.ID, "org-1", "op-id-1", "mTLS",
 	))
 	persistCLISessionForController(t, c, user.ID, oldSessionID, "op-ctrl-1")
@@ -129,7 +129,7 @@ func TestCLIRefreshController_Refresh_Success(t *testing.T) {
 	assert.Equal(t, user.ID, resp.UserID)
 
 	// Old session must be deactivated.
-	oldDoc, err := c.cliSessionSvc.db.DocGet(
+	oldDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
 	require.NoError(t, err)
 	require.NotNil(t, oldDoc)
@@ -140,7 +140,7 @@ func TestCLIRefreshController_Refresh_Success(t *testing.T) {
 	assert.False(t, oldSession.IsActive, "old session must be deactivated after refresh")
 
 	// New session must be active and bound to the same user.
-	newDoc, err := c.cliSessionSvc.db.DocGet(
+	newDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)
@@ -163,7 +163,7 @@ func TestCLIRefreshController_Refresh_OldSessionMissing_StillSucceeds(t *testing
 
 	// Persist an active operator session for the user so the controller can
 	// inherit the operator binding when the old CLI session is missing.
-	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(t.Context(),
 		"op-refresh-missing", user.ID, "org-1", "op-id-1", "mTLS",
 	))
 
@@ -177,7 +177,7 @@ func TestCLIRefreshController_Refresh_OldSessionMissing_StillSucceeds(t *testing
 	assert.Equal(t, user.ID, resp.UserID)
 
 	// New session is active and bound to the inherited operator session.
-	newDoc, err := c.cliSessionSvc.db.DocGet(
+	newDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)
@@ -216,7 +216,7 @@ func TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive(t *
 	c, user := setupTestCLIRefreshController(t)
 
 	// Persist a new active operator session for the user.
-	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(t.Context(),
 		"op-refresh-active", user.ID, "org-1", "op-id-active", "mTLS",
 	))
 
@@ -233,7 +233,7 @@ func TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive(t *
 	assert.Equal(t, user.ID, resp.UserID)
 
 	// New session must be bound to the active operator session, not the stale one.
-	newDoc, err := c.cliSessionSvc.db.DocGet(
+	newDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)
@@ -269,7 +269,7 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionOperators), "op-id-provenance", provenanceBytes,
 	))
 
@@ -283,7 +283,7 @@ func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.
 		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionOperators), "op-id-data", dataBytes,
 	))
 
@@ -304,7 +304,7 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 
 	staleSessionID := "op-refresh-stale-registry"
 	activeSessionID := "op-refresh-registry-active"
-	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(t.Context(),
 		staleSessionID, user.ID, "org-1", "op-id-stale", "mTLS",
 	))
 
@@ -319,7 +319,7 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionOperators), "op-id-registry-active", opBytes,
 	))
 
@@ -331,7 +331,7 @@ func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testi
 	c.handleRefresh(rr, req)
 
 	resp := parseRefreshResponse(t, rr)
-	newDoc, err := c.cliSessionSvc.db.DocGet(
+	newDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)
@@ -375,7 +375,7 @@ func TestCLIRefreshController_Refresh_UserNotActive(t *testing.T) {
 	persistCLISessionForController(t, c, user.ID, oldSessionID, "op-ctrl-disabled")
 
 	// Disable the user after the session was created.
-	require.NoError(t, c.userSvc.Disable(user.ID, "test", "actor", "op"))
+	require.NoError(t, c.userSvc.Disable(t.Context(), user.ID, "test", "actor", "op"))
 
 	req := refreshRequestWithContext(t, user.ID, oldSessionID)
 	rr := httptest.NewRecorder()
@@ -417,7 +417,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 		UpdatedAt:         timestamppb.New(now),
 	})
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))
+	require.NoError(t, c.cliSessionSvc.db.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))
 	staleRemoteBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id:                "stale-remote-operator",
 		UserId:            user.ID,
@@ -428,7 +428,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 		UpdatedAt:         timestamppb.New(now.Add(-48 * time.Hour)),
 	})
 	require.NoError(t, err)
-	require.NoError(t, c.cliSessionSvc.db.DocSetWithTimestamps(marshaler.CollectionName(constants.CollectionOperators), "stale-remote-operator", staleRemoteBytes, now.Add(-48*time.Hour), now.Add(-48*time.Hour)))
+	require.NoError(t, c.cliSessionSvc.db.DocSetWithTimestamps(t.Context(), marshaler.CollectionName(constants.CollectionOperators), "stale-remote-operator", staleRemoteBytes, now.Add(-48*time.Hour), now.Add(-48*time.Hour)))
 	oldSessionID := "refresh-ctrl-unbound-old"
 	persistCLISessionForController(t, c, user.ID, oldSessionID, "")
 
@@ -441,7 +441,7 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	assert.Equal(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID)
 
 	// The new session persists the recovered binding.
-	newDoc, err := c.cliSessionSvc.db.DocGet(
+	newDoc, err := c.cliSessionSvc.db.DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)

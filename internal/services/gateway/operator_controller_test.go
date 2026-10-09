@@ -63,7 +63,7 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 	t.Helper()
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
 		Id:                operatorID,
 		UserId:            userID,
@@ -75,7 +75,7 @@ func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessi
 		UpdatedAt:         timestamppb.Now(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	require.NoError(t, infra.DocStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 }
 
 func stopOperatorRequest(t *testing.T, controller *OperatorController, _, sessionID, reason string) *httptest.ResponseRecorder {
@@ -132,7 +132,7 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-remote-session", "retired")
 		assert.Equal(t, http.StatusBadGateway, rr.Code)
 		assert.Contains(t, rr.Body.String(), constants.ErrDispatchNoDelivery.Error())
-		op, err := infra.Auth.ValidateOperatorSession("stop-remote-session")
+		op, err := infra.Auth.ValidateOperatorSession(t.Context(), "stop-remote-session")
 		require.NoError(t, err)
 		assert.Equal(t, string(constants.OperatorStatusActive), op.Status)
 	})
@@ -157,7 +157,7 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 
 		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-remote-session", "planned maintenance")
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), "stop-remote")
+		doc, err := infra.DocStore.DocGet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), "stop-remote")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		operator, err := models.OperatorDocumentFromStore(doc)
@@ -190,7 +190,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 		UserId: "user-123", OrganizationId: "org-123",
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op-123", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op-123", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -255,7 +255,7 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 
 	t.Run("Returns platform-enrolled operators alongside slots", func(t *testing.T) {
 		// Create a user-created slot.
-		slot, err := infra.Reg.createSlot("user-platform", "org-platform")
+		slot, err := infra.Reg.createSlot(t.Context(), "user-platform", "org-platform")
 		require.NoError(t, err)
 
 		// Persist a platform-enrolled operator (is_slot=false) stamped
@@ -274,7 +274,7 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 		}
 		opBytes, err := models.MarshalOperatorDocument(platformOp)
 		require.NoError(t, err)
-		require.NoError(t, infra.Reg.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.Id, opBytes))
+		require.NoError(t, infra.Reg.docStore.DocSet(t.Context(), marshaler.CollectionName(constants.CollectionOperators), platformOp.Id, opBytes))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators?user_id=user-platform", nil)
 		w := httptest.NewRecorder()
@@ -576,7 +576,7 @@ func TestHandleReauth_ResponseContainsGatewayPosture(t *testing.T) {
 		UserId: "user-posture", OrganizationId: "org-posture",
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op-posture", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op-posture", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
@@ -625,7 +625,7 @@ func TestHandleReauth_PersistsRuntimeConfig(t *testing.T) {
 		UserId: "user-runtime-config", OrganizationId: "org-runtime-config",
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op-runtime-config", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op-runtime-config", opBytes))
 
 	body := `{"runtime_config":{"inference_enabled":true,"log_level":"info"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader(body))
@@ -642,7 +642,7 @@ func TestHandleReauth_PersistsRuntimeConfig(t *testing.T) {
 	controller.handleReauth(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	operators, err := reg.ListUserOperators("user-runtime-config")
+	operators, err := reg.ListUserOperators(t.Context(), "user-runtime-config")
 	require.NoError(t, err)
 	require.Len(t, operators, 1)
 	require.NotNil(t, operators[0].RuntimeConfig)
@@ -687,7 +687,7 @@ func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
 			UserId: "user-456", OrganizationId: "org-456",
 		})
 		require.NoError(t, err)
-		require.NoError(t, infra.DocStore.DocSet(string(constants.CollectionOperators), "op-456", opBytes))
+		require.NoError(t, infra.DocStore.DocSet(t.Context(), string(constants.CollectionOperators), "op-456", opBytes))
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession+operatorSessionID, nil)
 		w := httptest.NewRecorder()
@@ -728,7 +728,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
@@ -736,7 +736,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 		Status: string(constants.OperatorStatusActive), CreatedAt: timestamppb.Now(), UpdatedAt: timestamppb.Now(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
 	cliSession := models.CLISession{
@@ -750,7 +750,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
@@ -837,7 +837,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	}
 	policyBytes, err := json.Marshal(policy)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes))
 
 	// Seed a valid operator+CLI binding so the handler can return 200.
@@ -848,7 +848,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opBytes, err := models.MarshalOperatorDocument(&operatorv1.OperatorDocument{
@@ -856,7 +856,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 		Status: string(constants.OperatorStatusActive), CreatedAt: timestamppb.Now(), UpdatedAt: timestamppb.Now(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
 	cliSession := models.CLISession{
@@ -870,7 +870,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	require.NoError(t, infra.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 
 	controller := newOperatorController(OperatorControllerDeps{
@@ -957,7 +957,7 @@ func reauthWithRuntimeConfig(t *testing.T, runtimeConfigJSON string) (*httptest.
 		UserId: "user-heartbeat", OrganizationId: "org-heartbeat",
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.GetDocStore().DocSet("operators", "op-heartbeat", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(t.Context(), "operators", "op-heartbeat", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader(`{"runtime_config":`+runtimeConfigJSON+`}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -983,7 +983,7 @@ func TestHandleReauth_StoresDeclaredHeartbeatInterval(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, 120, resp.Config.HeartbeatIntervalSeconds)
 
-	operators, err := reg.ListUserOperators("user-heartbeat")
+	operators, err := reg.ListUserOperators(t.Context(), "user-heartbeat")
 	require.NoError(t, err)
 	require.Len(t, operators, 1)
 	assert.EqualValues(t, 120000, operators[0].RuntimeConfig.GetHeartbeatIntervalMs())
@@ -1007,7 +1007,7 @@ func TestHandleReauth_RejectsHeartbeatIntervalPastMaximum(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), constants.ErrOperatorHeartbeatIntervalInvalid.Error())
 
-	operators, err := reg.ListUserOperators("user-heartbeat")
+	operators, err := reg.ListUserOperators(t.Context(), "user-heartbeat")
 	require.NoError(t, err)
 	require.Len(t, operators, 1)
 	assert.Zero(t, operators[0].RuntimeConfig.GetHeartbeatIntervalMs(), "a rejected interval must not be stored")
