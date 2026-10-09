@@ -31,15 +31,19 @@ func TestSQLAuditStore_InitDatabase_CommitmentLedgerWardenIntentColumn(t *testin
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)
 
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
 	config := &AuditStoreConfig{
-		DBPath:               constants.TestCommitmentLedgerDBFilename,
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
 
-	ass, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	ass, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { ass.Close() })
 
@@ -98,14 +102,18 @@ func TestSQLAuditStore_StartupMigratesPopulatedCommitmentLedger(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
 	config := &AuditStoreConfig{
-		DBPath:               constants.TestCommitmentLedgerDBFilename,
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
-	store, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	store, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	_, err = store.db.Exec(`INSERT INTO commitment_ledger (transaction_id, transaction_hash, prior_commitment_hash, warden_intent_signature_digest, committed_at_unix_ms, hash, attestation_json) VALUES ('tx-1', 'tx-hash', '', 'preserved-digest', 1, 'commitment-hash', '{}')`)
 	require.NoError(t, err)
@@ -113,7 +121,7 @@ func TestSQLAuditStore_StartupMigratesPopulatedCommitmentLedger(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
 
-	reopened, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	reopened, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, reopened.Close()) })
 	rows, err := reopened.CommitmentLedger().ListCommitments()

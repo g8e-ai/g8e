@@ -21,7 +21,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
@@ -32,7 +31,6 @@ import (
 
 // AuditStoreConfig holds configuration for the SQL audit store
 type AuditStoreConfig struct {
-	DBPath                    string
 	MaxDBSizeMB               int64
 	RetentionDays             int
 	PruneIntervalMinutes      int
@@ -46,7 +44,6 @@ type AuditStoreConfig struct {
 // DefaultAuditStoreConfig returns the default configuration for the audit store.
 func DefaultAuditStoreConfig() *AuditStoreConfig {
 	return &AuditStoreConfig{
-		DBPath:                    constants.DbFilename,
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
 		PruneIntervalMinutes:      60,
@@ -120,10 +117,15 @@ type SQLAuditStore struct {
 	muWrites sync.WaitGroup
 }
 
-// NewSQLAuditStore creates a new SQL audit store
-func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.RuntimeFileService) (*SQLAuditStore, error) {
+// NewSQLAuditStore creates a SQL audit store over the runtime's canonical
+// database. The caller owns db: the store shares its pool and writer gate with
+// every other writer of g8e.db and never closes it.
+func NewSQLAuditStore(config *AuditStoreConfig, db *sqliteutil.DB, logger *slog.Logger, fileSvc fs.RuntimeFileService) (*SQLAuditStore, error) {
 	if config == nil {
 		config = DefaultAuditStoreConfig()
+	}
+	if db == nil {
+		return nil, fmt.Errorf("audit store: database: %w", constants.ErrMissingRequiredField)
 	}
 
 	if config.EncryptionVault == nil {
@@ -141,6 +143,7 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 		logger:          logger,
 		fileSvc:         fileSvc,
 		encryptionVault: config.EncryptionVault,
+		db:              db,
 	}
 
 	if err := ass.bootstrap(); err != nil {
@@ -152,10 +155,9 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 	ass.pruner.Start()
 
 	encryptionEnabled := ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked()
-	dataDir := ass.fileSvc.Resolve(constants.DataDirname)
 	ass.logger.Info("Audit store initialized",
-		"data_dir", dataDir,
-		"db_path", pathutil.ResolveDBPath(dataDir, config.DBPath),
+		"data_dir", ass.fileSvc.Resolve(constants.DataDirname),
+		"db_path", db.GetPath(),
 		"encryption_enabled", encryptionEnabled)
 
 	return ass, nil
@@ -216,35 +218,23 @@ func (ass *SQLAuditStore) verifyWritePermissions() error {
 	return nil
 }
 
-// initDatabase creates the database and schema
+// initDatabase applies the audit schema and migrations to the shared database.
 func (ass *SQLAuditStore) initDatabase() error {
-	dbPath := pathutil.ResolveDBPath(ass.fileSvc.Resolve(constants.DataDirname), ass.config.DBPath)
-
-	cfg := sqliteutil.DefaultDBConfig(dbPath)
-	db, err := sqliteutil.OpenDB(cfg, ass.logger)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrAuditStoreOpenDBFailed, err)
-	}
-
+	db := ass.db
 	if _, err := db.Exec(auditStoreSchema); err != nil {
-		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 
 	if err := migrateReceiptsColumns(db, ass.logger); err != nil {
-		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 	if err := migrateCommitmentColumns(db, ass.logger); err != nil {
-		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 	if err := MigrateEventChainColumns(db, ass.logger, ass.encryptionVault); err != nil {
-		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 
-	ass.db = db
 	ass.commitmentLedger = NewCommitmentLedger(db, ass.logger)
 
 	ass.logger.Info("Database schema initialized")
@@ -772,11 +762,9 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 	}
 
+	// Both chain appends select their heads inside one write transaction, so
+	// the event chain and commitment ledger advance atomically.
 	var commitment *CommitmentRow
-	if build != nil {
-		// Keep ledger-before-write lock ordering and both chain appends atomic.
-		ass.commitmentLedger.mu.Lock()
-	}
 	err = ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		if record.OperatorSessionID != "" {
 			if _, err := conn.ExecContext(context.Background(),
@@ -803,9 +791,6 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 		}
 		return nil
 	})
-	if build != nil {
-		ass.commitmentLedger.mu.Unlock()
-	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 	}
@@ -1682,7 +1667,8 @@ func (ass *SQLAuditStore) Wait() {
 	ass.muWrites.Wait()
 }
 
-// Close shuts down the audit store service. Idempotent.
+// Close drains in-flight writes and stops the pruner. The database belongs to
+// the caller and stays open. Idempotent.
 func (ass *SQLAuditStore) Close() error {
 	if ass == nil {
 		return nil
@@ -1690,17 +1676,13 @@ func (ass *SQLAuditStore) Close() error {
 
 	ass.Wait()
 
-	var closeErr error
 	ass.closeOnce.Do(func() {
 		if ass.pruner != nil {
 			ass.pruner.Stop()
 		}
-		if ass.db != nil {
-			closeErr = ass.db.Close()
-		}
 	})
 
-	return closeErr
+	return nil
 }
 
 // GetDataDir returns the audit store data directory

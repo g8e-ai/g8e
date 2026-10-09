@@ -27,6 +27,7 @@ import (
 	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -54,12 +55,15 @@ func newCommitmentTestActuator(t *testing.T) (*L5Actuator, *storage.SQLAuditStor
 	require.NoError(t, err)
 	require.NoError(t, testVault.Unlock(privKey))
 	t.Cleanup(func() { require.NoError(t, testVault.Close()) })
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), slog.Default())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	auditStore, err := storage.NewSQLAuditStore(&storage.AuditStoreConfig{
-		DBPath:          constants.TestCommitmentLedgerDBFilename,
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		EncryptionVault: testVault,
-	}, slog.Default(), fileSvc)
+	}, db, slog.Default(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
 	actuator.SQLAuditStore = auditStore

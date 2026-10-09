@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -91,12 +92,17 @@ func newInferenceTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	require.NoError(t, err)
 	testVault := storagetest.CreateTestVault(t, fileSvc.Resolve(constants.VaultDirname), privKey)
 
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard))
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
 	auditStore, err := storage.NewSQLAuditStore(&storage.AuditStoreConfig{
-		DBPath:          constants.DbFilename,
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		EncryptionVault: testVault,
-	}, logger, fileSvc)
+	}, db, logger, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
 

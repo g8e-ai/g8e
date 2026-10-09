@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -45,13 +46,17 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 	require.NoError(t, err)
 
 	auditStoreConfig := &AuditStoreConfig{
-		DBPath:               "audit_store.db",
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
-	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	auditStore, err := NewSQLAuditStore(auditStoreConfig, db, logger, fileSvc)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

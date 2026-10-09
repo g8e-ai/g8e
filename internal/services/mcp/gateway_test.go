@@ -32,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -446,8 +447,12 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 	testVault := storagetest.CreateTestVault(t, vaultDir, privKey)
 
 	// Create audit store
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), slog.Default())
+	require.NoError(t, err)
+	defer db.Close()
+
 	auditConfig := &storage.AuditStoreConfig{
-		DBPath:                    "audit.db",
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -455,7 +460,7 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 		HeadTailSize:              51200,
 		EncryptionVault:           testVault,
 	}
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default(), fileSvc)
+	auditStore, err := storage.NewSQLAuditStore(auditConfig, db, slog.Default(), fileSvc)
 	require.NoError(t, err)
 	defer auditStore.Close()
 
@@ -772,8 +777,12 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		testVault := storagetest.CreateTestVault(t, vaultDir, privKey)
 
 		// Create audit store
+		dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+		db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), slog.Default())
+		require.NoError(t, err)
+		defer db.Close()
+
 		auditConfig := &storage.AuditStoreConfig{
-			DBPath:                    "audit.db",
 			MaxDBSizeMB:               100,
 			RetentionDays:             7,
 			PruneIntervalMinutes:      60,
@@ -781,7 +790,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 			HeadTailSize:              51200,
 			EncryptionVault:           testVault,
 		}
-		auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default(), fileSvc)
+		auditStore, err := storage.NewSQLAuditStore(auditConfig, db, slog.Default(), fileSvc)
 		require.NoError(t, err)
 		defer auditStore.Close()
 

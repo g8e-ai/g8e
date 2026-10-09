@@ -12,7 +12,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -44,12 +43,13 @@ type CommitmentRow struct {
 
 // CommitmentLedger is the SQLite-backed storage for commitment attestations.
 // It stores raw JSON attestations with atomic append operations to guarantee
-// chain integrity under concurrent writes. This type is in the storage package
-// to avoid import cycles with the governance package.
+// chain integrity under concurrent writes: every append selects the chain head
+// inside a BEGIN IMMEDIATE transaction, which SQLite's write lock (and, within
+// one process, the sqliteutil writer gate) serializes. This type is in the
+// storage package to avoid import cycles with the governance package.
 type CommitmentLedger struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
-	mu     sync.Mutex
 }
 
 // NewCommitmentLedger creates a new commitment ledger backed by the given SQLite database.
@@ -149,13 +149,11 @@ func (cl *CommitmentLedger) AppendCommitment(build CommitmentBuilder) error {
 		return fmt.Errorf("commitment ledger not initialized")
 	}
 	var appended *CommitmentRow
-	cl.mu.Lock()
 	err := cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		var err error
 		appended, err = cl.appendBuiltCommitment(conn, build)
 		return err
 	})
-	cl.mu.Unlock()
 	if err == nil {
 		cl.logAppend(appended)
 	}
@@ -168,7 +166,6 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 		return fmt.Errorf("commitment ledger not initialized")
 	}
 	var appended *CommitmentRow
-	cl.mu.Lock()
 	err := cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		currentPriorHash, err := selectCommitmentHead(conn)
 		if err != nil {
@@ -187,7 +184,6 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 		appended, err = cl.insertCommitment(conn, attestation, priorHash, hash)
 		return err
 	})
-	cl.mu.Unlock()
 	if err == nil {
 		cl.logAppend(appended)
 	}
@@ -195,7 +191,7 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 }
 
 // appendBuiltCommitment selects the chain head, builds the attestation over
-// it and appends it. The caller holds cl.mu and the write transaction.
+// it and appends it. The caller holds the write transaction.
 func (cl *CommitmentLedger) appendBuiltCommitment(conn *sql.Conn, build CommitmentBuilder) (*CommitmentRow, error) {
 	priorHash, err := selectCommitmentHead(conn)
 	if err != nil {

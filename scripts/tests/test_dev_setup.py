@@ -18,7 +18,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_bootstrap_uv import BASH, bash_environment, bash_path
+try:
+    from test_bootstrap_uv import BASH, bash_environment, bash_path
+except ImportError:
+    from scripts.tests.test_bootstrap_uv import BASH, bash_environment, bash_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKE = shutil.which("make")

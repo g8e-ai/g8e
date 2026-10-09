@@ -8,12 +8,15 @@
 package storage
 
 import (
+	"crypto/ed25519"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -30,7 +33,6 @@ func TestDefaultAuditStoreConfig(t *testing.T) {
 		got      interface{}
 		expected interface{}
 	}{
-		{"DBPath", config.DBPath, constants.DbFilename},
 		{"MaxDBSizeMB", config.MaxDBSizeMB, int64(2048)},
 		{"RetentionDays", config.RetentionDays, 90},
 		{"PruneIntervalMinutes", config.PruneIntervalMinutes, 60},
@@ -438,20 +440,83 @@ func TestRecordFileMutationNilStore(t *testing.T) {
 	}
 }
 
+// TestSQLAuditStore_NilDB verifies that NewSQLAuditStore
+// returns an error when db is nil.
+func TestSQLAuditStore_NilDB(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
+	config := DefaultAuditStoreConfig()
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	config.EncryptionVault = CreateTestVault(t, fileSvc, privKey)
+
+	ass, err := NewSQLAuditStore(config, nil, logger, fileSvc)
+	if err == nil {
+		t.Error("NewSQLAuditStore with nil db should return error")
+	}
+	if !errors.Is(err, constants.ErrMissingRequiredField) {
+		t.Errorf("expected ErrMissingRequiredField, got: %v", err)
+	}
+	if ass != nil {
+		t.Error("NewSQLAuditStore with nil db should return nil store")
+	}
+}
+
+// TestSQLAuditStore_NilFileSvc verifies that NewSQLAuditStore
+// returns an error when fileSvc is nil.
+func TestSQLAuditStore_NilFileSvc(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	tempDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t, tempDir)
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	config := DefaultAuditStoreConfig()
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	config.EncryptionVault = CreateTestVault(t, fileSvc, privKey)
+
+	ass, err := NewSQLAuditStore(config, db, logger, nil)
+	if err == nil {
+		t.Error("NewSQLAuditStore with nil fileSvc should return error")
+	}
+	if !errors.Is(err, constants.ErrMissingRequiredField) {
+		t.Errorf("expected ErrMissingRequiredField, got: %v", err)
+	}
+	if ass != nil {
+		t.Error("NewSQLAuditStore with nil fileSvc should return nil store")
+	}
+}
+
 // TestSQLAuditStore_NilEncryptionVault verifies that NewSQLAuditStore
 // requires EncryptionVault in config and returns an error when vault is nil.
 func TestSQLAuditStore_NilEncryptionVault(t *testing.T) {
 	logger := testutil.NewTestLogger()
+	fileSvc := newTestFileSvc(t, testutil.TempDir(t))
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
 
 	config := DefaultAuditStoreConfig()
 
 	// Test that service fails to initialize with nil EncryptionVault
-	ass, err := NewSQLAuditStore(config, logger, nil)
+	ass, err := NewSQLAuditStore(config, db, logger, fileSvc)
 	if err == nil {
 		t.Error("NewSQLAuditStore with nil EncryptionVault should return error")
 	}
-	if !strings.Contains(err.Error(), "EncryptionVault is required") {
-		t.Errorf("Error should mention 'EncryptionVault is required', got: %v", err)
+	if !errors.Is(err, constants.ErrAuditStoreEncryptionVaultRequired) {
+		t.Errorf("Error should match ErrAuditStoreEncryptionVaultRequired, got: %v", err)
 	}
 	if ass != nil {
 		t.Error("NewSQLAuditStore with nil EncryptionVault should return nil store")

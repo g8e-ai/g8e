@@ -11,3 +11,4 @@ Makefile        text eol=lf
 protocol/schemas/oscal/v1.1.2/*.json text eol=lf
 g8e-adapter/contract-pack/** text eol=lf
 evaluation-explorer/src/content/scenario-catalog.generated.ts text eol=lf
+evaluation-explorer/runtime.production.json text eol=lf

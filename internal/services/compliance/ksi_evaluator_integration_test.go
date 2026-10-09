@@ -27,7 +27,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
@@ -85,17 +84,19 @@ func newIntegrationEvaluatorFixture(t *testing.T) *integrationEvaluatorFixture {
 
 	logger := testutil.NewTestLogger()
 
-	auditCfg := storage.DefaultAuditStoreConfig()
-	auditCfg.EncryptionVault = testVault
-	auditStore, err := storage.NewSQLAuditStore(auditCfg, logger, fileSvc)
-	require.NoError(t, err)
-	t.Cleanup(func() { auditStore.Close() })
-
-	dbPath := pathutil.ResolveDBPath(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard))
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
 	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { mainDB.Close() })
-	commitments := storage.NewCommitmentLedger(mainDB, logger)
+
+	auditCfg := storage.DefaultAuditStoreConfig()
+	auditCfg.EncryptionVault = testVault
+	auditStore, err := storage.NewSQLAuditStore(auditCfg, mainDB, logger, fileSvc)
+	require.NoError(t, err)
+	t.Cleanup(func() { auditStore.Close() })
+
+	commitments := auditStore.CommitmentLedger()
 
 	ledger, err := storage.NewGitLedgerService(&storage.LedgerConfig{
 		GitPath:         gitPath,

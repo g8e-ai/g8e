@@ -66,7 +66,13 @@ def bash_path(path):
 def bash_environment(fake_home, fake_bin):
     env = os.environ.copy()
     env["HOME"] = bash_path(fake_home)
-    env["PATH"] = f"{bash_path(fake_bin)}:/usr/bin:/bin"
+    bin_path = bash_path(fake_bin)
+    if os.name == "nt" and "git" in BASH.lower():
+        git_usr_bin = bash_path(Path(BASH).parents[1] / "usr" / "bin")
+        git_mingw_bin = bash_path(Path(BASH).parents[1] / "mingw64" / "bin")
+        env["PATH"] = f"{bin_path}:{git_mingw_bin}:{git_usr_bin}:/usr/bin:/bin"
+    else:
+        env["PATH"] = f"{bin_path}:/usr/bin:/bin"
     return env
 
 

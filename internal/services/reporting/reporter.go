@@ -67,23 +67,25 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	// Open vault (locked or unlocked).
 	v, vaultUnlocked := openVault(fileSvc, opts.Keystore, logger)
 
-	// Open audit store (sessions, events, file_mutations, receipts, commitment_ledger).
-	auditStoreCfg := storage.DefaultAuditStoreConfig()
-	auditStoreCfg.EncryptionVault = v
-	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, logger, fileSvc)
-	if err != nil {
-		return RunResult{}, fmt.Errorf("%w: audit store: %w", constants.ErrReportStoreUnavailable, err)
+	// Open g8e.db once; the audit store and its commitment ledger share the pool.
+	if err := fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard); err != nil {
+		return RunResult{}, fmt.Errorf("%w: data dir: %w", constants.ErrReportStoreUnavailable, err)
 	}
-	defer auditStore.Close()
-
-	// Open commitment ledger (shares g8e.db with audit store — open separately read-only).
-	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
-	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
+	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(fileSvc.Resolve(constants.CanonicalDBRelPath)), logger)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("%w: main db: %w", constants.ErrReportStoreUnavailable, err)
 	}
 	defer mainDB.Close()
-	cl := storage.NewCommitmentLedger(mainDB, logger)
+
+	// Open audit store (sessions, events, file_mutations, receipts, commitment_ledger).
+	auditStoreCfg := storage.DefaultAuditStoreConfig()
+	auditStoreCfg.EncryptionVault = v
+	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, mainDB, logger, fileSvc)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("%w: audit store: %w", constants.ErrReportStoreUnavailable, err)
+	}
+	defer auditStore.Close()
+	cl := auditStore.CommitmentLedger()
 
 	// Open execution vault.
 	evCfg := storage.DefaultExecutionVaultConfig()

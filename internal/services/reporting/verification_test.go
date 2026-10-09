@@ -52,14 +52,18 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	require.NoError(t, err)
 	testVault := createTestVault(t, fileSvc, privKey)
 
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
 	cfg := &storage.AuditStoreConfig{
-		DBPath:               "test_audit.db",
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
-	store, err := storage.NewSQLAuditStore(cfg, testutil.NewTestLogger(), fileSvc)
+	store, err := storage.NewSQLAuditStore(cfg, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	return store

@@ -27,7 +27,7 @@ async function filesUnder(directory) {
   return files;
 }
 
-const productionRuntime = await readFile(new URL('runtime.production.json', projectRoot), 'utf8');
+const productionRuntime = (await readFile(new URL('runtime.production.json', projectRoot), 'utf8')).replace(/\r\n/g, '\n');
 if (productionRuntime !== expectedRuntime) throw new Error('runtime.production.json does not match the production contract');
 await writeFile(new URL('runtime.json', distRoot), productionRuntime, 'utf8');
 

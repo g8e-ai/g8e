@@ -47,7 +47,11 @@ import (
 //   - Otherwise one BEGIN IMMEDIATE transaction rehashes only the dirty leaves,
 //     their buckets and the bucket ancestor paths, clears the dirty set and reads
 //     the new root. The result always describes one committed snapshot; a rollback
-//     publishes nothing. No Go mutex is held across SQL or hashing.
+//     publishes nothing.
+//   - Concurrent readers that observe dirty rows coalesce: they queue on one
+//     flush slot, and a waiter whose dirty observation is covered by a flush
+//     that started after it (and succeeded) reads the committed root instead of
+//     taking another write transaction. Waiting honors ctx.
 //
 // Tree shape: a leaf identity is SHA-256 over (source, key); its first two bytes
 // select one of 65,536 buckets. A bucket digest commits to its leaves ordered by
@@ -65,6 +69,13 @@ type StateRootService struct {
 	// flushedLeaves counts leaf identities processed by commitment flushes. It
 	// lets tests assert that work follows the change set, not history size.
 	flushedLeaves atomic.Int64
+
+	// flushSlot admits one root flush at a time. flushStarts counts flushes
+	// begun (incremented while holding the slot); flushCovered is the start
+	// number of the latest successful flush and is guarded by the slot.
+	flushSlot    chan struct{}
+	flushStarts  atomic.Uint64
+	flushCovered uint64
 }
 
 // KeymapHashProvider returns a deterministic hash of the token keymap.
@@ -115,8 +126,9 @@ var stateEmptyDigests = func() [stateTreeDepth + 1][]byte {
 // NewStateRootService creates a new state root service.
 func NewStateRootService(db *sqliteutil.DB, logger *slog.Logger) *StateRootService {
 	return &StateRootService{
-		db:     db,
-		logger: logger,
+		db:        db,
+		logger:    logger,
+		flushSlot: make(chan struct{}, 1),
 	}
 }
 
@@ -156,6 +168,27 @@ func (s *StateRootService) GetObservedStateRoot(ctx context.Context) (string, er
 // committedTreeRoot reads the tier's tree root and the dirty marker in one
 // statement (one snapshot). Pending changes are flushed first.
 func (s *StateRootService) committedTreeRoot(ctx context.Context, tier string) ([]byte, error) {
+	dirty, digest, err := s.readTreeRoot(ctx, tier)
+	if err != nil {
+		return nil, err
+	}
+	if dirty {
+		// Any flush that starts after this point reads a dirty set that
+		// includes every change this caller observed.
+		ticket := s.flushStarts.Load()
+		digest, err = s.flushTreeRoot(ctx, tier, ticket)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if digest == nil {
+		return stateEmptyDigests[0], nil
+	}
+	return digest, nil
+}
+
+// readTreeRoot reads the dirty marker and the tier's committed tree root.
+func (s *StateRootService) readTreeRoot(ctx context.Context, tier string) (bool, []byte, error) {
 	var dirty bool
 	var digest []byte
 	err := s.db.QueryRowWithRetry(ctx,
@@ -164,28 +197,45 @@ func (s *StateRootService) committedTreeRoot(ctx context.Context, tier string) (
 		tier,
 	).Scan(&dirty, &digest)
 	if err != nil {
-		return nil, fmt.Errorf("%w: read committed root: %w", constants.ErrStateRootCalculate, err)
+		return false, nil, fmt.Errorf("%w: read committed root: %w", constants.ErrStateRootCalculate, err)
 	}
-	if dirty {
-		err = s.db.ExecInImmediateTxWithRetry(ctx, func(conn *sql.Conn) error {
-			if err := s.flush(ctx, conn); err != nil {
-				return err
-			}
-			digest = nil
-			err := conn.QueryRowContext(ctx,
-				"SELECT digest FROM state_nodes WHERE tier = ? AND level = 0 AND idx = 0", tier).Scan(&digest)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("%w: read flushed root: %w", constants.ErrStateRootCalculate, err)
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
+	return dirty, digest, nil
+}
+
+// flushTreeRoot returns a tier root that reflects every change committed
+// before ticket was taken. When a flush that started after ticket has already
+// succeeded, the committed root is read without a write transaction.
+func (s *StateRootService) flushTreeRoot(ctx context.Context, tier string, ticket uint64) ([]byte, error) {
+	select {
+	case s.flushSlot <- struct{}{}:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%w: await root flush: %w", constants.ErrStateRootCalculate, ctx.Err())
+	}
+	defer func() { <-s.flushSlot }()
+
+	if s.flushCovered > ticket {
+		_, digest, err := s.readTreeRoot(ctx, tier)
+		return digest, err
+	}
+
+	start := s.flushStarts.Add(1)
+	var digest []byte
+	err := s.db.ExecInImmediateTxWithRetry(ctx, func(conn *sql.Conn) error {
+		if err := s.flush(ctx, conn); err != nil {
+			return err
 		}
+		digest = nil
+		err := conn.QueryRowContext(ctx,
+			"SELECT digest FROM state_nodes WHERE tier = ? AND level = 0 AND idx = 0", tier).Scan(&digest)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: read flushed root: %w", constants.ErrStateRootCalculate, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	if digest == nil {
-		return stateEmptyDigests[0], nil
-	}
+	s.flushCovered = start
 	return digest, nil
 }
 

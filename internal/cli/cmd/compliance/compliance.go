@@ -21,7 +21,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -222,7 +221,7 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keysto
 // openEvaluatorDeps opens the audit store, git ledger, and commitment ledger
 // from the runtime file service. Returns ok=false if any store is unavailable.
 // Each evidence source is opened by a dedicated opener (openVault,
-// openAuditStore, openCommitments, openLedger); this function composes them and
+// openAuditStore, openLedger); this function composes them and
 // aggregates their cleanups so a failure in a later opener releases resources
 // acquired by earlier ones.
 func openEvaluatorDeps(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (compliance.EvaluatorDeps, func(), bool) {
@@ -237,13 +236,7 @@ func openEvaluatorDeps(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (co
 		return compliance.EvaluatorDeps{}, nil, false
 	}
 	cleanups = append(cleanups, auditCleanup)
-
-	cl, commitCleanup, ok := openCommitments(fileSvc)
-	if !ok {
-		runCleanups(cleanups)
-		return compliance.EvaluatorDeps{}, nil, false
-	}
-	cleanups = append(cleanups, commitCleanup)
+	cl := auditStore.CommitmentLedger()
 
 	ledger, ledgerCleanup, ok := openLedger(fileSvc, v)
 	if !ok {
@@ -297,27 +290,27 @@ func openVault(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (*vault.Vau
 	return v, func() {}
 }
 
-// openAuditStore opens the SQL audit store. Returns ok=false on failure.
+// openAuditStore opens g8e.db once and builds the SQL audit store over it; the
+// store's commitment ledger shares the same pool. Returns ok=false on failure.
 func openAuditStore(fileSvc fs.RuntimeFileService, v *vault.Vault) (*storage.SQLAuditStore, func(), bool) {
+	if err := fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard); err != nil {
+		return nil, nil, false
+	}
+	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(fileSvc.Resolve(constants.CanonicalDBRelPath)), slog.Default())
+	if err != nil {
+		return nil, nil, false
+	}
 	auditCfg := storage.DefaultAuditStoreConfig()
 	auditCfg.EncryptionVault = v
-	auditStore, err := storage.NewSQLAuditStore(auditCfg, slog.Default(), fileSvc)
+	auditStore, err := storage.NewSQLAuditStore(auditCfg, mainDB, slog.Default(), fileSvc)
 	if err != nil {
+		mainDB.Close()
 		return nil, nil, false
 	}
-	return auditStore, func() { auditStore.Close() }, true
-}
-
-// openCommitments opens the shared g8e.db connection and constructs a
-// commitment ledger over it. Returns ok=false on failure.
-func openCommitments(fileSvc fs.RuntimeFileService) (*storage.CommitmentLedger, func(), bool) {
-	dbPath := pathutil.ResolveDBPath(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
-	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), slog.Default())
-	if err != nil {
-		return nil, nil, false
-	}
-	cl := storage.NewCommitmentLedger(mainDB, slog.Default())
-	return cl, func() { mainDB.Close() }, true
+	return auditStore, func() {
+		auditStore.Close()
+		mainDB.Close()
+	}, true
 }
 
 // openLedger opens the git-backed ledger service. Returns ok=false on failure.

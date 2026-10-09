@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -39,10 +40,15 @@ func newIntegrationAuditStore(t *testing.T) *SQLAuditStore {
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, fileSvc, privKey)
 
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
 	config := DefaultAuditStoreConfig()
 	config.EncryptionVault = testVault
 
-	ass, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	ass, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, ass.Close()) })
 	return ass
@@ -88,7 +94,12 @@ func TestNewSQLAuditStore_NilLoggerUsesDefault(t *testing.T) {
 	config := DefaultAuditStoreConfig()
 	config.EncryptionVault = testVault
 
-	ass, err := NewSQLAuditStore(config, nil, fileSvc)
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	ass, err := NewSQLAuditStore(config, db, nil, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, ass.Close()) })
 
@@ -289,7 +300,12 @@ func TestSQLAuditStore_VerifyChain_BackfillLegacyRows(t *testing.T) {
 	config := DefaultAuditStoreConfig()
 	config.EncryptionVault = testVault
 
-	ass, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	ass, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, ass.Close()) })
 
@@ -424,9 +440,14 @@ func TestSQLAuditStore_VerifyChain_SurvivesVaultRekey(t *testing.T) {
 	fileSvc := newTestFileSvc(t, tempDir)
 	testVault := CreateTestVault(t, fileSvc, oldKey)
 
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
 	config := DefaultAuditStoreConfig()
 	config.EncryptionVault = testVault
-	ass, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	ass, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	require.NoError(t, ass.CreateSession("rekey-chain-session", constants.SessionTypeOperator, "Rekey Chain", "user-rekey"))
@@ -457,7 +478,7 @@ func TestSQLAuditStore_VerifyChain_SurvivesVaultRekey(t *testing.T) {
 	t.Cleanup(func() { rekeyedVault.Close() })
 
 	config.EncryptionVault = rekeyedVault
-	ass2, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	ass2, err := NewSQLAuditStore(config, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, ass2.Close()) })
 

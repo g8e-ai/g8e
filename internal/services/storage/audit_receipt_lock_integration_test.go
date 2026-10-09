@@ -37,7 +37,8 @@ func TestReceiptPreparationDoesNotWaitForLedger(t *testing.T) {
 			case "session whitespace":
 				record.OperatorSessionID = " session "
 			}
-			store.commitmentLedger.mu.Lock()
+			release, acquired := store.db.TryAcquireWriter()
+			require.True(t, acquired)
 			done := make(chan error, 1)
 			go func() {
 				done <- store.RecordActionReceiptWithCommitment(record, func(string) (*operatorv1.CommitmentAttestation, error) {
@@ -47,11 +48,11 @@ func TestReceiptPreparationDoesNotWaitForLedger(t *testing.T) {
 			var err error
 			select {
 			case err = <-done:
-				store.commitmentLedger.mu.Unlock()
+				release()
 			case <-time.After(time.Second):
-				store.commitmentLedger.mu.Unlock()
+				release()
 				err = <-done // Join even when the regression is present.
-				t.Error("receipt preparation waited for the occupied ledger")
+				t.Error("receipt preparation waited for the occupied writer gate")
 			}
 			require.Error(t, err)
 			switch invalid {
@@ -86,9 +87,9 @@ func TestReceiptSuccessLogsFollowCommitAndUnlock(t *testing.T) {
 		Handler: slog.DiscardHandler,
 		observe: func(record slog.Record) {
 			messages = append(messages, record.Message)
-			unlocked := store.commitmentLedger.mu.TryLock()
+			release, unlocked := store.db.TryAcquireWriter()
 			if unlocked {
-				store.commitmentLedger.mu.Unlock()
+				release()
 			}
 			assert.True(t, unlocked, "log handler must not serialize receipt writers: %s", record.Message)
 			var count int

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"sync"
 	"time"
 
 	"modernc.org/sqlite"
@@ -63,12 +64,36 @@ func DefaultDBConfig(path string) DBConfig {
 	}
 }
 
+// walCheckpointCommitInterval is how many gated write commits accumulate
+// before the background checkpointer is woken. SQLite's automatic checkpoint
+// is disabled for databases opened by OpenDB because it runs inside COMMIT on
+// the committing connection, which extends the serialized write section.
+const walCheckpointCommitInterval = 64
+
 // DB represents a wrapper around *sql.DB that provides common g8eo data operations.
+//
+// SQLite admits one writer at a time. Every in-process writer that goes through
+// ExecWithRetry, ExecInTxWithRetry or ExecInImmediateTxWithRetry first takes
+// the pool's writer gate, so writers queue in FIFO order on a channel instead
+// of polling SQLite's lock through busy_timeout sleeps and retry backoff, and a
+// queued writer holds no pooled connection that readers need. A process opens
+// each database file once and shares that DB among its stores, so the gate
+// covers every in-process writer. SQLITE_BUSY retries remain for contention
+// with other processes.
 type DB struct {
 	*sql.DB
 	logger *slog.Logger
 	path   string
 	config DBConfig
+
+	writerOnce sync.Once
+	writer     chan struct{}
+
+	commits    int64 // guarded by the writer gate
+	checkpoint chan struct{}
+	stopOnce   sync.Once
+	stop       context.CancelFunc
+	stopped    chan struct{}
 }
 
 // OpenDB opens (or creates) a SQLite database with best-practice settings.
@@ -93,6 +118,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		fmt.Sprintf("cache_size(-%d)", cfg.CacheSizeMB*1024),
 		"auto_vacuum(INCREMENTAL)",
 		"temp_store(MEMORY)",
+		"wal_autocheckpoint(0)",
 	} {
 		params.Add("_pragma", pragma)
 	}
@@ -103,10 +129,11 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("sqliteutil: open database %s: %w", cfg.Path, err)
 	}
 
-	// Increase connection pool size to fully utilize WAL mode
-	// WAL mode allows multiple readers and one writer concurrently
+	// WAL mode allows many readers and one writer. Keep every pooled
+	// connection idle-resident so a burst does not close and reopen
+	// connections and re-run the DSN PRAGMAs on each.
 	sqlDB.SetMaxOpenConns(20)
-	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxIdleConns(20)
 	sqlDB.SetConnMaxLifetime(0)
 
 	if err := sqlDB.Ping(); err != nil {
@@ -117,12 +144,95 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	}
 
 	logger.Info("SQLite database opened", "path", cfg.Path)
-	return &DB{
-		DB:     sqlDB,
-		logger: logger,
-		path:   cfg.Path,
-		config: cfg,
-	}, nil
+	checkpointCtx, stop := context.WithCancel(context.Background())
+	db := &DB{
+		DB:         sqlDB,
+		logger:     logger,
+		path:       cfg.Path,
+		config:     cfg,
+		checkpoint: make(chan struct{}, 1),
+		stop:       stop,
+		stopped:    make(chan struct{}),
+	}
+	go db.runCheckpointer(checkpointCtx)
+	return db, nil
+}
+
+// Close stops the background checkpointer, then closes the pool. SQLite
+// checkpoints the WAL when the last connection closes.
+func (db *DB) Close() error {
+	db.stopOnce.Do(func() {
+		if db.stop != nil {
+			db.stop()
+			<-db.stopped
+		}
+	})
+	return db.DB.Close()
+}
+
+// runCheckpointer folds the WAL back into the database off the write path.
+// It wakes only when writers signal; PASSIVE never blocks readers or writers.
+func (db *DB) runCheckpointer(ctx context.Context) {
+	defer close(db.stopped)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-db.checkpoint:
+			if _, err := db.ExecContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)"); err != nil && ctx.Err() == nil && !IsBusyError(err) {
+				db.logger.Warn("SQLite WAL checkpoint failed", "path", db.path, "error", err)
+			}
+		}
+	}
+}
+
+// writerGate returns the writer gate, creating it on first use so a
+// zero-value DB is usable.
+func (db *DB) writerGate() chan struct{} {
+	db.writerOnce.Do(func() { db.writer = make(chan struct{}, 1) })
+	return db.writer
+}
+
+// acquireWriter waits in FIFO order for the writer gate or until ctx ends.
+func (db *DB) acquireWriter(ctx context.Context) error {
+	select {
+	case db.writerGate() <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// releaseWriter releases the writer gate.
+func (db *DB) releaseWriter() {
+	<-db.writerGate()
+}
+
+// TryAcquireWriter attempts to acquire the writer gate without blocking.
+// If acquired, it returns a release function and true; otherwise nil and false.
+func (db *DB) TryAcquireWriter() (func(), bool) {
+	select {
+	case db.writerGate() <- struct{}{}:
+		return db.releaseWriter, true
+	default:
+		return nil, false
+	}
+}
+
+// noteCommit records a successful gated write and wakes the checkpointer once
+// per walCheckpointCommitInterval commits. The caller holds the writer gate.
+func (db *DB) noteCommit() {
+	if db.checkpoint == nil {
+		return
+	}
+	db.commits++
+	if db.commits%walCheckpointCommitInterval != 0 {
+		return
+	}
+	select {
+	case db.checkpoint <- struct{}{}:
+	default:
+	}
 }
 
 // OpenReadOnlyDB opens an existing SQLite database without creating or
@@ -191,6 +301,11 @@ func (db *DB) HealthCheck(ctx context.Context) error {
 // ExecWithRetry executes a SQL statement with automatic retry on SQLITE_BUSY.
 // This is useful for high-concurrency scenarios where WAL mode may still encounter transient locks.
 func (db *DB) ExecWithRetry(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	if err := db.acquireWriter(ctx); err != nil {
+		return nil, err
+	}
+	defer db.releaseWriter()
+
 	var result sql.Result
 	var err error
 
@@ -198,6 +313,7 @@ func (db *DB) ExecWithRetry(ctx context.Context, query string, args ...interface
 	for i := 0; i < maxRetries; i++ {
 		result, err = db.ExecContext(ctx, query, args...)
 		if err == nil {
+			db.noteCommit()
 			return result, nil
 		}
 		if ctx.Err() != nil {
@@ -346,6 +462,11 @@ func findSubstring(s, substr string) bool {
 // If the function returns nil, the transaction is committed.
 // This handles SQLITE_BUSY errors at both the Begin() and Commit() stages.
 func (db *DB) ExecInTxWithRetry(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	if err := db.acquireWriter(ctx); err != nil {
+		return err
+	}
+	defer db.releaseWriter()
+
 	maxRetries := db.config.MaxRetries
 	var lastErr error
 
@@ -403,6 +524,7 @@ func (db *DB) ExecInTxWithRetry(ctx context.Context, fn func(tx *sql.Tx) error) 
 			return fmt.Errorf("sqliteutil: commit transaction: %w", err)
 		}
 
+		db.noteCommit()
 		return nil
 	}
 
@@ -410,7 +532,14 @@ func (db *DB) ExecInTxWithRetry(ctx context.Context, fn func(tx *sql.Tx) error) 
 }
 
 // ExecInImmediateTxWithRetry executes a SQLite BEGIN IMMEDIATE transaction on one connection and retries SQLITE_BUSY failures.
+// The writer gate is held for the whole call, so fn must not start another
+// gated write on db; it must do all of its work through conn.
 func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn) error) error {
+	if err := db.acquireWriter(ctx); err != nil {
+		return err
+	}
+	defer db.releaseWriter()
+
 	var lastErr error
 	for i := 0; i < db.config.MaxRetries; i++ {
 		if err := ctx.Err(); err != nil {
@@ -495,6 +624,7 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			}
 		}
 		if err == nil {
+			db.noteCommit()
 			return nil
 		}
 		if ctx.Err() != nil {

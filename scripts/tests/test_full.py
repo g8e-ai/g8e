@@ -10,6 +10,7 @@
 import contextlib
 import importlib.util
 import io
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -294,7 +295,7 @@ class FullTests(unittest.TestCase):
         run.assert_not_called()
         text = output.getvalue()
         self.assertIn("--roles provenance,observer,inference,data", text)
-        self.assertIn("--model-storage-root /models", text)
+        self.assertIn(f"--model-storage-root {shlex.quote(str(Path('/models').resolve()))}", text)
         self.assertIn("--inference-ollama-endpoint http://gpu:11434", text)
         self.assertIn("https://dev.example:8443", text)
 
@@ -357,7 +358,10 @@ class FullTests(unittest.TestCase):
             contextlib.redirect_stdout(output),
         ):
             FULL.main()
-        self.assertIn("--model-storage-root /srv/ollama/models", output.getvalue())
+        self.assertIn(
+            f"--model-storage-root {shlex.quote(str(Path('/srv/ollama/models').resolve()))}",
+            output.getvalue(),
+        )
 
     def test_embedded_gateway_invalid_environment_fails_before_side_effects(self):
         for values in (

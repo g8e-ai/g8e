@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -61,14 +62,20 @@ func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(
 	require.NoError(t, err)
 	testVault := storagetest.CreateTestVault(t, fileSvc.Resolve(constants.VaultDirname), vaultKey)
 
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard))
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+
 	auditConfig := storage.DefaultAuditStoreConfig()
 	auditConfig.EncryptionVault = testVault
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, testutil.NewTestLogger(), fileSvc)
+	auditStore, err := storage.NewSQLAuditStore(auditConfig, db, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
-	auditStoreClosed := false
+	closed := false
 	t.Cleanup(func() {
-		if !auditStoreClosed {
-			require.NoError(t, auditStore.Close())
+		if !closed {
+			_ = auditStore.Close()
+			_ = db.Close()
 		}
 	})
 	require.NoError(t, auditStore.CreateSession("operator-session-1", constants.SessionTypeOperator, "operator fixture", "test-user"))
@@ -123,7 +130,7 @@ func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(
 	now := time.Now().UTC()
 	windowStart := now.Add(-time.Minute)
 	windowEnd := now.Add(time.Minute)
-	dbPath := filepath.Join(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
+	dbPath = filepath.Join(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
 	reader, err := storage.OpenReadOnlyOperationalEvidence(dbPath, testutil.NewTestLogger())
 	require.NoError(t, err)
 	snapshot, err := reader.Snapshot(ctx, storage.OperationalEvidenceQuery{WindowStart: windowStart, WindowEnd: windowEnd, MaxRows: 10})
@@ -133,7 +140,8 @@ func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(
 	require.Len(t, snapshot.Commitments, 1)
 	require.NoError(t, reader.Close())
 	require.NoError(t, auditStore.Close())
-	auditStoreClosed = true
+	require.NoError(t, db.Close())
+	closed = true
 
 	assessmentAsOf := now
 	scope := validGenerationScope(windowStart, windowEnd)

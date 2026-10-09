@@ -57,41 +57,22 @@ func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) Option
 	require.NoError(t, v.Unlock(vaultKey))
 	t.Cleanup(func() { v.Close() })
 
+	// Open g8e.db once; the audit store and its commitment ledger share the pool.
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard))
+	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(filepath.Join(dataDir, constants.DbFilename)), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { mainDB.Close() })
+
 	// Audit store.
 	auditCfg := &storage.AuditStoreConfig{
-		DBPath:               constants.DbFilename,
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      v,
 	}
-	store, err := storage.NewSQLAuditStore(auditCfg, testutil.NewTestLogger(), fileSvc)
+	store, err := storage.NewSQLAuditStore(auditCfg, mainDB, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
-
-	// Create commitment_ledger table in the same DB (audit store doesn't create it).
-	clDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(filepath.Join(dataDir, constants.DbFilename)), testutil.NewTestLogger())
-	require.NoError(t, err)
-	_, err = clDB.Exec(`CREATE TABLE IF NOT EXISTS commitment_ledger (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		transaction_id TEXT NOT NULL,
-		transaction_hash TEXT NOT NULL,
-		prior_commitment_hash TEXT NOT NULL,
-		state_root_at_commit TEXT,
-		l2_signature_digest TEXT,
-		warden_intent_signature_digest TEXT,
-		human_signature_digest TEXT,
-		action_type TEXT,
-		target_resource TEXT,
-		committed_at_unix_ms INTEGER NOT NULL,
-		auditor_key_id TEXT,
-		signature TEXT,
-		hash TEXT NOT NULL,
-		attestation_json TEXT NOT NULL,
-		UNIQUE(hash)
-	)`)
-	require.NoError(t, err)
-	t.Cleanup(func() { clDB.Close() })
 
 	var ev *storage.ExecutionVaultService
 	var rs *storage.SQLReplayStore

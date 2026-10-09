@@ -151,10 +151,11 @@ func OpenCanonicalDBService(logger *slog.Logger, ks *keystore.Keystore, fileSvc 
 	}
 	logger.Info("Vault unlocked successfully", "vault_dir", vaultDirAbs)
 
-	// Initialize SQLAuditStore for transaction-native audit recording
+	// Initialize SQLAuditStore for transaction-native audit recording. It
+	// shares this pool, so every g8e.db writer queues on one writer gate.
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
 	auditStoreConfig.EncryptionVault = encryptionVault
-	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
+	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, db, logger, fileSvc)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBAuditStoreInit, err)
