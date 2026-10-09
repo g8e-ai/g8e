@@ -384,15 +384,69 @@ function Build-EvaluationExplorer {
     }
 }
 
+function Test-G8ERepositoryRoot {
+    param([string]$Directory)
+
+    if ([string]::IsNullOrWhiteSpace($Directory)) {
+        return $false
+    }
+    try {
+        $root = [System.IO.Path]::GetFullPath($Directory)
+    } catch {
+        return $false
+    }
+    $goMod = Join-Path $root "go.mod"
+    $setupScript = Join-Path $root "scripts\windows-setup.ps1"
+    if (-not (Test-Path -LiteralPath $goMod -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $setupScript -PathType Leaf)) {
+        return $false
+    }
+    return [bool](Select-String -LiteralPath $goMod -Pattern '^module\s+github\.com/g8e-ai/g8e/v2\s*$' -Quiet)
+}
+
+function Get-G8ECheckoutPathSegments {
+    param(
+        [string[]]$Segments,
+        [string]$CurrentRoot
+    )
+
+    $current = [System.IO.Path]::GetFullPath($CurrentRoot).TrimEnd([char[]]'\/')
+    $updated = [System.Collections.Generic.List[string]]::new()
+    $updated.Add($current)
+    foreach ($segment in $Segments) {
+        if ([string]::IsNullOrWhiteSpace($segment)) {
+            continue
+        }
+        try {
+            $normalized = [System.IO.Path]::GetFullPath($segment).TrimEnd([char[]]'\/')
+        } catch {
+            $updated.Add($segment)
+            continue
+        }
+        if ($normalized -ieq $current -or (Test-G8ERepositoryRoot -Directory $normalized)) {
+            continue
+        }
+        $updated.Add($segment)
+    }
+    return $updated.ToArray()
+}
+
 function Configure-Path {
     param([bool]$IncludeDevTools = $false)
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    $segments = @()
+    $originalSegments = @()
     if ($userPath) {
-        $segments = $userPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)
+        $originalSegments = $userPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)
+    }
+    $segments = @(Get-G8ECheckoutPathSegments -Segments $originalSegments -CurrentRoot $Script:RepoRoot)
+    $staleRoots = @($originalSegments | Where-Object {
+        $_ -and $_ -ine $Script:RepoRoot -and (Test-G8ERepositoryRoot -Directory $_)
+    })
+    foreach ($root in $staleRoots) {
+        Write-Host "  removed stale g8e checkout $root from user PATH." -ForegroundColor Yellow
     }
 
-    $toAdd = @($Script:RepoRoot)
+    $toAdd = @()
     if ($IncludeDevTools) {
         $goBin = if (Get-Command go -ErrorAction SilentlyContinue) {
             $bin = (go env GOBIN)
@@ -410,24 +464,31 @@ function Configure-Path {
         }
     }
 
-    $updated = $false
+    $pathChanged = ($originalSegments -join ';') -cne ($segments -join ';')
     foreach ($dir in $toAdd) {
         if ($segments -contains $dir) {
             Write-Host "  $dir already present in user PATH — skipping." -ForegroundColor Green
         } else {
             $segments += $dir
-            $updated = $true
+            $pathChanged = $true
             Write-Host "  added $dir to user PATH." -ForegroundColor Green
-        }
-        if (-not ($env:Path.Split(';') -contains $dir)) {
-            $env:Path = "$env:Path;$dir"
         }
     }
 
-    if ($updated) {
+    if ($pathChanged) {
         $newPath = $segments -join ';'
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     }
+
+    $processSegments = $env:Path.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)
+    $processSegments = @(Get-G8ECheckoutPathSegments -Segments $processSegments -CurrentRoot $Script:RepoRoot)
+    foreach ($dir in $toAdd) {
+        if ($processSegments -notcontains $dir) {
+            $processSegments += $dir
+        }
+    }
+    $env:Path = $processSegments -join ';'
+    Write-Host "  placed $Script:RepoRoot first in user PATH." -ForegroundColor Green
 }
 
 function Show-NextSteps {
@@ -558,9 +619,4 @@ Configure-Path -IncludeDevTools $true
 Write-Host "`n[STEP 6/$totalSteps] Verifying the toolchain (make dev-check)..." -ForegroundColor Yellow
 Invoke-Step "make dev-check" { make dev-check }
 Show-NextSteps -BuildOnly $false
-
-# Keep the checkout's g8e binary on PATH for the remainder of this shell.
-if (($env:Path -split ';') -notcontains $PWD.Path) {
-    $env:Path = "$env:Path;$($PWD.Path)"
-}
 

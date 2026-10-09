@@ -219,6 +219,38 @@ if [ "$1" = --version ]; then echo "Python 3.12.3"; else exec "$SETUP_TEST_PYTHO
         self.assertEqual(self.logged_calls(), ["make dev-python"])
 
     @unittest.skipUnless(os.name == "nt" and shutil.which("pwsh"), "requires native Windows PowerShell")
+    def test_windows_path_prefers_current_checkout_and_removes_stale_checkout(self):
+        source = (REPO_ROOT / "scripts/windows-setup.ps1").read_text(encoding="utf-8")
+        functions = re.search(
+            r"(?ms)^function Test-G8ERepositoryRoot \{.*?(?=^function Configure-Path)", source,
+        ).group()
+        current = self.root / "current"
+        stale = self.root / "stale"
+        ordinary = self.root / "ordinary"
+        for checkout in (current, stale):
+            (checkout / "scripts").mkdir(parents=True)
+            (checkout / "go.mod").write_text("module github.com/g8e-ai/g8e/v2\n", encoding="utf-8")
+            (checkout / "scripts/windows-setup.ps1").touch()
+        (ordinary / "scripts").mkdir(parents=True)
+        (ordinary / "go.mod").write_text("module example.org/not-g8e\n", encoding="utf-8")
+        (ordinary / "scripts/windows-setup.ps1").touch()
+        script = self.root / "path-test.ps1"
+        script.write_text(
+            '$ErrorActionPreference = "Stop"\n' + functions + '\n'
+            '$segments = @($args[2], $args[1], $args[0], $args[1])\n'
+            '$result = @(Get-G8ECheckoutPathSegments -Segments $segments -CurrentRoot $args[0])\n'
+            '$result | ConvertTo-Json -Compress\n',
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-File", str(script),
+             str(current), str(stale), str(ordinary)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assert_succeeded(result)
+        self.assertEqual(json.loads(result.stdout), [str(current), str(ordinary)])
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("pwsh"), "requires native Windows PowerShell")
     def test_windows_explorer_rebuild_reuses_node_dependencies(self):
         source = (REPO_ROOT / "scripts/windows-setup.ps1").read_text(encoding="utf-8")
         functions = re.search(
