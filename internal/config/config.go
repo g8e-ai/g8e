@@ -124,7 +124,7 @@ type GatewayConfig struct {
 	Posture             GatewayPosture // Governance enforcement posture (doctrine, consensus, ratify, notary)
 	HTTPPort            int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
 	HTTPSPort           int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
-	ListenHost          string         // Bind host for HTTP and HTTPS; empty preserves the all-interface default
+	ListenHost          string         // Bind host for HTTP and HTTPS (default: constants.LocalhostIP; 0.0.0.0 must be requested explicitly)
 	DataDir             string         // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir              string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir          string         // Directory for platform secrets (default: .g8e/secrets)
@@ -346,6 +346,7 @@ type GatewayOptions struct {
 	Posture             GatewayPosture
 	HTTPPort            int
 	HTTPSPort           int
+	ListenHost          string
 	DataDir             string
 	PKIDir              string
 	SecretsDir          string
@@ -560,6 +561,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 			HTTPPort:            httpPort,
 			HTTPSPort:           httpsPort,
+			ListenHost:          listenHostOrDefault(opts.ListenHost),
 			DataDir:             dataDir,
 			PKIDir:              pkiDir,
 			SecretsDir:          secretsDir,
@@ -794,6 +796,15 @@ func httpPortOrDefault(p int) int {
 		return p
 	}
 	return constants.Ports.OperatorHttp
+}
+
+// listenHostOrDefault returns host if non-empty, otherwise loopback. Binding
+// all interfaces is opt-in via an explicit host (for example 0.0.0.0).
+func listenHostOrDefault(host string) string {
+	if host != "" {
+		return host
+	}
+	return constants.LocalhostIP
 }
 
 // httpsPortOrDefault returns p if non-zero, otherwise the default from paths.json.

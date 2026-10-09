@@ -1002,7 +1002,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
 	listenHost := cfg.Gateway.ListenHost
 	if listenHost == "" {
-		listenHost = "0.0.0.0"
+		listenHost = constants.LocalhostIP
 	}
 	ls.server = &http.Server{
 		Addr:              net.JoinHostPort(listenHost, strconv.Itoa(cfg.Gateway.HTTPPort)),

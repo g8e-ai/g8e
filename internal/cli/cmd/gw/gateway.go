@@ -86,6 +86,7 @@ type GatewayFlags struct {
 	AllowedOrigins      []string
 	DoctrineDir         string
 
+	ListenHost                        string
 	PublicSpectatorEnabled            bool
 	PublicSpectatorPrivateAddr        string
 	PublicSpectatorPublicAddr         string
@@ -108,6 +109,7 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)")
 	cmd.Flags().IntVar(&f.HTTPPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
 	cmd.Flags().IntVar(&f.HTTPSPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
+	cmd.Flags().StringVar(&f.ListenHost, "listen-host", constants.LocalhostIP, "Bind host for the HTTP and HTTPS listeners (use 0.0.0.0 to listen on all interfaces, e.g. for container or LAN access)")
 	cmd.Flags().StringVar(&f.DataDir, "data-dir", "", fmt.Sprintf("Data directory for SQLite database (default: %s in working directory)", constants.DefaultDataDir))
 	cmd.Flags().StringVar(&f.PKIDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
 	cmd.Flags().StringVar(&f.SecretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
@@ -197,6 +199,7 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		Posture:                            g8econfig.GatewayPosture(f.Posture),
 		HTTPPort:                           f.HTTPPort,
 		HTTPSPort:                          f.HTTPSPort,
+		ListenHost:                         f.ListenHost,
 		DataDir:                            f.DataDir,
 		PKIDir:                             f.PKIDir,
 		SecretsDir:                         f.SecretsDir,

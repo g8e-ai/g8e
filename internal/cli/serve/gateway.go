@@ -45,6 +45,7 @@ type GatewayConfig struct {
 	Posture                            config.GatewayPosture   `json:"posture"`
 	HTTPPort                           int                     `json:"http_port"`
 	HTTPSPort                          int                     `json:"https_port"`
+	ListenHost                         string                  `json:"listen_host,omitempty"`
 	DataDir                            string                  `json:"data_dir,omitempty"`
 	PKIDir                             string                  `json:"pki_dir,omitempty"`
 	SecretsDir                         string                  `json:"secrets_dir,omitempty"`
@@ -138,6 +139,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		Posture:                            cfg.Posture,
 		HTTPPort:                           cfg.HTTPPort,
 		HTTPSPort:                          cfg.HTTPSPort,
+		ListenHost:                         cfg.ListenHost,
 		DataDir:                            cfg.DataDir,
 		PKIDir:                             cfg.PKIDir,
 		SecretsDir:                         cfg.SecretsDir,

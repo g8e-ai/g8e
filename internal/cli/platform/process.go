@@ -343,6 +343,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 		args = append(args, "--doctrine-dir", opts.DoctrineDir)
 	}
 
+	if opts.ListenHost != "" {
+		args = append(args, "--listen-host", opts.ListenHost)
+	}
 	args = append(args, "--public-spectator", strconv.FormatBool(opts.PublicSpectatorEnabled))
 	if opts.PublicSpectatorPrivateAddr != "" {
 		args = append(args, "--public-spectator-private-listen", opts.PublicSpectatorPrivateAddr)

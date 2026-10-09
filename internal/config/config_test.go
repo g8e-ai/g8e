@@ -402,3 +402,9 @@ func TestBuildPubSubURL(t *testing.T) {
 		})
 	}
 }
+
+func TestListenHostOrDefault_LoopbackUnlessRequested(t *testing.T) {
+	assert.Equal(t, constants.LocalhostIP, listenHostOrDefault(""))
+	assert.Equal(t, "0.0.0.0", listenHostOrDefault("0.0.0.0"))
+	assert.Equal(t, "192.168.1.10", listenHostOrDefault("192.168.1.10"))
+}

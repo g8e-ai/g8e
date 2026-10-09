@@ -244,7 +244,7 @@ Mutations that traverse a g8e ingress use a typed `GovernanceEnvelope` (INV-BOUN
 
 ### Gateway HTTP boundary
 
-`gateway.HTTPHandler` in `internal/services/gateway/gateway_http.go` is the routing shell. `initHTTPHandler` in `gateway_service.go` builds two listeners, both bound to `Gateway.ListenHost` (empty binds all interfaces):
+`gateway.HTTPHandler` in `internal/services/gateway/gateway_http.go` is the routing shell. `initHTTPHandler` in `gateway_service.go` builds two listeners, both bound to `Gateway.ListenHost` (`--listen-host`, default `127.0.0.1`; `0.0.0.0` must be requested explicitly):
 
 | Field | Listener | Handler | Role |
 | --- | --- | --- | --- |
