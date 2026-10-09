@@ -300,6 +300,8 @@ Deploy up to 5000 Operators per host. Use `--local` to run on this system withou
 
 After approval, deployment waits for each new process to establish its command subscription and reads the session ID from that ready record, then prints the session IDs for [binding and running commands](#bind-the-cli-to-operators-and-run-commands). The ready phase follows the Gateway's subscription acknowledgement; deployment does not poll the registry for an active status that is assigned during issuance. Any failed deployment or failed readiness check produces a nonzero exit. Readiness is independent of the worker log level. Subscription loss returns the phase to enrolled, and reconnect publishes ready again. Startup failures publish a terminal failed phase with a non-secret error category; detailed diagnostics remain in the startup logs. A completed enrollment is retained on retry. Local/SSH deployments retain `start.log` and `operator.pid` in each directory; Docker reads container logs only to explain a stopped container. Stop workers with `operator stop <operator-session-id>` and revoke enrollment with `auth enroll revoke <request-id>` when retiring them.
 
+Fresh local/SSH deployment directories skip host process scans. A retained `operator.pid` or `start.log` triggers the existing directory-scoped replacement check, including an interrupted launch that wrote its log before its PID. Replacement matches the worker command and exact working directory; it does not signal a PID merely because it appears in a stale file. Retain these launch records until the worker has stopped.
+
 The 5000 limit is a deployment range, not a promise that every host can sustain 5000 processes. Size host memory, process/file limits, and Gateway capacity for the intended fleet.
 
 ---

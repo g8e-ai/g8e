@@ -734,13 +734,8 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 	if record == nil {
 		return constants.ErrAuditStoreRecordReceiptFailed
 	}
-	if build != nil {
-		if ass.commitmentLedger == nil {
-			return constants.ErrAuditStoreDBNotInitialized
-		}
-		// Ledger lock before the write lock, the same order AppendCommitment takes.
-		ass.commitmentLedger.mu.Lock()
-		defer ass.commitmentLedger.mu.Unlock()
+	if build != nil && ass.commitmentLedger == nil {
+		return constants.ErrAuditStoreDBNotInitialized
 	}
 
 	ass.muWrites.Add(1)
@@ -760,7 +755,26 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 		timestamp = time.Now().UTC()
 	}
 
-	err := ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+	// Canonicalization and encryption depend only on this receipt, not on either
+	// chain head. Do this work before serializing writers on the ledger/SQLite.
+	chainEvent := &Event{
+		OperatorSessionID: record.OperatorSessionID,
+		Timestamp:         timestamp,
+		Type:              constants.EventOperatorReceiptRecorded,
+		ContentText:       string(receiptJSON),
+		TransactionID:     record.TransactionID,
+	}
+	prepared, err := ass.prepareAuditEventInsert(chainEvent)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+	}
+
+	var commitment *CommitmentRow
+	if build != nil {
+		// Keep ledger-before-write lock ordering and both chain appends atomic.
+		ass.commitmentLedger.mu.Lock()
+	}
+	err = ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		if record.OperatorSessionID != "" {
 			if _, err := conn.ExecContext(context.Background(),
 				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
@@ -774,34 +788,31 @@ func (ass *SQLAuditStore) recordActionReceipt(record *models.ActionReceiptRecord
 			return err
 		}
 
-		chainEvent := &Event{
-			OperatorSessionID: record.OperatorSessionID,
-			Timestamp:         timestamp,
-			Type:              constants.EventOperatorReceiptRecorded,
-			ContentText:       string(receiptJSON),
-			TransactionID:     record.TransactionID,
-		}
 		if chainEvent.OperatorSessionID != "" {
 			if err := ass.requireExistingSessionConn(conn, chainEvent); err != nil {
 				return err
 			}
 		}
-		prepared, err := ass.prepareAuditEventInsert(chainEvent)
-		if err != nil {
-			return err
-		}
-		if _, _, _, err = AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
+		if _, _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
 			return err
 		}
 		if build != nil {
-			return ass.commitmentLedger.appendBuiltCommitment(conn, build)
+			var err error
+			commitment, err = ass.commitmentLedger.appendBuiltCommitment(conn, build)
+			return err
 		}
 		return nil
 	})
+	if build != nil {
+		ass.commitmentLedger.mu.Unlock()
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 	}
 
+	if commitment != nil {
+		ass.commitmentLedger.logAppend(commitment)
+	}
 	ass.logger.Info("ActionReceipt recorded",
 		"transaction_id", record.TransactionID,
 		"status", record.Status)

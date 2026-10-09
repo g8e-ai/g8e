@@ -161,11 +161,18 @@ func (cl *CommitmentLedger) AppendCommitment(build CommitmentBuilder) error {
 	if cl == nil || cl.db == nil {
 		return fmt.Errorf("commitment ledger not initialized")
 	}
+	var appended *CommitmentRow
 	cl.mu.Lock()
-	defer cl.mu.Unlock()
-	return cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
-		return cl.appendBuiltCommitment(conn, build)
+	err := cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		var err error
+		appended, err = cl.appendBuiltCommitment(conn, build)
+		return err
 	})
+	cl.mu.Unlock()
+	if err == nil {
+		cl.logAppend(appended)
+	}
+	return err
 }
 
 // AppendCommitmentJSON appends a prebuilt attestation after verifying its prior hash under SQLite's write lock.
@@ -173,9 +180,9 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 	if cl == nil || cl.db == nil {
 		return fmt.Errorf("commitment ledger not initialized")
 	}
+	var appended *CommitmentRow
 	cl.mu.Lock()
-	defer cl.mu.Unlock()
-	return cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+	err := cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		currentPriorHash, err := selectCommitmentHead(conn)
 		if err != nil {
 			return fmt.Errorf("failed to query current prior hash: %w", err)
@@ -183,20 +190,26 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 		if currentPriorHash != "" && currentPriorHash != priorHash {
 			return fmt.Errorf("prior_commitment_hash mismatch: expected %s, got %s", currentPriorHash, priorHash)
 		}
-		return cl.insertCommitment(conn, attestationJSON, priorHash, hash)
+		appended, err = cl.insertCommitment(conn, attestationJSON, priorHash, hash)
+		return err
 	})
+	cl.mu.Unlock()
+	if err == nil {
+		cl.logAppend(appended)
+	}
+	return err
 }
 
 // appendBuiltCommitment selects the chain head, builds the attestation over
 // it and appends it. The caller holds cl.mu and the write transaction.
-func (cl *CommitmentLedger) appendBuiltCommitment(conn *sql.Conn, build CommitmentBuilder) error {
+func (cl *CommitmentLedger) appendBuiltCommitment(conn *sql.Conn, build CommitmentBuilder) (*CommitmentRow, error) {
 	priorHash, err := selectCommitmentHead(conn)
 	if err != nil {
-		return fmt.Errorf("commitment ledger: select head: %w", err)
+		return nil, fmt.Errorf("commitment ledger: select head: %w", err)
 	}
 	attestationJSON, hash, err := build(priorHash)
 	if err != nil {
-		return fmt.Errorf("commitment ledger: build: %w", err)
+		return nil, fmt.Errorf("commitment ledger: build: %w", err)
 	}
 	return cl.insertCommitment(conn, attestationJSON, priorHash, hash)
 }
@@ -211,17 +224,17 @@ func selectCommitmentHead(conn *sql.Conn) (string, error) {
 	return head, nil
 }
 
-func (cl *CommitmentLedger) insertCommitment(conn *sql.Conn, attestationJSON []byte, priorHash, hash string) error {
+func (cl *CommitmentLedger) insertCommitment(conn *sql.Conn, attestationJSON []byte, priorHash, hash string) (*CommitmentRow, error) {
 	if len(attestationJSON) == 0 {
-		return fmt.Errorf("attestation JSON is empty")
+		return nil, fmt.Errorf("attestation JSON is empty")
 	}
 	attestation := &operatorv1.CommitmentAttestation{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(attestationJSON, attestation); err != nil {
-		return fmt.Errorf("failed to unmarshal attestation JSON: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal attestation JSON: %w", err)
 	}
 	canonicalAttestation, err := compliancev1.MarshalCanonical(attestation)
 	if err != nil {
-		return fmt.Errorf("failed to canonicalize attestation JSON: %w", err)
+		return nil, fmt.Errorf("failed to canonicalize attestation JSON: %w", err)
 	}
 	_, err = conn.ExecContext(context.Background(), `
 		INSERT INTO commitment_ledger (
@@ -235,10 +248,15 @@ func (cl *CommitmentLedger) insertCommitment(conn *sql.Conn, attestationJSON []b
 		attestation.GetActionType(), attestation.GetTargetResource(), attestation.GetCommittedAtUnixMs(), attestation.GetAuditorKeyId(),
 		attestation.GetSignature(), hash, canonicalAttestation)
 	if err != nil {
-		return fmt.Errorf("failed to insert commitment: %w", err)
+		return nil, fmt.Errorf("failed to insert commitment: %w", err)
 	}
+	return &CommitmentRow{TransactionID: attestation.GetTransactionId(), Hash: hash, PriorCommitmentHash: priorHash}, nil
+}
+
+// logAppend runs only after commit and outside the ledger lock: a slow log sink
+// must not block the next chain append or announce a transaction that rolls back.
+func (cl *CommitmentLedger) logAppend(row *CommitmentRow) {
 	if cl.logger != nil {
-		cl.logger.Info("Commitment appended to ledger", "transaction_id", attestation.GetTransactionId(), "commitment_hash", hash, "prior_commitment_hash", priorHash)
+		cl.logger.Info("Commitment appended to ledger", "transaction_id", row.TransactionID, "commitment_hash", row.Hash, "prior_commitment_hash", row.PriorCommitmentHash)
 	}
-	return nil
 }

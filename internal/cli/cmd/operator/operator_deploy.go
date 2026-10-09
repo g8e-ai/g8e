@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -48,6 +49,7 @@ const (
 	// operatorDeployStartLog is written by the started worker in its working
 	// directory for human diagnostics. Discovery uses structured runtime state.
 	operatorDeployStartLog = "start.log"
+	operatorDeployPIDFile  = "operator.pid"
 )
 
 // operatorDeployEnrollTimeout bounds how long deploy waits for the Gateway to
@@ -548,19 +550,42 @@ func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) 
 	return nil
 }
 
-// startOperator stops any worker previously started from dir, clears the start
-// log so stale enrollment output cannot be read back, and starts a new worker.
-// The stop pattern is anchored to the worker's own command line so it cannot
-// match the shell running this command.
+// stopPreviousOperator checks only directories with a recorded deployment.
+// Fresh fleet members must not each scan the entire host's process table.
+// The PID/start log is evidence of a previous launch, not authority to signal a PID:
+// the anchored directory pattern still prevents stale/reused PIDs from targeting
+// unrelated processes.
+func (s deploySSH) stopPreviousOperator(ctx context.Context, dir string) error {
+	if s.local {
+		previous := false
+		for _, name := range []string{operatorDeployPIDFile, operatorDeployStartLog} {
+			_, err := os.Lstat(filepath.Join(dir, name))
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("read previous deployment: %w", err)
+			}
+			previous = previous || err == nil
+		}
+		if !previous {
+			return nil
+		}
+	}
+	running := operatorDeployShellQuote(`^\./g8e operator start .*--working-dir ` + regexp.QuoteMeta(dir) + `$`)
+	stop := fmt.Sprintf(`cd %[1]s && { { [ ! -e %[3]s ] && [ ! -L %[3]s ] && [ ! -e %[4]s ] && [ ! -L %[4]s ]; } || { for i in $(seq 1 50); do pkill -f %[2]s || break; sleep 0.1; done && ! pgrep -f %[2]s >/dev/null; }; }`, operatorDeployShellQuote(dir), running, operatorDeployPIDFile, operatorDeployStartLog)
+	if _, err := s.run(ctx, stop); err != nil {
+		return fmt.Errorf("stop previous operator: %w", err)
+	}
+	return nil
+}
+
+// startOperator stops any worker previously deployed from dir, clears its start
+// log, and starts a new worker.
 func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, startArgs ...string) error {
+	if err := s.stopPreviousOperator(ctx, dir); err != nil {
+		return err
+	}
 	quotedArgs := make([]string, len(startArgs))
 	for i, arg := range startArgs {
 		quotedArgs[i] = operatorDeployShellQuote(arg)
-	}
-	running := operatorDeployShellQuote(`^\./g8e operator start .*--working-dir ` + regexp.QuoteMeta(dir) + `$`)
-	stop := fmt.Sprintf(`cd %[1]s && for i in $(seq 1 50); do pkill -f %[2]s || break; sleep 0.1; done && ! pgrep -f %[2]s >/dev/null`, operatorDeployShellQuote(dir), running)
-	if _, err := s.run(ctx, stop); err != nil {
-		return fmt.Errorf("stop previous operator: %w", err)
 	}
 	if s.local {
 		if err := ctx.Err(); err != nil {
@@ -582,7 +607,7 @@ func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, star
 		if err := worker.Start(); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(dir, "operator.pid"), []byte(fmt.Sprintf("%d\n", worker.Process.Pid)), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, operatorDeployPIDFile), []byte(fmt.Sprintf("%d\n", worker.Process.Pid)), 0o600); err != nil {
 			_ = worker.Process.Kill()
 			_ = worker.Wait()
 			return err
@@ -591,8 +616,8 @@ func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, star
 		return nil
 	}
 	script := fmt.Sprintf(
-		`umask 077; cd %[1]s && rm -f %[3]s && { nohup ./g8e operator start --endpoint %[2]s %[4]s --working-dir %[1]s > %[3]s 2>&1 < /dev/null & echo $! > operator.pid; }`,
-		operatorDeployShellQuote(dir), endpoint, operatorDeployStartLog, strings.Join(quotedArgs, " "))
+		`umask 077; cd %[1]s && rm -f %[3]s && { nohup ./g8e operator start --endpoint %[2]s %[4]s --working-dir %[1]s > %[3]s 2>&1 < /dev/null & echo $! > %[5]s; }`,
+		operatorDeployShellQuote(dir), endpoint, operatorDeployStartLog, strings.Join(quotedArgs, " "), operatorDeployPIDFile)
 	if _, err := s.run(ctx, script); err != nil {
 		return fmt.Errorf("start operator: %w", err)
 	}

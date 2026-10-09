@@ -156,6 +156,8 @@ Pruning deletes chained rows only after appending a `g8e.v1.platform.audit.chain
 
 The `receipts` table is a latest-stage query projection, not the audit record of record. L5 upserts one row per `transaction_id` as the receipt advances from `EXECUTING` to the signed final receipt that carries the signed persistence attestation. The `EXECUTING` write also appends the transaction's commitment in the same transaction when the commitment ledger is configured. Every stage write also appends a chained `g8e.v1.operator.receipt.recorded` fact whose `content_text` is the canonical protojson receipt for that stage.
 
+Receipt canonicalization and audit-content encryption happen before acquiring the commitment ledger mutex or SQLite write transaction. Session validation, the receipt upsert, audit-chain append, and optional commitment append still commit atomically; commitment construction uses the head read inside that transaction. Receipt and commitment success logs run only after commit and after releasing the ledger mutex, so log sinks do not extend the chain's critical section.
+
 Compliance operational export carries both the retained receipt body and the matching chained receipt facts. The evidence importer verifies the exported chain segment, cross-links matching receipt projections to their chain entries, and cross-links commitments to receipts through deterministic stage evidence.
 
 For a remote Operator, the local audit store is authoritative. After execution, the Operator publishes the signed receipt to the Gateway receipt channel. The Gateway verifies the signer, mirrors an accepted receipt into its own chain and projection, but publication failure does not invalidate the already persisted local result.
