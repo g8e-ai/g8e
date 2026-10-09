@@ -30,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
-	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -349,13 +348,13 @@ func (w *L5Actuator) signAndLogReceipt(ctx context.Context, vt *VerifiedTransact
 		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
 	}
 	var attestation *operatorv1.CommitmentAttestation
-	err = w.SQLAuditStore.RecordActionReceiptWithCommitment(BuildReceiptRecord(vt.Envelope, receipt), func(priorHash string) ([]byte, string, error) {
-		built, payload, err := w.buildCommitment(vt, receipt, priorHash)
+	err = w.SQLAuditStore.RecordActionReceiptWithCommitment(BuildReceiptRecord(vt.Envelope, receipt), func(priorHash string) (*operatorv1.CommitmentAttestation, error) {
+		built, err := w.buildCommitment(vt, receipt, priorHash)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		attestation = built
-		return payload, built.Hash, nil
+		return built, nil
 	})
 	if err != nil {
 		w.Logger.Error("Fail-closed: Failed to persist initial action receipt and commitment", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
@@ -408,8 +407,8 @@ func (w *L5Actuator) verifyAuditorKey() error {
 }
 
 // buildCommitment signs the receipt's commitment attestation over the given
-// chain head and returns it with its canonical encoding.
-func (w *L5Actuator) buildCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt, priorHash string) (*operatorv1.CommitmentAttestation, []byte, error) {
+// chain head. Storage owns its canonical JSON encoding.
+func (w *L5Actuator) buildCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt, priorHash string) (*operatorv1.CommitmentAttestation, error) {
 	attestation := &operatorv1.CommitmentAttestation{
 		TransactionId:               vt.Envelope.Id,
 		TransactionHash:             vt.Envelope.TransactionHash,
@@ -425,16 +424,12 @@ func (w *L5Actuator) buildCommitment(vt *VerifiedTransaction, receipt *operatorv
 	}
 	canonical, err := CanonicalizeCommitmentAttestation(attestation)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	hash := sha256.Sum256(canonical)
 	attestation.Hash = hex.EncodeToString(hash[:])
 	attestation.Signature = hex.EncodeToString(ed25519.Sign(w.AuditorSigningKey, canonical))
-	payload, err := compliancev1.MarshalCanonical(attestation)
-	if err != nil {
-		return nil, nil, fmt.Errorf("commitment attestation: marshal: %w", err)
-	}
-	return attestation, payload, nil
+	return attestation, nil
 }
 
 func l2SignatureDigest(env *govtypes.GovernanceEnvelope) string {

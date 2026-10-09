@@ -3,7 +3,7 @@ doc_id: storage
 title: Storage Architecture
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-10-06
+last_updated: 2026-10-08
 version: v2.3.2
 owners:
   - internal/services/storage/
@@ -165,6 +165,8 @@ For a remote Operator, the local audit store is authoritative. After execution, 
 ### Commitment Ledger
 
 The commitment ledger is a permanent SQLite hash chain inside `g8e.db`, distinct from the git-backed file ledger. Before execution, L5 builds and signs a `CommitmentAttestation` against the current chain head while SQLite holds the write lock. This serialization prevents concurrent writers from selecting the same predecessor.
+
+L5 passes the signed typed attestation to the ledger builder owner; storage serializes it to canonical JSON once, without decoding and re-encoding an intermediate JSON result. The builder result must be nonnil and name the chain head selected in the transaction. A mismatch or encoding failure rolls back the receipt, audit event, session insertion, and commitment together. The stored hash comes from the same attestation as the stored JSON.
 
 The commitment binds the transaction, state root, action and target, prior commitment hash, L2 and L3 signature digests, and the initial Warden-to-Actuator receipt signature digest. L5 records the commitment and prior hashes in deterministic stage evidence and does not execute when commitment persistence fails. Compliance tooling verifies the chain, signatures, structured fields, and links to receipts independently.
 

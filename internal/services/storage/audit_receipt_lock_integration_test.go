@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -41,8 +40,8 @@ func TestReceiptPreparationDoesNotWaitForLedger(t *testing.T) {
 			store.commitmentLedger.mu.Lock()
 			done := make(chan error, 1)
 			go func() {
-				done <- store.RecordActionReceiptWithCommitment(record, func(string) ([]byte, string, error) {
-					return nil, "", constants.ErrNotFound
+				done <- store.RecordActionReceiptWithCommitment(record, func(string) (*operatorv1.CommitmentAttestation, error) {
+					return nil, constants.ErrNotFound
 				})
 			}()
 			var err error
@@ -101,12 +100,11 @@ func TestReceiptSuccessLogsFollowCommitAndUnlock(t *testing.T) {
 	store.logger = logger
 	store.commitmentLedger.logger = logger
 	record := sampleActionReceiptRecord(t, "session")
-	require.NoError(t, store.RecordActionReceiptWithCommitment(record, func(prior string) ([]byte, string, error) {
-		payload, err := compliancev1.MarshalCanonical(&operatorv1.CommitmentAttestation{
+	require.NoError(t, store.RecordActionReceiptWithCommitment(record, func(prior string) (*operatorv1.CommitmentAttestation, error) {
+		return &operatorv1.CommitmentAttestation{
 			TransactionId: record.TransactionID, TransactionHash: record.TransactionHash,
 			PriorCommitmentHash: prior, Hash: "commitment-hash",
-		})
-		return payload, "commitment-hash", err
+		}, nil
 	}))
 	require.Contains(t, messages, "ActionReceipt recorded")
 	require.Contains(t, messages, "Commitment appended to ledger")
@@ -133,12 +131,11 @@ func TestReceiptCommitFailureRollsBackWithoutSuccessLogs(t *testing.T) {
 	})
 	store.logger, store.commitmentLedger.logger = logger, logger
 	record := sampleActionReceiptRecord(t, "session")
-	err = store.RecordActionReceiptWithCommitment(record, func(prior string) ([]byte, string, error) {
-		payload, err := compliancev1.MarshalCanonical(&operatorv1.CommitmentAttestation{
+	err = store.RecordActionReceiptWithCommitment(record, func(prior string) (*operatorv1.CommitmentAttestation, error) {
+		return &operatorv1.CommitmentAttestation{
 			TransactionId: record.TransactionID, TransactionHash: record.TransactionHash,
 			PriorCommitmentHash: prior, Hash: "commitment-hash",
-		})
-		return payload, "commitment-hash", err
+		}, nil
 	})
 	require.ErrorIs(t, err, constants.ErrAuditStoreRecordReceiptFailed)
 	require.Empty(t, messages, "a rolled-back write must not emit success logs")
@@ -164,13 +161,12 @@ func TestReceiptConcurrentStagesPreserveBothChains(t *testing.T) {
 		record.ActionReceipt.Status = record.Status
 		wg.Go(func() {
 			<-start
-			err := store.RecordActionReceiptWithCommitment(record, func(prior string) ([]byte, string, error) {
+			err := store.RecordActionReceiptWithCommitment(record, func(prior string) (*operatorv1.CommitmentAttestation, error) {
 				hash := "commitment-" + record.TransactionID
-				payload, err := compliancev1.MarshalCanonical(&operatorv1.CommitmentAttestation{
+				return &operatorv1.CommitmentAttestation{
 					TransactionId: record.TransactionID, TransactionHash: record.TransactionHash,
 					PriorCommitmentHash: prior, Hash: hash,
-				})
-				return payload, hash, err
+				}, nil
 			})
 			if err == nil {
 				record.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
@@ -219,9 +215,9 @@ func TestReceiptMissingSessionFailsClosedAtomically(t *testing.T) {
 
 			record := sampleActionReceiptRecord(t, "missing-session")
 			if withCommitment {
-				err = store.RecordActionReceiptWithCommitment(record, func(string) ([]byte, string, error) {
+				err = store.RecordActionReceiptWithCommitment(record, func(string) (*operatorv1.CommitmentAttestation, error) {
 					t.Error("commitment builder ran despite missing session")
-					return nil, "", constants.ErrNotFound
+					return nil, constants.ErrNotFound
 				})
 			} else {
 				err = store.RecordActionReceipt(record)
@@ -239,6 +235,42 @@ func TestReceiptMissingSessionFailsClosedAtomically(t *testing.T) {
 			require.Zero(t, count)
 			require.NoError(t, store.db.QueryRow("SELECT count(*) FROM commitment_ledger").Scan(&count))
 			require.Zero(t, count)
+		})
+	}
+}
+
+func TestReceiptCommitmentInvalidBuilderResultRollsBackAtomically(t *testing.T) {
+	for _, invalid := range []string{"head mismatch", "nil attestation", "invalid UTF-8"} {
+		t.Run(invalid, func(t *testing.T) {
+			store := newIntegrationAuditStore(t)
+			record := sampleActionReceiptRecord(t, "session")
+			err := store.RecordActionReceiptWithCommitment(record, func(prior string) (*operatorv1.CommitmentAttestation, error) {
+				attestation := &operatorv1.CommitmentAttestation{
+					TransactionId: record.TransactionID, TransactionHash: record.TransactionHash,
+					PriorCommitmentHash: prior, Hash: "commitment-hash",
+				}
+				switch invalid {
+				case "head mismatch":
+					attestation.PriorCommitmentHash = "different-head"
+				case "nil attestation":
+					return nil, nil
+				case "invalid UTF-8":
+					attestation.TargetResource = string([]byte{0xff})
+				}
+				return attestation, nil
+			})
+			require.ErrorIs(t, err, constants.ErrAuditStoreRecordReceiptFailed)
+			switch invalid {
+			case "head mismatch":
+				require.ErrorIs(t, err, constants.ErrValidationFailed)
+			case "nil attestation":
+				require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+			}
+			for _, table := range []string{"receipts", "events", "commitment_ledger", "sessions"} {
+				var count int
+				require.NoError(t, store.db.QueryRow("SELECT count(*) FROM "+table).Scan(&count))
+				require.Zero(t, count, table)
+			}
 		})
 	}
 }

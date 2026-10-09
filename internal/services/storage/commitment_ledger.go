@@ -17,6 +17,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -138,23 +139,9 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 	return results, nil
 }
 
-type commitmentFields struct {
-	TransactionID               string `json:"transaction_id"`
-	TransactionHash             string `json:"transaction_hash"`
-	StateRootAtCommit           string `json:"state_root_at_commit"`
-	L2SignatureDigest           string `json:"l2_signature_digest"`
-	WardenIntentSignatureDigest string `json:"warden_intent_signature_digest"`
-	HumanSignatureDigest        string `json:"human_signature_digest"`
-	ActionType                  string `json:"action_type"`
-	TargetResource              string `json:"target_resource"`
-	CommittedAtUnixMs           int64  `json:"committed_at_unix_ms"`
-	AuditorKeyID                string `json:"auditor_key_id"`
-	Signature                   string `json:"signature"`
-}
-
-// CommitmentBuilder builds the canonical attestation JSON and its hash for the
-// given chain head.
-type CommitmentBuilder func(priorHash string) ([]byte, string, error)
+// CommitmentBuilder builds a signed attestation over the given chain head.
+// Storage encodes the typed result once for persistence.
+type CommitmentBuilder func(priorHash string) (*operatorv1.CommitmentAttestation, error)
 
 // AppendCommitment builds and appends an attestation while holding SQLite's write lock so every ledger instance selects a unique chain head.
 func (cl *CommitmentLedger) AppendCommitment(build CommitmentBuilder) error {
@@ -190,7 +177,14 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 		if currentPriorHash != "" && currentPriorHash != priorHash {
 			return fmt.Errorf("prior_commitment_hash mismatch: expected %s, got %s", currentPriorHash, priorHash)
 		}
-		appended, err = cl.insertCommitment(conn, attestationJSON, priorHash, hash)
+		if len(attestationJSON) == 0 {
+			return fmt.Errorf("attestation JSON is empty")
+		}
+		attestation := &operatorv1.CommitmentAttestation{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(attestationJSON, attestation); err != nil {
+			return fmt.Errorf("failed to unmarshal attestation JSON: %w", err)
+		}
+		appended, err = cl.insertCommitment(conn, attestation, priorHash, hash)
 		return err
 	})
 	cl.mu.Unlock()
@@ -207,11 +201,17 @@ func (cl *CommitmentLedger) appendBuiltCommitment(conn *sql.Conn, build Commitme
 	if err != nil {
 		return nil, fmt.Errorf("commitment ledger: select head: %w", err)
 	}
-	attestationJSON, hash, err := build(priorHash)
+	attestation, err := build(priorHash)
 	if err != nil {
 		return nil, fmt.Errorf("commitment ledger: build: %w", err)
 	}
-	return cl.insertCommitment(conn, attestationJSON, priorHash, hash)
+	if attestation == nil {
+		return nil, fmt.Errorf("commitment ledger: build: %w", constants.ErrMissingRequiredField)
+	}
+	if attestation.GetPriorCommitmentHash() != priorHash {
+		return nil, fmt.Errorf("commitment ledger: builder prior hash mismatch: %w", constants.ErrValidationFailed)
+	}
+	return cl.insertCommitment(conn, attestation, priorHash, attestation.GetHash())
 }
 
 // selectCommitmentHead returns the latest commitment hash, or "" for an empty ledger.
@@ -224,14 +224,7 @@ func selectCommitmentHead(conn *sql.Conn) (string, error) {
 	return head, nil
 }
 
-func (cl *CommitmentLedger) insertCommitment(conn *sql.Conn, attestationJSON []byte, priorHash, hash string) (*CommitmentRow, error) {
-	if len(attestationJSON) == 0 {
-		return nil, fmt.Errorf("attestation JSON is empty")
-	}
-	attestation := &operatorv1.CommitmentAttestation{}
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(attestationJSON, attestation); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal attestation JSON: %w", err)
-	}
+func (cl *CommitmentLedger) insertCommitment(conn *sql.Conn, attestation *operatorv1.CommitmentAttestation, priorHash, hash string) (*CommitmentRow, error) {
 	canonicalAttestation, err := compliancev1.MarshalCanonical(attestation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to canonicalize attestation JSON: %w", err)

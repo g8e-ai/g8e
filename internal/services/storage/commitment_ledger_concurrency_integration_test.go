@@ -12,7 +12,6 @@ package storage
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -22,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,15 +50,16 @@ func TestCommitmentLedger_ConcurrentLedgerInstancesBuildAgainstUniqueHeads(t *te
 		go func(index int) {
 			defer wg.Done()
 			<-start
-			err := ledgers[index%len(ledgers)].AppendCommitment(func(priorHash string) ([]byte, string, error) {
+			err := ledgers[index%len(ledgers)].AppendCommitment(func(priorHash string) (*operatorv1.CommitmentAttestation, error) {
 				hashBytes := sha256.Sum256([]byte(fmt.Sprintf("%s|%d", priorHash, index)))
 				hash := hex.EncodeToString(hashBytes[:])
-				payload, marshalErr := json.Marshal(commitmentFields{
-					TransactionID:     fmt.Sprintf("tx-%d", index),
-					TransactionHash:   fmt.Sprintf("transaction-hash-%d", index),
-					CommittedAtUnixMs: time.Now().UnixMilli(),
-				})
-				return payload, hash, marshalErr
+				return &operatorv1.CommitmentAttestation{
+					TransactionId:       fmt.Sprintf("tx-%d", index),
+					TransactionHash:     fmt.Sprintf("transaction-hash-%d", index),
+					CommittedAtUnixMs:   time.Now().UnixMilli(),
+					PriorCommitmentHash: priorHash,
+					Hash:                hash,
+				}, nil
 			})
 			errs <- err
 		}(i)

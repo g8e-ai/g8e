@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -124,6 +125,19 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	require.Equal(t, actuator.AuditorKeyID, commitments[0].AuditorKeyID)
 	require.NotEmpty(t, commitments[0].WardenIntentSignatureDigest)
 	require.NotEmpty(t, commitments[0].Signature)
+
+	storedAttestation := &operatorv1.CommitmentAttestation{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(commitments[0].AttestationJSON, storedAttestation))
+	canonicalJSON, err := compliancev1.MarshalCanonical(storedAttestation)
+	require.NoError(t, err)
+	require.Equal(t, canonicalJSON, commitments[0].AttestationJSON)
+	require.Equal(t, commitments[0].Hash, storedAttestation.Hash)
+	require.Equal(t, commitments[0].PriorCommitmentHash, storedAttestation.PriorCommitmentHash)
+	canonicalSigningBytes, err := CanonicalizeCommitmentAttestation(storedAttestation)
+	require.NoError(t, err)
+	commitmentSignature, err := hex.DecodeString(storedAttestation.Signature)
+	require.NoError(t, err)
+	require.True(t, ed25519.Verify(actuator.AuditorSigningKey.Public().(ed25519.PublicKey), canonicalSigningBytes, commitmentSignature))
 
 	listedReceipts, err := auditStore.ListActionReceipts(models.AuditScope{OperatorSessionID: envelope.OperatorSessionId}, 10, 0)
 	require.NoError(t, err)
