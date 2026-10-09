@@ -61,7 +61,7 @@ func TestSubmitRequest_SendsTypedOperatorRequestAndReturnsGatewayResponse(t *tes
 		gotMethod = r.Method
 		gotContentType = r.Header.Get("Content-Type")
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&gotBody))
-		createdReply("req-42", "token-42")(w, r)
+		createdReply("req-42")(w, r)
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
 
@@ -127,7 +127,7 @@ func TestSubmitRequest_BootstrapAndNetworkFailuresAreReturnedWithoutRetry(t *tes
 }
 
 func TestSubmitRequest_ReturnsContextErrorWithoutContactingGatewayWhenAlreadyCancelled(t *testing.T) {
-	stub := newEnrollStub(t, enrollRoutes{request: createdReply("r", "t")})
+	stub := newEnrollStub(t, enrollRoutes{request: createdReply("r")})
 	client, _ := newEnrollClient(t, stub.server.URL)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -370,7 +370,7 @@ func TestSubmitCompletion_FailsOnRejectionMalformedBodyOrUnreachableGateway(t *t
 }
 
 func TestEnroll_RefusesCorruptPendingStateWithoutContactingGateway(t *testing.T) {
-	stub := newEnrollStub(t, enrollRoutes{request: createdReply("r", "t")})
+	stub := newEnrollStub(t, enrollRoutes{request: createdReply("r")})
 	client, fileSvc := newEnrollClient(t, stub.server.URL)
 	require.NoError(t, fileSvc.MkdirAll(t.Context(), filepath.Dir(client.pendingStatePath()), constants.PermDirPrivate))
 	require.NoError(t, fileSvc.WriteFile(t.Context(), client.pendingStatePath(), []byte("{not json"), constants.PermFilePrivate))
@@ -389,7 +389,7 @@ func TestEnroll_ExpiredPendingStateStartsFresh(t *testing.T) {
 	goodPEM, err := encodeECPrivateKeyPEM(goodKey)
 	require.NoError(t, err)
 
-	stub := newEnrollStub(t, enrollRoutes{request: createdReply("new-req", "new-tok")})
+	stub := newEnrollStub(t, enrollRoutes{request: createdReply("new-req")})
 	client, fileSvc := newEnrollClient(t, stub.server.URL)
 	require.NoError(t, client.persistPendingState(client.pendingStatePath(), &operatorPendingState{
 		RequestID: "old-expired-req", Token: "old-tok", OperatorKeyPEM: goodPEM, CLIKeyPEM: goodPEM,
@@ -487,7 +487,7 @@ func TestEnroll_LostCreateResponseResumesSamePersistedRequest(t *testing.T) {
 				_ = conn.Close()
 				return
 			}
-			createdReply("req-after-loss", "ignored-token")(w, r)
+			createdReply("req-after-loss")(w, r)
 		},
 		status: statusReply(models.PlatformEnrollmentStatePending),
 	})
@@ -546,7 +546,7 @@ func TestEnroll_RejectsIncompleteCompletionResponses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stub := newEnrollStub(t, enrollRoutes{
-				request: createdReply("req-1", "tok-1"),
+				request: createdReply("req-1"),
 				status:  statusReply(models.PlatformEnrollmentStateApproved),
 				complete: func(w http.ResponseWriter, _ *http.Request) {
 					respondJSON(w, http.StatusCreated, tt.response)
@@ -574,7 +574,7 @@ func TestEnroll_ProofsVerifyAgainstTheKeysSubmittedInTheRequest(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{
 		request: func(w http.ResponseWriter, r *http.Request) {
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&submitted))
-			createdReply("req-1", "ignored-token")(w, r)
+			createdReply("req-1")(w, r)
 		},
 		status: statusReply(models.PlatformEnrollmentStateApproved),
 		complete: func(w http.ResponseWriter, r *http.Request) {

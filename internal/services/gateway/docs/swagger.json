@@ -4061,6 +4061,9 @@
         },
         "models.PlatformEnrollmentCreateRequest": {
             "type": "object",
+            "required": [
+                "token_hash"
+            ],
             "properties": {
                 "app": {
                     "$ref": "#/definitions/models.PlatformAppCSRPayload"
@@ -4087,6 +4090,7 @@
                     "type": "string"
                 },
                 "token_hash": {
+                    "description": "SHA-256 hex of the requester-generated token.",
                     "type": "string"
                 }
             }

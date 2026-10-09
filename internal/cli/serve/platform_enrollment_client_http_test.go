@@ -72,7 +72,7 @@ func statusReply(state models.PlatformEnrollmentState) http.HandlerFunc {
 	}
 }
 
-func createdReply(requestID, token string) http.HandlerFunc {
+func createdReply(requestID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusCreated, models.PlatformEnrollmentCreateResponse{
 			RequestID: requestID, ComponentKind: models.PlatformComponentOperator,

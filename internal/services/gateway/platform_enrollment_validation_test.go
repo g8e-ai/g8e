@@ -39,6 +39,7 @@ func newPlatformEnrollmentCSR(t *testing.T) (string, *ecdsa.PrivateKey) {
 func TestValidatePlatformEnrollmentRequestComputesTypedFingerprints(t *testing.T) {
 	appCSR, _ := newPlatformEnrollmentCSR(t)
 	request := models.PlatformEnrollmentCreateRequest{
+		TokenHash:     models.PlatformEnrollmentTokenHash("validation-token"),
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -55,6 +56,7 @@ func TestValidatePlatformEnrollmentRequestComputesTypedFingerprints(t *testing.T
 func TestValidatePlatformEnrollmentRequestRejectsDuplicateOperatorKeys(t *testing.T) {
 	csr, _ := newPlatformEnrollmentCSR(t)
 	request := models.PlatformEnrollmentCreateRequest{
+		TokenHash:         models.PlatformEnrollmentTokenHash("validation-token"),
 		ComponentKind:     models.PlatformComponentOperator,
 		InstanceID:        "operator-1",
 		Hostname:          "operator.local",
@@ -83,6 +85,7 @@ func TestVerifyPlatformEnrollmentProofsRequiresEverySubmittedKey(t *testing.T) {
 		},
 	}
 	fingerprints, err := validatePlatformEnrollmentRequest(models.PlatformEnrollmentCreateRequest{
+		TokenHash:         models.PlatformEnrollmentTokenHash("validation-token"),
 		ComponentKind:     request.ComponentKind,
 		InstanceID:        request.InstanceID,
 		Hostname:          "operator.local",

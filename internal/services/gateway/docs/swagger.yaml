@@ -1466,7 +1466,10 @@ definitions:
       system_fingerprint:
         type: string
       token_hash:
+        description: SHA-256 hex of the requester-generated token.
         type: string
+    required:
+    - token_hash
     type: object
   models.PlatformEnrollmentCreateResponse:
     properties:

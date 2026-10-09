@@ -1043,6 +1043,7 @@ func TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval(t *testing
 		now := time.Now().UTC()
 		_, err := env.enrollSvc.createRequestRecord(t.Context(), &models.PlatformEnrollmentRequest{
 			ID:            fmt.Sprintf("operator-fill-%d", i),
+			TokenHash:     models.PlatformEnrollmentTokenHash(fmt.Sprintf("operator-fill-%d", i)),
 			ComponentKind: models.PlatformComponentOperator,
 			InstanceID:    fmt.Sprintf("operator-fill-%d", i),
 			State:         models.PlatformEnrollmentStatePending,

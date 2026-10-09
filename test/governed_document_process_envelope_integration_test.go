@@ -151,7 +151,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 	assert.NotEmpty(t, receipt.Signature, "Receipt must be signed by actuator")
 
 	// Verify initial document was stored in the real SQLite document store.
-	doc, err := f.Service.GetDocStore().DocGet(collection, documentID)
+	doc, err := f.Service.GetDocStore().DocGet(t.Context(), collection, documentID)
 	require.NoError(t, err)
 	require.NotNil(t, doc)
 	assert.Equal(t, initialCaseID, rawJSONToString(t, doc.Data["case_id"]))
@@ -192,7 +192,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, mergeReceipt.Status)
 
 	// Step 3: Read back the document and verify untouched fields survived (Bug 10 regression assertion).
-	docAfterMerge, err := f.Service.GetDocStore().DocGet(collection, documentID)
+	docAfterMerge, err := f.Service.GetDocStore().DocGet(t.Context(), collection, documentID)
 	require.NoError(t, err)
 	require.NotNil(t, docAfterMerge)
 
@@ -227,7 +227,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, deleteReceipt.Status)
 
 	// Verify document is deleted from store.
-	deletedDoc, err := f.Service.GetDocStore().DocGet(collection, documentID)
+	deletedDoc, err := f.Service.GetDocStore().DocGet(t.Context(), collection, documentID)
 	require.NoError(t, err)
 	assert.Nil(t, deletedDoc, "Document must not exist after DOCUMENT_DELETE")
 }

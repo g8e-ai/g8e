@@ -79,7 +79,7 @@ func TestCLIRefresh_ExpiredSessionRecoverable(t *testing.T) {
 	}
 	expiredBytes, err := json.Marshal(expiredSession)
 	require.NoError(t, err)
-	require.NoError(t, fixture.Service.GetDocStore().DocSet(
+	require.NoError(t, fixture.Service.GetDocStore().DocSet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, expiredBytes,
 	))
 
@@ -118,7 +118,7 @@ func TestCLIRefresh_ExpiredSessionRecoverable(t *testing.T) {
 	assert.Equal(t, identity.UserID, refreshResult.UserID)
 
 	// 4. Verify the old session is deactivated.
-	oldDoc, err := fixture.Service.GetDocStore().DocGet(
+	oldDoc, err := fixture.Service.GetDocStore().DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	require.NoError(t, err)
 	require.NotNil(t, oldDoc)
@@ -129,7 +129,7 @@ func TestCLIRefresh_ExpiredSessionRecoverable(t *testing.T) {
 	assert.False(t, oldSession.IsActive, "old session must be deactivated after refresh")
 
 	// 5. Verify the new session is active and persisted.
-	newDoc, err := fixture.Service.GetDocStore().DocGet(
+	newDoc, err := fixture.Service.GetDocStore().DocGet(t.Context(),
 		marshaler.CollectionName(constants.CollectionCLISessions), refreshResult.CLISessionID)
 	require.NoError(t, err)
 	require.NotNil(t, newDoc)

@@ -33,3 +33,11 @@ func TestPlatformEnrollmentController_ContentionAndCancellationErrors(t *testing
 		})
 	}
 }
+
+func TestPlatformEnrollmentController_TokenConflictUsesHTTPConflict(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	controller := &PlatformEnrollmentController{logger: logger, responder: response.NewWriter(logger)}
+	rr := httptest.NewRecorder()
+	controller.writeEnrollmentError(rr, constants.ErrPlatformEnrollmentTokenConflict)
+	require.Equal(t, http.StatusConflict, rr.Code)
+}

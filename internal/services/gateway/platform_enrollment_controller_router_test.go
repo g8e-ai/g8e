@@ -41,6 +41,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -688,7 +689,9 @@ func TestPlatformEnrollmentRouter_PreBootstrapRequestRejected(t *testing.T) {
 	httpsRouter := h.buildPublicRouter()
 
 	csr, _ := generateAppCSRAndKey(t)
+	_, tokenHash := newPlatformEnrollmentTestToken(t)
 	body, err := json.Marshal(models.PlatformEnrollmentCreateRequest{
+		TokenHash:     tokenHash,
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-pre-bootstrap-1",
 		Hostname:      "dashboard-pre-bootstrap.local",
@@ -737,6 +740,20 @@ func TestPlatformEnrollmentRouter_CSRValidationRejectsInvalidBody(t *testing.T) 
 		env.httpsRouter.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code, "invalid component kind must return 400")
+	})
+
+	t.Run("malformed token hash returns 400", func(t *testing.T) {
+		body, err := json.Marshal(models.PlatformEnrollmentCreateRequest{
+			TokenHash: strings.Repeat("A", 64), ComponentKind: models.PlatformComponentDashboard,
+			InstanceID: "dashboard-invalid-token-hash", Hostname: "dashboard.local",
+			App: &models.PlatformAppCSRPayload{CSRPEM: "invalid"},
+		})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentRequest, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		env.httpsRouter.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code, "malformed create token hash must return 400")
 	})
 }
 

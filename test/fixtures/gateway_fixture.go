@@ -280,7 +280,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 
 	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted in fixture tests
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetSignerStore().AddTrustedSigner(models.TrustedSigner{
+	err = ls.GetSignerStore().AddTrustedSigner(t.Context(), models.TrustedSigner{
 		ID:        ActuatorKeyID,
 		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
@@ -292,7 +292,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NotNil(t, mcpGateway)
 
 	// Seed platform_settings required for health check
-	err = ls.GetDocStore().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	err = ls.GetDocStore().DocSet(t.Context(), string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 	require.NoError(t, err)
 
 	// Start the gateway service. The Start error is delivered on a buffered
@@ -409,7 +409,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	err = f.Service.GetDocStore().DocSet(string(constants.CollectionUsers), userID, userBytes)
+	err = f.Service.GetDocStore().DocSet(t.Context(), string(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
@@ -508,7 +508,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 
 	// Wait for operator session to be persisted in database
 	require.Eventually(t, func() bool {
-		op, err := f.Service.GetDocStore().DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		op, err := f.Service.GetDocStore().DocGet(t.Context(), string(constants.CollectionOperators), regResp.OperatorID)
 		if err != nil || op == nil {
 			return false
 		}
@@ -671,7 +671,7 @@ func SetupConsensus(t *testing.T, consensusStore *gateway.ConsensusStoreService,
 		pub, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = signerStore.AddTrustedSigner(models.TrustedSigner{
+		err = signerStore.AddTrustedSigner(t.Context(), models.TrustedSigner{
 			ID:        appID,
 			PublicKey: hex.EncodeToString(pub),
 			AddedAt:   time.Now().UTC(),
@@ -695,7 +695,7 @@ func SetupConsensus(t *testing.T, consensusStore *gateway.ConsensusStoreService,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err := consensusStore.AddConsensus(policy)
+	err := consensusStore.AddConsensus(t.Context(), policy)
 	require.NoError(t, err)
 
 	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
