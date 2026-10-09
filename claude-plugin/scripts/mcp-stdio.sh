@@ -1,4 +1,11 @@
 #!/bin/sh
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+#
 # shellcheck disable=SC2016 # '${' matches an unsubstituted ${user_config.*} placeholder.
 # Starts the g8e MCP stdio bridge for the plugin.
 #

@@ -1,4 +1,11 @@
 #!/bin/sh
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+#
 # shellcheck disable=SC2016 # single-quoted '${user_config.*}' is a literal placeholder input.
 # Tests for the g8e Claude Code plugin scripts. POSIX sh; no Claude Code,
 # Gateway, or network required.

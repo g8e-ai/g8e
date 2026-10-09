@@ -110,7 +110,9 @@ func run(args []string, root string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w (run: make explorer-catalog)", outputRelPath, err)
 	}
-	if !bytes.Equal(existing, generated) {
+	normalizedExisting := bytes.ReplaceAll(existing, []byte("\r\n"), []byte("\n"))
+	normalizedGenerated := bytes.ReplaceAll(generated, []byte("\r\n"), []byte("\n"))
+	if !bytes.Equal(normalizedExisting, normalizedGenerated) {
 		return fmt.Errorf("%s is out of date (run: make explorer-catalog)", outputRelPath)
 	}
 	return nil

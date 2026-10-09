@@ -1280,7 +1280,9 @@ async function main() {
         stale++;
         continue;
       }
-      if (existing !== content) {
+      const normalizedExisting = existing.replace(/\r\n/g, '\n');
+      const normalizedContent = content.replace(/\r\n/g, '\n');
+      if (normalizedExisting !== normalizedContent) {
         console.error(`stale: ${relPath}`);
         stale++;
       }

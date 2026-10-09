@@ -161,12 +161,19 @@ def _resolve_include_path(pattern: str, config_dir: Path) -> list[Path]:
     # Expand ~ to home directory
     expanded = Path(pattern).expanduser()
 
-    # If the path is absolute, use it as-is; otherwise, make it relative to config_dir
+    # If the path is absolute, use it as-is; otherwise, resolve relative to config_dir.
+    # On Windows, a path like '/foo' has expanded.root set ('\') but expanded.drive is empty,
+    # making is_absolute() False. We supply the drive from config_dir or cwd so glob() works.
     if expanded.is_absolute():
-        glob_root = Path(expanded.anchor)
-        matched = glob_root.glob(str(expanded.relative_to(glob_root)))
+        target = expanded
+    elif expanded.root:
+        drive = config_dir.drive or Path.cwd().drive
+        target = Path(f"{drive}{expanded}")
     else:
-        matched = config_dir.glob(str(expanded))
+        target = config_dir / expanded
+
+    glob_root = Path(target.anchor)
+    matched = glob_root.glob(str(target.relative_to(glob_root)))
 
     # Sort for deterministic ordering and validate paths
     safe_paths: list[Path] = []
