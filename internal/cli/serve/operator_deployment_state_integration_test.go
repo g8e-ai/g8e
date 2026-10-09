@@ -9,6 +9,7 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -41,9 +42,12 @@ func TestOperatorDeploymentRecorderPreservesIdentityAcrossSubscriptionChanges(t 
 		}
 		require.Equal(t, phase, state.Phase)
 	}
-	info, err := fileSvc.Stat(ctx, operatorDeploymentStateRelPath())
-	require.NoError(t, err)
-	require.EqualValues(t, constants.PermFilePrivate, info.Mode().Perm())
+	// Windows does not model Unix permission bits; Go reports 0666 for any writable file.
+	if runtime.GOOS != "windows" {
+		info, err := fileSvc.Stat(ctx, operatorDeploymentStateRelPath())
+		require.NoError(t, err)
+		require.EqualValues(t, constants.PermFilePrivate, info.Mode().Perm())
+	}
 }
 
 func TestOperatorDeploymentFailureSurvivesLateReadinessCallback(t *testing.T) {

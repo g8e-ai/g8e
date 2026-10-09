@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
@@ -83,7 +84,7 @@ func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, m
 			}
 		}
 	}
-	if err := os.Rename(tmpPath, absPath); err != nil {
+	if err := renameReplace(tmpPath, absPath); err != nil {
 		if previousMode != 0 {
 			if restoreErr := os.Chmod(absPath, previousMode); restoreErr != nil {
 				return fmt.Errorf("%w: %w; restore destination mode: %w", constants.ErrFileRenameFailed, err, restoreErr)
@@ -93,4 +94,27 @@ func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, m
 	}
 
 	return nil
+}
+
+const (
+	windowsRenameRetryAttempts = 20
+	windowsRenameRetryDelay    = 10 * time.Millisecond
+)
+
+// renameReplace moves tmpPath over absPath. On Windows, MoveFileEx fails with
+// access denied while another handle holds the destination open, and Go's
+// os.Open does not request FILE_SHARE_DELETE, so concurrent readers (for
+// example a watcher polling the same record) make the replacement fail
+// transiently. Retry only that case; the destination is either replaced or
+// still holds the previous complete contents.
+func renameReplace(tmpPath, absPath string) error {
+	err := os.Rename(tmpPath, absPath)
+	if runtime.GOOS != "windows" {
+		return err
+	}
+	for attempt := 1; err != nil && errors.Is(err, os.ErrPermission) && attempt < windowsRenameRetryAttempts; attempt++ {
+		time.Sleep(windowsRenameRetryDelay)
+		err = os.Rename(tmpPath, absPath)
+	}
+	return err
 }

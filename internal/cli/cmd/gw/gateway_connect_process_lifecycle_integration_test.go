@@ -220,7 +220,7 @@ func TestConnectStoppedGateway_PersistsResolvedPorts(t *testing.T) {
 		if _, reserved := constants.GatewayReservedLoopbackPorts[candidate]; reserved {
 			continue
 		}
-		httpProbe, err = net.Listen("tcp", fmt.Sprintf(":%d", candidate))
+		httpProbe, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", candidate))
 		if err == nil {
 			break
 		}
@@ -229,7 +229,7 @@ func TestConnectStoppedGateway_PersistsResolvedPorts(t *testing.T) {
 	t.Cleanup(func() { _ = httpProbe.Close() })
 	resolvedHTTPPort := httpProbe.Addr().(*net.TCPAddr).Port
 
-	httpsProbe, err := net.Listen("tcp", ":0")
+	httpsProbe, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = httpsProbe.Close() })
 	resolvedHTTPSPort := httpsProbe.Addr().(*net.TCPAddr).Port
