@@ -94,9 +94,6 @@ func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFile
 	if cfg.PublicListenAddress == "" {
 		cfg.PublicListenAddress = DefaultPublicSpectatorConfig().PublicListenAddress
 	}
-	if cfg.ExplorerListenAddress == "" {
-		cfg.ExplorerListenAddress = DefaultPublicSpectatorConfig().ExplorerListenAddress
-	}
 	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress, cfg.AllowContainerBind); err != nil {
 		return nil, err
 	}

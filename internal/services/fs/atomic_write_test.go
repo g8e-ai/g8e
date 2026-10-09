@@ -81,3 +81,37 @@ func TestWriteFile_NestedDeepPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []byte("deep"), got)
 }
+
+func TestReadFile_SucceedsWhileWriteFileReplacesTheSameRecord(t *testing.T) {
+	svc := setupTestFS(t)
+	ctx := context.Background()
+
+	const rel = "record.json"
+	require.NoError(t, svc.WriteFile(ctx, rel, []byte("record-0"), constants.PermFileReadOnly))
+
+	var wg sync.WaitGroup
+	writeErrs := make(chan error, 1)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 300; i++ {
+			if err := svc.WriteFile(ctx, rel, []byte("record-1"), constants.PermFileReadOnly); err != nil {
+				writeErrs <- err
+				return
+			}
+		}
+	}()
+
+	var readErr error
+	for i := 0; i < 300 && readErr == nil; i++ {
+		_, readErr = svc.ReadFile(ctx, rel)
+	}
+	wg.Wait()
+
+	require.NoError(t, readErr, "a reader must never observe the replacement as a failure")
+	select {
+	case err := <-writeErrs:
+		require.NoError(t, err)
+	default:
+	}
+}

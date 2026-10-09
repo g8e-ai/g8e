@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -117,4 +118,27 @@ func renameReplace(tmpPath, absPath string) error {
 		err = os.Rename(tmpPath, absPath)
 	}
 	return err
+}
+
+// windowsErrorSharingViolation is ERROR_SHARING_VIOLATION: the file is open
+// without a share mode that permits this access.
+const windowsErrorSharingViolation syscall.Errno = 32
+
+// openRetryable reports whether an open failure is the transient Windows
+// sharing violation raised while WriteFile is replacing the destination. It
+// is never true on other platforms, where errno 32 means something else.
+func openRetryable(err error) bool {
+	return runtime.GOOS == "windows" && errors.Is(err, windowsErrorSharingViolation)
+}
+
+// openRetrying opens absPath for reading, retrying only the transient Windows
+// sharing violation from a concurrent atomic replacement. The file is either
+// the previous or the new complete contents once the open succeeds.
+func openRetrying(absPath string) (*os.File, error) {
+	f, err := os.Open(absPath)
+	for attempt := 1; err != nil && openRetryable(err) && attempt < windowsRenameRetryAttempts; attempt++ {
+		time.Sleep(windowsRenameRetryDelay)
+		f, err = os.Open(absPath)
+	}
+	return f, err
 }

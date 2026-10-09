@@ -202,7 +202,7 @@ func (fs *localFS) ReadFile(ctx context.Context, relPath string) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.Open(absPath)
+	f, err := openRetrying(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("%w: %s", constants.ErrNotFound, absPath)
