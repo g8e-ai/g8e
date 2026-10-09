@@ -46,31 +46,15 @@ type SecretManager struct {
 	keystore *keystore.Keystore
 }
 
-func NewSecretManager(db *sqliteutil.DB, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*SecretManager, error) {
-	ks, err := keystore.NewWithFS(fileSvc, logger)
-	if err != nil {
-		return nil, fmt.Errorf("secret_manager: init: keystore: %w", err)
-	}
-	if err := ks.Initialize(); err != nil {
-		return nil, fmt.Errorf("secret_manager: init: master key: %w", err)
-	}
-	if err := ks.EnforcePermissions(); err != nil {
-		return nil, fmt.Errorf("secret_manager: init: permissions: %w", err)
-	}
-	return &SecretManager{
-		db:       db,
-		logger:   logger,
-		fileSvc:  fileSvc,
-		keystore: ks,
-	}, nil
-}
-
 // GetKeystore returns the underlying Keystore instance.
 func (m *SecretManager) GetKeystore() *keystore.Keystore {
 	return m.keystore
 }
 
-// InitAppSettings creates secrets on first boot and validates them on later boots.
+// InitAppSettings creates secrets on first boot and validates them on later
+// boots. Missing or incomplete secrets on a later boot fail closed: silently
+// regenerating them would rotate the Actuator and Auditor signing identities
+// and orphan every receipt and session signed under the old keys.
 func (m *SecretManager) InitAppSettings() error {
 	var exists bool
 	err := m.db.QueryRowWithRetry(context.Background(),
@@ -89,14 +73,13 @@ func (m *SecretManager) InitAppSettings() error {
 	if err := m.cleanupStaleAppSettings(); err != nil {
 		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", "error", err)
 	}
-	if err := m.migrateAuditorIdentity(); err != nil {
-		if errors.Is(err, constants.ErrNotFound) {
-			return m.recreateAppSettings()
-		}
-		return fmt.Errorf("secret_manager: init app settings: migrate auditor identity: %w", err)
+	if err := m.validateAppSettings(); err != nil {
+		return err
 	}
-
-	return m.validateAppSettings()
+	if _, _, err := m.GetAuditorKey(); err != nil {
+		return fmt.Errorf("secret_manager: init app settings: auditor identity: %w: %w", constants.ErrBootstrapSecretsMissing, err)
+	}
+	return nil
 }
 
 func (m *SecretManager) cleanupStaleAppSettings() error {
@@ -146,95 +129,6 @@ func (m *SecretManager) cleanupStaleAppSettings() error {
 		return fmt.Errorf("secret_manager: cleanup stale app settings: update: %w", err)
 	}
 	return nil
-}
-
-func (m *SecretManager) recreateAppSettings() error {
-	m.logger.Info("[SecretManager] Recreating app settings due to corrupted state")
-
-	// Delete existing platform_settings document from database
-	_, err := m.db.ExecWithRetry(context.Background(),
-		"DELETE FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
-	)
-	if err != nil {
-		return fmt.Errorf("secret_manager: recreate app settings: delete: %w", err)
-	}
-
-	// Delete existing secret files
-	for _, name := range requiredBootstrapSecrets {
-		relPath := filepath.Join(constants.SecretsDirname, name)
-		if err := m.fileSvc.Remove(context.Background(), relPath); err != nil {
-			m.logger.Warn("[SecretManager] Failed to delete secret file during recreation",
-				"name", name, "error", err)
-		}
-	}
-
-	// Delete bootstrap digest manifest if it exists
-	manifestRelPath := filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)
-	if err := m.fileSvc.Remove(context.Background(), manifestRelPath); err != nil {
-		m.logger.Warn("[SecretManager] Failed to delete digest manifest during recreation",
-			"error", err)
-	}
-
-	// Recreate from scratch
-	return m.createAppSettings(time.Now().UTC())
-}
-
-func (m *SecretManager) migrateAuditorIdentity() error {
-	manifest, err := m.readDigestManifest()
-	if err != nil {
-		return err
-	}
-	auditorSecrets := []string{constants.SecretsFileAuditorSigningKey, constants.SecretsFileAuditorKeyID}
-	_, hasSigningKey := manifest.Secrets[constants.SecretsFileAuditorSigningKey]
-	_, hasKeyID := manifest.Secrets[constants.SecretsFileAuditorKeyID]
-	if hasSigningKey && hasKeyID {
-		_, _, err := m.GetAuditorKey()
-		return err
-	}
-	if hasSigningKey || hasKeyID {
-		return constants.ErrValidationFailed
-	}
-	for _, name := range requiredBootstrapSecrets {
-		if name == constants.SecretsFileAuditorSigningKey || name == constants.SecretsFileAuditorKeyID {
-			continue
-		}
-		if err := m.validateManifestSecret(manifest, name); err != nil {
-			return err
-		}
-	}
-	existing := 0
-	for _, name := range auditorSecrets {
-		exists, err := m.fileSvc.FileExists(context.Background(), filepath.Join(constants.SecretsDirname, name))
-		if err != nil {
-			return fmt.Errorf("check %s: %w", name, err)
-		}
-		if exists {
-			existing++
-		}
-	}
-	if existing == 1 {
-		return constants.ErrValidationFailed
-	}
-	if existing == 0 {
-		seed, err := m.generateSecureTokenBytes(ed25519.SeedSize)
-		if err != nil {
-			return err
-		}
-		priv := ed25519.NewKeyFromSeed(seed)
-		secrets := map[string]string{
-			constants.SecretsFileAuditorSigningKey: hex.EncodeToString(seed),
-			constants.SecretsFileAuditorKeyID:      hex.EncodeToString(priv.Public().(ed25519.PublicKey)),
-		}
-		for _, name := range auditorSecrets {
-			if err := m.keystore.EncryptSecret(name, secrets[name]); err != nil {
-				return fmt.Errorf("encrypt %s: %w", name, err)
-			}
-		}
-	}
-	if _, _, err := m.GetAuditorKey(); err != nil {
-		return err
-	}
-	return m.writeDigestManifestFromEncryptedFiles(time.Now().UTC())
 }
 
 func (m *SecretManager) createAppSettings(now time.Time) error {
@@ -324,17 +218,17 @@ func (m *SecretManager) validateAppSettings() error {
 
 	manifest, err := m.readDigestManifest()
 	if err != nil {
-		// If bootstrap digest manifest is missing, treat this as corrupted state
-		// and recreate secrets (e.g., when .g8e directory was wiped but DB persists)
 		if errors.Is(err, constants.ErrNotFound) {
-			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets")
-			return m.recreateAppSettings()
+			return fmt.Errorf("secret_manager: validate app settings: %w: digest manifest: %w", constants.ErrBootstrapSecretsMissing, err)
 		}
 		return fmt.Errorf("secret_manager: validate app settings: %w", err)
 	}
 
 	for _, name := range requiredBootstrapSecrets {
 		if err := m.validateManifestSecret(manifest, name); err != nil {
+			if errors.Is(err, constants.ErrNotFound) {
+				return fmt.Errorf("secret_manager: validate app settings: %w: %w", constants.ErrBootstrapSecretsMissing, err)
+			}
 			return fmt.Errorf("secret_manager: validate app settings: %w", err)
 		}
 	}

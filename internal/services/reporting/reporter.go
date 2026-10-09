@@ -11,7 +11,6 @@ package reporting
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
@@ -30,8 +30,9 @@ import (
 type Options struct {
 	// FileSvc owns runtime-relative database and ledger paths.
 	FileSvc fs.RuntimeFileService
-	// VaultKeyPath is the explicit external path to the hex-encoded vault key file.
-	VaultKeyPath string
+	// Keystore holds the master-key-wrapped vault key. When nil, the report
+	// runs in metadata-only mode and content columns stay empty.
+	Keystore *keystore.Keystore
 	// OutDir is the external directory to write CSV files into.
 	OutDir string
 	// Logger is optional; if nil, slog.Default() is used.
@@ -64,7 +65,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	fileSvc := opts.FileSvc
 
 	// Open vault (locked or unlocked).
-	v, vaultUnlocked := openVault(fileSvc, opts.VaultKeyPath, logger)
+	v, vaultUnlocked := openVault(fileSvc, opts.Keystore, logger)
 
 	// Open audit store (sessions, events, file_mutations, receipts, commitment_ledger).
 	auditStoreCfg := storage.DefaultAuditStoreConfig()
@@ -220,31 +221,25 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	}, nil
 }
 
-// openVault tries to create and unlock the vault from the key file.
-// Returns a (possibly locked) vault and whether it was successfully unlocked.
-func openVault(fileSvc fs.RuntimeFileService, keyPath string, logger *slog.Logger) (*vault.Vault, bool) {
+// openVault creates the vault and unlocks it with the vault key held in the
+// keystore. Returns a (possibly locked) vault and whether it was unlocked.
+func openVault(fileSvc fs.RuntimeFileService, ks *keystore.Keystore, logger *slog.Logger) (*vault.Vault, bool) {
 	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: logger})
 	if err != nil {
 		logger.Warn("Could not create vault; proceeding without encryption", "error", err)
 		return nil, false
 	}
 
-	if keyPath == "" {
+	if ks == nil {
 		return v, false
 	}
 
-	data, err := os.ReadFile(keyPath)
+	keyBytes, err := ks.LoadVaultKey()
 	if err != nil {
-		logger.Info("Vault key not found; proceeding in metadata-only mode", "path", keyPath)
+		logger.Info("Vault key unavailable; proceeding in metadata-only mode", "error", err)
 		return v, false
 	}
-
-	keyHex := strings.TrimSpace(string(data))
-	keyBytes, err := hex.DecodeString(keyHex)
-	if err != nil {
-		logger.Warn("Invalid vault key encoding; proceeding in metadata-only mode", "error", err)
-		return v, false
-	}
+	defer vault.SecureZero(keyBytes)
 
 	if err := v.Unlock(keyBytes); err != nil {
 		logger.Warn("Vault unlock failed; proceeding in metadata-only mode", "error", err)

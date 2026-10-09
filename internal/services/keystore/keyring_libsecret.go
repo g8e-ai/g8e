@@ -11,23 +11,60 @@ package keystore
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 )
 
-// libsecretKeyring uses the libsecret/GNOME Keyring for key storage on Linux.
-type libsecretKeyring struct{}
+// secretToolTimeout bounds each secret-tool call; D-Bus activation of a
+// missing or locked Secret Service can otherwise block startup indefinitely.
+const secretToolTimeout = 15 * time.Second
 
-func newLibsecretKeyring() (Keyring, error) {
-	// Check if secret-tool is available
+// secretToolRunner runs secret-tool with args, feeding stdin, and returns its
+// stdout, stderr, and exit error. Tests replace it to observe the exact argv.
+type secretToolRunner func(stdin io.Reader, args ...string) (stdout, stderr []byte, err error)
+
+func runSecretTool(stdin io.Reader, args ...string) ([]byte, []byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), secretToolTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "secret-tool", args...)
+	cmd.Stdin = stdin
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return stdout.Bytes(), stderr.Bytes(), err
+}
+
+// libsecretKeyring stores the master key in the Secret Service (GNOME Keyring,
+// KWallet) through secret-tool. The item is identified by the single attribute
+// pair keyStoreName=masterKeyName.
+type libsecretKeyring struct {
+	run secretToolRunner
+}
+
+// newLibsecretKeyring returns a libsecret keyring only when secret-tool is
+// installed and the Secret Service answers a lookup. Headless hosts without a
+// D-Bus session fail here rather than on first store.
+func newLibsecretKeyring(run secretToolRunner) (Keyring, error) {
 	if _, err := exec.LookPath("secret-tool"); err != nil {
-		return nil, fmt.Errorf("libsecret: check secret-tool availability: %w (install libsecret-tools)", err)
+		return nil, fmt.Errorf("%w: secret-tool not found (install libsecret-tools): %w", constants.ErrKeyStoreSecretServiceDown, err)
 	}
-	return &libsecretKeyring{}, nil
+	k := &libsecretKeyring{run: run}
+	key, err := k.RetrieveMasterKey()
+	vault.SecureZero(key)
+	if err != nil && !errors.Is(err, constants.ErrKeyStoreKeyNotFound) {
+		return nil, err
+	}
+	return k, nil
 }
 
 func (l *libsecretKeyring) Name() string {
@@ -35,73 +72,46 @@ func (l *libsecretKeyring) Name() string {
 }
 
 func (l *libsecretKeyring) RetrieveMasterKey() ([]byte, error) {
-	args := []string{
-		"lookup",
-		keyStoreName,
-		masterKeyName,
-	}
-
-	cmd := exec.Command("secret-tool", args...)
-	output, err := cmd.Output()
+	stdout, stderr, err := l.run(nil, "lookup", keyStoreName, masterKeyName)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			// secret-tool returns exit code 1 when item not found
+		// secret-tool exits 1 with no output when the item does not exist,
+		// and exits 1 with a diagnostic on stderr when the service fails.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 && len(bytes.TrimSpace(stderr)) == 0 {
 			return nil, constants.ErrKeyStoreKeyNotFound
 		}
-		return nil, fmt.Errorf("libsecret: lookup master key: %w", err)
+		return nil, fmt.Errorf("%w: lookup master key: %w: %s", constants.ErrKeyStoreSecretServiceDown, err, strings.TrimSpace(string(stderr)))
 	}
 
-	// secret-tool returns base64-encoded value
-	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(output)))
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(stdout)))
 	if err != nil {
-		return nil, fmt.Errorf("libsecret: decode base64 key: %w", err)
+		return nil, fmt.Errorf("%w: libsecret: %w", constants.ErrKeyStoreDecodeFailed, err)
 	}
-
 	if len(key) == 0 {
 		return nil, constants.ErrKeyStoreKeyNotFound
 	}
-
 	return key, nil
 }
 
+// StoreMasterKey passes the secret on stdin, which is where secret-tool reads
+// it from; it must never appear in argv.
 func (l *libsecretKeyring) StoreMasterKey(key []byte) error {
-	// Encode key as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
-
-	args := []string{
-		"store",
-		"--label=" + keyStoreName,
-		keyStoreName,
-		masterKeyName,
-		encoded,
+	_, stderr, err := l.run(strings.NewReader(encoded), "store", "--label="+keyStoreName, keyStoreName, masterKeyName)
+	if err != nil {
+		return fmt.Errorf("%w: libsecret: %w: %s", constants.ErrKeyStoreStoreFailed, err, strings.TrimSpace(string(stderr)))
 	}
-
-	cmd := exec.Command("secret-tool", args...)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("libsecret: store master key: %w", err)
-	}
-
 	return nil
 }
 
 func (l *libsecretKeyring) DeleteMasterKey() error {
-	args := []string{
-		"clear",
-		keyStoreName,
-		masterKeyName,
-	}
-
-	cmd := exec.Command("secret-tool", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		// Don't error if key doesn't exist (already deleted)
-		if strings.Contains(stderr.String(), "not found") {
+	_, stderr, err := l.run(nil, "clear", keyStoreName, masterKeyName)
+	if err != nil {
+		// clear exits non-zero with no diagnostic when nothing matched.
+		if len(bytes.TrimSpace(stderr)) == 0 {
 			return nil
 		}
-		return fmt.Errorf("libsecret: clear master key: %w", err)
+		return fmt.Errorf("%w: libsecret: %w: %s", constants.ErrKeyStoreDeleteFailed, err, strings.TrimSpace(string(stderr)))
 	}
-
 	return nil
 }

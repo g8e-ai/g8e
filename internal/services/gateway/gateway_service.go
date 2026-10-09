@@ -46,6 +46,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
@@ -164,7 +165,11 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if b.db != nil {
 		db = b.db
 	} else {
-		db, err = OpenCanonicalDBService(logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
+		ks, ksErr := keystore.Open(b.fileSvc, logger, keystore.Options{MasterKeyFile: cfg.Gateway.MasterKeyFile})
+		if ksErr != nil {
+			return nil, fmt.Errorf("gateway: open keystore: %w", ksErr)
+		}
+		db, err = OpenCanonicalDBService(logger, ks, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
@@ -331,12 +336,12 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if consensusSvc == nil && cfg.Gateway.Posture.RequiresL2() && cfg.Gateway.ConsensusID != "" {
 		policy, err := consensusStore.GetConsensus(ctx, cfg.Gateway.ConsensusID)
 		if err == nil && policy != nil {
-			fileProvider, err := consensus.NewFileKeyProvider(b.fileSvc, cfg.Gateway.ConsensusID)
+			memberKeys, err := consensus.NewKeystoreKeyProvider(db.GetSecretManager().GetKeystore(), cfg.Gateway.ConsensusID)
 			if err != nil {
-				return nil, fmt.Errorf("gateway: create consensus file key provider: %w", err)
+				return nil, fmt.Errorf("gateway: create consensus key provider: %w", err)
 			}
 			keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
-				if key, err := fileProvider.GetMemberKey(appID); err == nil {
+				if key, err := memberKeys.GetMemberKey(appID); err == nil {
 					return key, nil
 				}
 				if appID == actuatorKeyID {
@@ -581,7 +586,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		}
 		spectatorCfg.TrustedProxyCIDRs = cfg.Gateway.PublicSpectatorTrustedProxyCIDRs
 		spectatorCfg.AllowContainerBind = cfg.Gateway.PublicSpectatorAllowContainerBind
-		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
+		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, db.GetSecretManager().GetKeystore(), logger)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)
 		}

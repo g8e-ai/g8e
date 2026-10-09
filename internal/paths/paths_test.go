@@ -81,7 +81,6 @@ func TestInitWithBase(t *testing.T) {
 		{"SecretsDir", Infra.SecretsDir, pathutil.SafeJoin(base, constants.RuntimeDirname, constants.SecretsDirname)},
 		{"ProtocolDir", Infra.ProtocolDir, pathutil.SafeJoin(base, constants.RuntimeDirname, constants.ProtocolDirname)},
 		{"VaultDir", Infra.VaultDir, pathutil.SafeJoin(base, constants.RuntimeDirname, constants.VaultDirname)},
-		{"VaultKeyPath", Infra.VaultKeyPath, pathutil.SafeJoin(Infra.VaultDir, constants.VaultKeyFilename)},
 		{"ProtocolConstantsDir", Infra.ProtocolConstantsDir, pathutil.SafeJoin(Infra.ProtocolDir, constants.ProtocolConstantsDirname)},
 		{"ProtocolModelsDir", Infra.ProtocolModelsDir, pathutil.SafeJoin(Infra.ProtocolDir, constants.ProtocolModelsDirname)},
 		{"DbPath", Infra.DbPath, pathutil.SafeJoin(Infra.DataDir, constants.DbFilename)},
@@ -245,7 +244,6 @@ func TestInitWithBase_DerivedPathsPrefixedWithParent(t *testing.T) {
 		parent string
 	}{
 		{"DbPath", Infra.DbPath, Infra.DataDir},
-		{"VaultKeyPath", Infra.VaultKeyPath, Infra.VaultDir},
 		{"ProtocolConstantsDir", Infra.ProtocolConstantsDir, Infra.ProtocolDir},
 		{"ProtocolModelsDir", Infra.ProtocolModelsDir, Infra.ProtocolDir},
 		{"LocalStateDBPath", Infra.LocalStateDBPath, Infra.RuntimeDir},
@@ -571,7 +569,6 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		RuntimeDir                  string
 		DataDir                     string
 		VaultDir                    string
-		VaultKeyPath                string
 		TestVaultDir                string
 		LocalStateDBPath            string
 		SuspendedTransactionsDBPath string

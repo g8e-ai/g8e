@@ -9,7 +9,6 @@ package compliancecmd
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -26,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
@@ -73,6 +73,7 @@ func complianceKSICmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Ru
 	var actionIDs []string
 	var evidenceWindowStartUnixMs int64
 	var evidenceWindowEndUnixMs int64
+	var masterKeyFile string
 
 	cmd := &cobra.Command{
 		Use:   "ksi",
@@ -105,7 +106,14 @@ prove no result was produced from evidence outside the assessment context.`,
 			if err != nil {
 				return err
 			}
-			resultSet := evaluateKSIs(ctx, fileSvc, cat, certClass, binding)
+			// Opened without Initialize so evaluation never generates a master
+			// key. Without a usable key store the vault stays locked.
+			ks, ksErr := keystore.NewWithFS(fileSvc, slog.Default(), keystore.Options{MasterKeyFile: masterKeyFile})
+			if ksErr != nil {
+				slog.Default().Warn("compliance: keystore unavailable, proceeding with locked vault", "error", ksErr)
+				ks = nil
+			}
+			resultSet := evaluateKSIs(ctx, fileSvc, ks, cat, certClass, binding)
 			if resultSet == nil {
 				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
@@ -138,6 +146,7 @@ prove no result was produced from evidence outside the assessment context.`,
 	cmd.Flags().StringSliceVar(&actionIDs, "action-id", nil, "Allowed evidence action or transaction ID (repeatable)")
 	cmd.Flags().Int64Var(&evidenceWindowStartUnixMs, "evidence-window-start-unix-ms", 0, "Inclusive start of the evidence collection interval in Unix milliseconds (required)")
 	cmd.Flags().Int64Var(&evidenceWindowEndUnixMs, "evidence-window-end-unix-ms", 0, "Inclusive end of the evidence collection interval in Unix milliseconds (required)")
+	cmd.Flags().StringVar(&masterKeyFile, "master-key-file", "", "Absolute path to the master key file the runtime was started with (default: OS key store)")
 	_ = cmd.MarkFlagRequired("scope-id")
 	_ = cmd.MarkFlagRequired("run-id")
 	_ = cmd.MarkFlagRequired("assertion-assessment-id")
@@ -184,12 +193,12 @@ func loadKSICatalog(path string) (*compliance.KSICatalog, error) {
 // default methods, and runs evaluation bound to the given binding. Returns nil
 // if stores are unavailable or evaluation fails. Callers must treat nil as a
 // fail-closed error.
-func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compliance.KSICatalog, class compliance.CertificationClass, binding compliance.EvaluationBinding) *compliance.KSIResultSet {
+func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, cat *compliance.KSICatalog, class compliance.CertificationClass, binding compliance.EvaluationBinding) *compliance.KSIResultSet {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	deps, cleanup, ok := openEvaluatorDeps(ctx, fileSvc)
+	deps, cleanup, ok := openEvaluatorDeps(ctx, fileSvc, ks)
 	if !ok {
 		slog.Default().Warn("compliance: evaluator deps unavailable")
 		return nil
@@ -216,10 +225,10 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compl
 // openAuditStore, openCommitments, openLedger); this function composes them and
 // aggregates their cleanups so a failure in a later opener releases resources
 // acquired by earlier ones.
-func openEvaluatorDeps(ctx context.Context, fileSvc fs.RuntimeFileService) (compliance.EvaluatorDeps, func(), bool) {
+func openEvaluatorDeps(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (compliance.EvaluatorDeps, func(), bool) {
 	var cleanups []func()
 
-	v, vaultCleanup := openVault(ctx, fileSvc)
+	v, vaultCleanup := openVault(fileSvc, ks)
 	cleanups = append(cleanups, vaultCleanup)
 
 	auditStore, auditCleanup, ok := openAuditStore(fileSvc, v)
@@ -260,10 +269,10 @@ func runCleanups(cleanups []func()) {
 }
 
 // openVault opens the encryption vault and attempts to unlock it with the
-// runtime vault key. A nil vault (with a no-op cleanup) is returned if vault
-// creation fails — callers proceed without encryption, which is fine for
-// metadata-only evidence reads.
-func openVault(ctx context.Context, fileSvc fs.RuntimeFileService) (*vault.Vault, func()) {
+// vault key held in ks. A nil vault (with a no-op cleanup) is returned if vault
+// creation fails; a nil ks leaves the vault locked. Callers proceed without
+// encryption, which is fine for metadata-only evidence reads.
+func openVault(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (*vault.Vault, func()) {
 	logger := slog.Default()
 	v, vaultErr := vault.NewVault(&vault.VaultConfig{
 		FileSvc: fileSvc,
@@ -273,18 +282,15 @@ func openVault(ctx context.Context, fileSvc fs.RuntimeFileService) (*vault.Vault
 		logger.Warn("compliance: vault creation failed, proceeding without encryption", "error", vaultErr)
 		return nil, func() {}
 	}
-	vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
-	keyData, keyErr := fileSvc.ReadFile(ctx, vaultKeyRel)
+	if ks == nil {
+		return v, func() {}
+	}
+	keyBytes, keyErr := ks.LoadVaultKey()
 	if keyErr != nil {
-		logger.Warn("compliance: vault key file not found, proceeding with locked vault", "path", vaultKeyRel, "error", keyErr)
+		logger.Warn("compliance: vault key unavailable, proceeding with locked vault", "error", keyErr)
 		return v, func() {}
 	}
-	keyHex := strings.TrimSpace(string(keyData))
-	keyBytes, decErr := hex.DecodeString(keyHex)
-	if decErr != nil {
-		logger.Warn("compliance: vault key hex decode failed, proceeding with locked vault", "error", decErr)
-		return v, func() {}
-	}
+	defer vault.SecureZero(keyBytes)
 	if unlockErr := v.Unlock(keyBytes); unlockErr != nil {
 		logger.Warn("compliance: vault unlock failed, proceeding with locked vault", "error", unlockErr)
 	}

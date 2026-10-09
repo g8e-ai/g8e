@@ -37,12 +37,6 @@
       "category": "violation",
       "description": "Vault directory path (flag fallback)"
     },
-    "VaultKey": {
-      "_go_const": "EnvVar.VaultKey",
-      "value": "G8E_VAULT_KEY",
-      "category": "violation",
-      "description": "Vault key file path (flag fallback)"
-    },
     "OperatorSessionID": {
       "_go_const": "EnvVar.OperatorSessionID",
       "value": "G8E_OPERATOR_SESSION_ID",

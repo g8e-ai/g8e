@@ -355,6 +355,7 @@ func operatorStartCmd() *cobra.Command {
 	var provenanceOperatorEnabled bool
 	var provenanceOperatorID string
 	var provenanceOperatorModelStorageRoot string
+	var masterKeyFile string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -397,6 +398,7 @@ func operatorStartCmd() *cobra.Command {
 				ProvenanceOperatorEnabled:          provenanceOperatorEnabled,
 				ProvenanceOperatorID:               provenanceOperatorID,
 				ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
+				MasterKeyFile:                      masterKeyFile,
 			}
 
 			if roles.Has(constants.OperatorRoleEmbedded) {
@@ -414,6 +416,7 @@ func operatorStartCmd() *cobra.Command {
 					ProviderBoundaryObserverID:         providerBoundaryObserverID,
 					ProvenanceOperatorID:               provenanceOperatorID,
 					ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
+					MasterKeyFile:                      masterKeyFile,
 				}, shared.VersionInfoFromCmd(cmd))
 			}
 			// Run operator (this blocks until shutdown)
@@ -433,6 +436,7 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", true, "Enable execution vault (data stays in working directory)")
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
+	cmd.Flags().StringVar(&masterKeyFile, "master-key-file", "", "Absolute path to an operator-provisioned master key (base64 of 32 random bytes) outside the runtime directory. Required where no OS key store exists (containers, headless Linux without a Secret Service)")
 	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat send interval in seconds (0-300; 0 selects 30; declared to the Gateway at session start, which marks the Operator stale after twice this interval, minimum 60 seconds)")
 	cmd.Flags().IntVar(&gatewayHTTPPort, "gateway-http-port", 0, "Gateway HTTP discovery port to dial (default: platform default)")
 	cmd.Flags().IntVar(&gatewayHTTPSPort, "gateway-https-port", 0, "Gateway HTTPS/mTLS port to dial (default: platform default)")

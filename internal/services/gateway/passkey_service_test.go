@@ -320,6 +320,21 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 		require.Len(t, creds, 1)
 	})
 
+	t.Run("Refuses to revoke the last passkey", func(t *testing.T) {
+		svc, user := newPasskeyServiceForTest(t)
+
+		require.NoError(t, svc.addCredential(t.Context(), user.ID, testCredential("cred-only")))
+
+		found, remaining, err := svc.revokeCredential(t.Context(), user.ID, base64.RawURLEncoding.EncodeToString([]byte("cred-only")))
+		require.ErrorIs(t, err, constants.ErrLastPasskeyRevoke)
+		require.True(t, found)
+		require.Equal(t, 1, remaining)
+
+		creds, err := svc.listCredentials(t.Context(), user.ID)
+		require.NoError(t, err)
+		require.Len(t, creds, 1)
+	})
+
 	t.Run("Success - credential not found", func(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 

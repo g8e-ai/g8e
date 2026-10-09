@@ -25,7 +25,6 @@ type TestPaths struct {
 	PKIDir            string
 	SecretsDir        string
 	VaultDir          string
-	VaultKeyPath      string
 	TestVaultDir      string
 	ProtocolDir       string
 	DocsDir           string
@@ -55,7 +54,6 @@ func NewTestPaths(baseDir string) *TestPaths {
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
 		VaultDir:          vaultDir,
-		VaultKeyPath:      filepath.Join(vaultDir, constants.VaultKeyFilename),
 		TestVaultDir:      testVaultDir,
 		ProtocolDir:       protocolDir,
 		DocsDir:           docsDir,

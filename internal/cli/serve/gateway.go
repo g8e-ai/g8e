@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	gateway "github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
 )
@@ -50,7 +51,7 @@ type GatewayConfig struct {
 	PKIDir                             string                  `json:"pki_dir,omitempty"`
 	SecretsDir                         string                  `json:"secrets_dir,omitempty"`
 	VaultDir                           string                  `json:"vault_dir,omitempty"`
-	VaultKeyPath                       string                  `json:"vault_key_path,omitempty"`
+	MasterKeyFile                      string                  `json:"master_key_file,omitempty"`
 	PasskeyRpID                        string                  `json:"passkey_rp_id,omitempty"`
 	PasskeyRpName                      string                  `json:"passkey_rp_name,omitempty"`
 	PasskeyRpOrigins                   []string                `json:"passkey_rp_origins,omitempty"`
@@ -144,7 +145,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		PKIDir:                             cfg.PKIDir,
 		SecretsDir:                         cfg.SecretsDir,
 		VaultDir:                           cfg.VaultDir,
-		VaultKeyPath:                       cfg.VaultKeyPath,
+		MasterKeyFile:                      cfg.MasterKeyFile,
 		PasskeyRpID:                        cfg.PasskeyRpID,
 		PasskeyRpName:                      cfg.PasskeyRpName,
 		PasskeyRpOrigins:                   cfg.PasskeyRpOrigins,
@@ -182,11 +183,15 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 
 	var svc *gateway.GatewayModeService
 	if cfg.ConsensusBootstrap != "" {
-		db, err := gateway.OpenCanonicalDBService(logger, gatewayCfg.Gateway.VaultKeyPath, nil, fileSvc)
+		ks, err := keystore.Open(fileSvc, logger, keystore.Options{MasterKeyFile: gatewayCfg.Gateway.MasterKeyFile})
+		if err != nil {
+			return fmt.Errorf("gateway: open keystore: %w", err)
+		}
+		db, err := gateway.OpenCanonicalDBService(logger, ks, fileSvc)
 		if err != nil {
 			return fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
-		if err := consensusPolicyBootstrap(context.Background(), db.GetConsensusStore(), db.GetSignerStore(), cfg.ConsensusBootstrap, fileSvc, logger); err != nil {
+		if err := consensusPolicyBootstrap(context.Background(), db.GetConsensusStore(), db.GetSignerStore(), cfg.ConsensusBootstrap, ks, logger); err != nil {
 			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
 		}
 		svc, err = gateway.NewGatewayModeServiceWithDB(gatewayCfg, fileSvc, logger, db, nil, nil)
@@ -370,7 +375,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // If member_seeds is provided, each member gets its own derived Ed25519 key
 // pair: the public key is registered as a trusted signer for that member, and
 // the private key is saved to secretsDir so the in-process LocalDeliberator
-// signs L2 votes with distinct per-member keys via FileKeyProvider. This makes
+// signs L2 votes with distinct per-member keys via KeystoreKeyProvider. This makes
 // RequireDistinct and quorum cryptographically meaningful.
 //
 // If member_seeds is omitted but seed_hex is provided, the same key is
@@ -382,8 +387,8 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // Under the C2 inverted construction order, this is called BEFORE
 // NewGatewayModeServiceWithDB so that build() reads the seeded policy from
 // the DB and constructs the ConsensusService internally. Member private keys
-// are saved to secretsDir so build()'s FileKeyProvider can load them.
-func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, bootstrapPath string, fileSvc fs.RuntimeFileService, logger *slog.Logger) error {
+// are sealed in the keystore so build()'s KeystoreKeyProvider can load them.
+func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, bootstrapPath string, ks *keystore.Keystore, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)
@@ -443,8 +448,8 @@ func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.Conse
 		sharedPrivKey = priv
 	}
 
-	// Register each member as a trusted signer and save the private key to disk
-	// so the in-process LocalDeliberator can sign L2 votes via FileKeyProvider.
+	// Register each member as a trusted signer and seal its private key in the
+	// keystore so the in-process LocalDeliberator can sign L2 votes.
 	for _, appID := range boot.MemberAppIDs {
 		var pubHex string
 		var privKey ed25519.PrivateKey
@@ -474,7 +479,7 @@ func consensusPolicyBootstrap(ctx context.Context, consensusStore *gateway.Conse
 		if err := signerStore.AddTrustedSigner(ctx, signer); err != nil {
 			return fmt.Errorf("consensus bootstrap: register signer %s: %w", appID, err)
 		}
-		if err := consensus.SaveMemberKey(fileSvc, boot.ConsensusID, appID, privKey); err != nil {
+		if err := consensus.SaveMemberKey(ks, boot.ConsensusID, appID, privKey); err != nil {
 			return fmt.Errorf("consensus bootstrap: save member key %s: %w", appID, err)
 		}
 		logger.Info("Trusted signer registered and key saved", "app_id", appID)

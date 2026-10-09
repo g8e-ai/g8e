@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/reporting"
 )
 
@@ -45,6 +46,9 @@ type reportFlags struct {
 	dataDir    string
 	runtimeDir string
 	ledgerDir  string
+	// masterKeyFile selects an operator-provisioned master key instead of the
+	// OS key store, matching the runtime that wrote the vault.
+	masterKeyFile string
 }
 
 func (f *reportFlags) addFlags(cmd *cobra.Command) {
@@ -52,6 +56,7 @@ func (f *reportFlags) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.dataDir, "data-dir", "", "Data directory (default: "+paths.Infra.DataDir+")")
 	cmd.Flags().StringVar(&f.runtimeDir, "runtime-dir", "", "Runtime directory (default: "+paths.Infra.RuntimeDir+")")
 	cmd.Flags().StringVar(&f.ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/data/ledger)")
+	cmd.Flags().StringVar(&f.masterKeyFile, "master-key-file", "", "Absolute path to the master key file the runtime was started with (default: OS key store)")
 }
 
 func (f *reportFlags) resolveOptions() (reporting.Options, error) {
@@ -88,11 +93,19 @@ func (f *reportFlags) resolveOptions() (reporting.Options, error) {
 		return reporting.Options{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
+	// The keystore is opened without Initialize so a report never generates a
+	// master key. Without a usable key store the report is metadata-only.
+	ks, err := keystore.NewWithFS(fileSvc, slog.Default(), keystore.Options{MasterKeyFile: f.masterKeyFile})
+	if err != nil {
+		slog.Default().Warn("Keystore unavailable; report will be metadata-only", "error", err)
+		ks = nil
+	}
+
 	return reporting.Options{
-		FileSvc:      fileSvc,
-		VaultKeyPath: filepath.Join(runtimeDir, constants.VaultDirname, constants.VaultKeyFilename),
-		OutDir:       outDir,
-		Logger:       slog.Default(),
+		FileSvc:  fileSvc,
+		Keystore: ks,
+		OutDir:   outDir,
+		Logger:   slog.Default(),
 	}, nil
 }
 

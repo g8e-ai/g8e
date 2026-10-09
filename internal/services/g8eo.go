@@ -174,12 +174,15 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.execution = execution.NewExecutionService(vs.config, vs.logger)
 	vs.fileEdit = execution.NewFileEditService(vs.config, vs.logger)
 
-	// Initialize SecretManager for loading signing keys (Actuator and Consensus)
-	// This must be initialized before storage services to provide keystore for encrypted token storage
-
 	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode.
-	gatewayDB, err := gateway.OpenCanonicalDBService(vs.logger, vs.config.VaultKeyPath, vs.keystore, vs.fileSvc)
+	if vs.keystore == nil {
+		vs.keystore, err = keystore.Open(vs.fileSvc, vs.logger, keystore.Options{MasterKeyFile: vs.config.MasterKeyFile})
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
+		}
+	}
+	gatewayDB, err := gateway.OpenCanonicalDBService(vs.logger, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}

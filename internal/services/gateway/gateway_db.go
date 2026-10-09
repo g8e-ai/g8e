@@ -16,14 +16,10 @@ package gateway
 
 import (
 	"context"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -86,14 +82,14 @@ type CanonicalDBService struct {
 }
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
-// vaultKeyPath is an optional explicit vault key path. When empty, the default
-// runtime-relative key under vault/ is used. Absolute paths are treated as
-// explicit external inputs; relative paths resolve through fileSvc.
-// ks is an optional pre-initialized keystore (non-nil for tests to bypass OS keychain,
-// nil for production which creates via OS keychain).
-func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+// ks is the initialized keystore holding the master key (see keystore.Open);
+// it encrypts the vault key and every platform secret at rest.
+func OpenCanonicalDBService(logger *slog.Logger, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	if fileSvc == nil {
 		return nil, fmt.Errorf("%w: runtime file service", constants.ErrMissingRequiredField)
+	}
+	if ks == nil {
+		return nil, fmt.Errorf("%w: keystore", constants.ErrMissingRequiredField)
 	}
 
 	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
@@ -115,58 +111,28 @@ func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keysto
 	}
 
 	vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
-	vaultKeyPath = resolveVaultKeyPath(vaultKeyPath, fileSvc)
 
 	// Auto-initialize vault on first run. If no vault header exists, generate
-	// a random key, create the vault header, and write the key file. This
-	// mirrors the `g8e vault init` CLI command and ensures the vault is always
-	// ready without requiring a separate initialization step — same pattern as
-	// SQLite creating the database file on first open.
+	// a random key, store it encrypted under the keystore master key, then
+	// create the vault header. The key is stored before the header so a crash
+	// in between leaves a vault that re-initializes, never one with no key.
 	headerExists, err := vault.VaultHeaderExists(fileSvc)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("gateway: check vault header: %w", err)
 	}
 	if !headerExists {
-		if err := fileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate); err != nil {
+		if err := ks.InitVault(); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+			return nil, err
 		}
-
-		initKey := make([]byte, vault.KeySize)
-		if _, err := rand.Read(initKey); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
-		}
-
-		header, _, err := vault.NewVaultHeader(initKey)
-		if err != nil {
-			db.Close()
-			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
-		}
-
-		if err := header.Save(fileSvc); err != nil {
-			db.Close()
-			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
-		}
-
-		keyData := []byte(hex.EncodeToString(initKey) + "\n")
-		if err := fileSvc.WriteFile(context.Background(), constants.DefaultVaultKeyRelPath, keyData, constants.PermFilePrivate); err != nil {
-			db.Close()
-			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
-		}
-
-		vault.SecureZero(initKey)
-		logger.Info("Vault auto-initialized on first run", "vault_dir", vaultDirAbs, "key_path", vaultKeyPath)
+		logger.Info("Vault auto-initialized on first run", "vault_dir", vaultDirAbs, "key_store", ks.KeyringName())
 	}
 
 	// Unlock vault. Encryption is required for secure data storage at rest —
 	// the vault must always be unlocked at startup. If the key cannot be read
 	// or the vault cannot be unlocked, the gateway fails to start.
-	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
+	privateKey, err := ks.LoadVaultKey()
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
@@ -179,7 +145,7 @@ func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keysto
 			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDirAbs)
 		}
 		if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
-			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, constants.SecretsFileVaultKey)
 		}
 		return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
 	}
@@ -238,17 +204,6 @@ func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keysto
 	return svc, nil
 }
 
-func resolveVaultKeyPath(vaultKeyPath string, fileSvc fs.RuntimeFileService) string {
-	vaultKeyPath = strings.TrimSpace(vaultKeyPath)
-	if vaultKeyPath == "" {
-		return fileSvc.Resolve(constants.DefaultVaultKeyRelPath)
-	}
-	if filepath.IsAbs(vaultKeyPath) {
-		return vaultKeyPath
-	}
-	return fileSvc.Resolve(filepath.ToSlash(vaultKeyPath))
-}
-
 // initStateRoot builds the incremental state commitment once for a new database
 // or one recorded under a different commitment algorithm.
 func (s *CanonicalDBService) initStateRoot() error {
@@ -300,19 +255,11 @@ func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService, ks *keyst
 		return fmt.Errorf("canonicalDB: init schema: %w", err)
 	}
 
-	var sm *SecretManager
-	if ks != nil {
-		sm = &SecretManager{
-			db:       s.db,
-			logger:   s.logger,
-			fileSvc:  fileSvc,
-			keystore: ks,
-		}
-	} else {
-		sm, err = NewSecretManager(s.db, fileSvc, s.logger)
-		if err != nil {
-			return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
-		}
+	sm := &SecretManager{
+		db:       s.db,
+		logger:   s.logger,
+		fileSvc:  fileSvc,
+		keystore: ks,
 	}
 	s.sm = sm
 	if err := sm.InitAppSettings(); err != nil {

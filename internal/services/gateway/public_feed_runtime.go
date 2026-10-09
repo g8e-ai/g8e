@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 )
 
 const (
@@ -170,7 +171,10 @@ func normalizeListenAddress(address string) string {
 
 // EnsureLocalPublicFeed initializes export config and signing material when
 // absent so the gateway-owned mirror can accept publisher ingest.
-func EnsureLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, sourceID, mirrorOrigin string) (models.PublicExportConfig, error) {
+func EnsureLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, sourceID, mirrorOrigin string) (models.PublicExportConfig, error) {
+	if ks == nil {
+		return models.PublicExportConfig{}, fmt.Errorf("public-feed: %w: keystore", constants.ErrMissingRequiredField)
+	}
 	exportConfig, err := ReadPublicExportConfig(ctx, fileSvc)
 	if err == nil {
 		return exportConfig, nil
@@ -213,10 +217,10 @@ func EnsureLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, s
 	exportConfig.SourceID = sourceID
 	exportConfig.MirrorOrigin = mirrorOrigin
 	exportConfig.SigningKeyID = hex.EncodeToString(keyDigest[:])
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
+	if err := WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedSigningKeyPath, privateKey); err != nil {
 		return models.PublicExportConfig{}, fmt.Errorf("public-feed: write signing key: %w", err)
 	}
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
+	if err := WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedIngestTokenPath, token); err != nil {
 		return models.PublicExportConfig{}, fmt.Errorf("public-feed: write ingest token: %w", err)
 	}
 	if err := writePublicExportConfig(ctx, fileSvc, exportConfig); err != nil {
@@ -380,7 +384,10 @@ func migrateLegacyPublicFeedArchive(ctx context.Context, fileSvc fs.RuntimeFileS
 	return moved, generation, nil
 }
 
-func TransitionLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, sourceID string) (models.PublicExportConfig, error) {
+func TransitionLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, sourceID string) (models.PublicExportConfig, error) {
+	if ks == nil {
+		return models.PublicExportConfig{}, fmt.Errorf("public-feed: %w: keystore", constants.ErrMissingRequiredField)
+	}
 	sourceID = strings.TrimSpace(sourceID)
 	if err := ValidatePublicFeedSourceID(sourceID); err != nil {
 		return models.PublicExportConfig{}, err
@@ -432,10 +439,10 @@ func TransitionLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileServic
 	if generationExists {
 		return models.PublicExportConfig{}, restoreLegacy(constants.ErrPublicFeedArchiveGenerationExists)
 	}
-	if _, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired); err != nil {
+	if _, err := ReadPublicSecret(ctx, fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired); err != nil {
 		return models.PublicExportConfig{}, restoreLegacy(err)
 	}
-	if _, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired); err != nil {
+	if _, err := ReadPublicSecret(ctx, fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired); err != nil {
 		return models.PublicExportConfig{}, restoreLegacy(err)
 	}
 
@@ -487,10 +494,10 @@ func TransitionLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileServic
 		}
 		moved = append(moved, archivePath)
 	}
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
+	if err := WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedSigningKeyPath, privateKey); err != nil {
 		return models.PublicExportConfig{}, rollback(fmt.Errorf("public-feed: write new signing key: %w", err))
 	}
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
+	if err := WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedIngestTokenPath, token); err != nil {
 		return models.PublicExportConfig{}, rollback(fmt.Errorf("public-feed: write new ingest token: %w", err))
 	}
 	if err := writePublicExportConfig(ctx, fileSvc, newConfig); err != nil {
@@ -514,20 +521,41 @@ func writePublicExportConfig(ctx context.Context, fileSvc fs.RuntimeFileService,
 	return nil
 }
 
-func ReadPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
+// WritePublicSecret seals secret under the keystore master key and writes the
+// ciphertext to relPath. Public-feed secrets never touch disk in the clear.
+func WritePublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, relPath string, secret []byte) error {
+	if ks == nil {
+		return fmt.Errorf("public-feed: %w: keystore", constants.ErrMissingRequiredField)
+	}
+	sealed, err := ks.Encrypt(hex.EncodeToString(secret))
+	if err != nil {
+		return fmt.Errorf("public-feed: seal %s: %w", relPath, err)
+	}
+	if err := fileSvc.WriteFile(ctx, relPath, []byte(sealed), constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("public-feed: write %s: %w", relPath, err)
+	}
+	return nil
+}
+
+// ReadPublicSecret reads and unseals a secret written by WritePublicSecret and
+// checks its length. Any read, unseal, or decode failure returns missingErr.
+func ReadPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
+	if ks == nil {
+		return nil, fmt.Errorf("%w: keystore unavailable", missingErr)
+	}
 	data, err := fileSvc.ReadFile(ctx, relPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", missingErr, err)
 	}
-	decoded, err := hex.DecodeString(strings.TrimSpace(string(data)))
+	plaintext, err := ks.Decrypt(strings.TrimSpace(string(data)))
+	if err != nil {
+		return nil, fmt.Errorf("%w: unseal: %v", missingErr, err)
+	}
+	decoded, err := hex.DecodeString(plaintext)
 	if err != nil || len(decoded) != expectedBytes {
 		return nil, missingErr
 	}
 	return decoded, nil
-}
-
-func readPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
-	return ReadPublicSecret(ctx, fileSvc, relPath, expectedBytes, missingErr)
 }
 
 func rejectTrailingPublicJSON(decoder *json.Decoder) error {

@@ -271,10 +271,16 @@ func NewPasskeyService(docStore *DocumentStoreService, logger *slog.Logger, cfg 
 
 	rpOrigins := buildRPOrigins(cfg)
 
+	// User verification (PIN or biometric) is required for every ceremony:
+	// presence alone would let anyone holding an unlocked authenticator log in
+	// or approve L3 actions.
 	w, err := webauthn.New(&webauthn.Config{
 		RPID:          cfg.RpID,
 		RPDisplayName: rpName,
 		RPOrigins:     rpOrigins,
+		AuthenticatorSelection: protocol.AuthenticatorSelection{
+			UserVerification: protocol.VerificationRequired,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize webauthn: %w", err)
@@ -515,7 +521,7 @@ func (s *PasskeyService) GenerateApprovalChallenge(ctx context.Context, userID, 
 			Timeout:            60000,
 			RelyingPartyID:     s.rpID,
 			AllowedCredentials: allowedCredentials,
-			UserVerification:   protocol.VerificationPreferred,
+			UserVerification:   protocol.VerificationRequired,
 		},
 	}
 
@@ -550,18 +556,8 @@ func (s *PasskeyService) VerifyAuthentication(ctx context.Context, userID string
 		return nil, fmt.Errorf("failed to finish login: %w", err)
 	}
 
-	// Update credential counter and last used
-	var storedCred *models.PasskeyCredential
-	for i := range user.PasskeyCredentials {
-		if bytes.Equal(user.PasskeyCredentials[i].ID, credential.ID) {
-			user.PasskeyCredentials[i].Authenticator.SignCount = credential.Authenticator.SignCount
-			user.PasskeyCredentials[i].LastUsedAtUnixMs = time.Now().UnixMilli()
-			storedCred = &user.PasskeyCredentials[i]
-			break
-		}
-	}
-
-	if err := s.updateUser(ctx, userID, user); err != nil {
+	storedCred, err := s.recordCredentialUse(ctx, userID, user, credential)
+	if err != nil {
 		return nil, err
 	}
 
@@ -584,7 +580,10 @@ func (s *PasskeyService) listCredentials(ctx context.Context, userID string) ([]
 	return user.PasskeyCredentials, nil
 }
 
-// revokeCredential removes a passkey credential from a user.
+// revokeCredential removes a passkey credential from a user. It refuses to
+// remove the user's last passkey: with none left, L3 approvals and passkey
+// login become impossible, and re-registration would fall back to weaker
+// bootstrap paths. Register a replacement first.
 func (s *PasskeyService) revokeCredential(ctx context.Context, userID, credentialID string) (found bool, remaining int, err error) {
 	user, err := s.getUser(ctx, userID)
 	if err != nil {
@@ -606,6 +605,9 @@ func (s *PasskeyService) revokeCredential(ctx context.Context, userID, credentia
 
 	if !found {
 		return false, len(user.PasskeyCredentials), nil
+	}
+	if len(newCreds) == 0 {
+		return true, len(user.PasskeyCredentials), constants.ErrLastPasskeyRevoke
 	}
 
 	if err := s.setCredentials(ctx, userID, newCreds); err != nil {
@@ -673,6 +675,7 @@ func (s *PasskeyService) VerifyPasskeyProof(ctx context.Context, userID, transac
 		UserID:               []byte(userID),
 		AllowedCredentialIDs: allowedCredentialIDs,
 		Expires:              time.Now().Add(passkeyChallengeTTL),
+		UserVerification:     protocol.VerificationRequired,
 	}
 
 	assertionResponse := models.ParsedAssertionResponse{
@@ -701,12 +704,56 @@ func (s *PasskeyService) VerifyPasskeyProof(ctx context.Context, userID, transac
 		return false, fmt.Errorf("failed to parse credential assertion: %w", err)
 	}
 
-	_, err = s.webauthn.ValidateLogin(user, session, parsedResponse)
+	credential, err := s.webauthn.ValidateLogin(user, session, parsedResponse)
 	if err != nil {
+		return false, fmt.Errorf("L3 WebAuthn verification failed: %w", err)
+	}
+	if _, err := s.recordCredentialUse(ctx, userID, user, credential); err != nil {
 		return false, fmt.Errorf("L3 WebAuthn verification failed: %w", err)
 	}
 
 	return true, nil
+}
+
+// recordCredentialUse rejects an assertion whose signature counter did not
+// advance (a possible cloned authenticator) and otherwise persists the new
+// counter and last-used time, so a replayed or cloned assertion cannot pass
+// again with the same counter.
+func (s *PasskeyService) recordCredentialUse(ctx context.Context, userID string, user *models.User, credential *webauthn.Credential) (*models.PasskeyCredential, error) {
+	if credential == nil {
+		return nil, fmt.Errorf("passkey: %w: validated credential", constants.ErrMissingRequiredField)
+	}
+	if credential.Authenticator.CloneWarning {
+		s.logger.Warn("Passkey assertion rejected: signature counter did not advance", "userID", userID, "stored_sign_count", storedSignCount(user, credential.ID))
+		return nil, constants.ErrPasskeyCloneDetected
+	}
+
+	var storedCred *models.PasskeyCredential
+	for i := range user.PasskeyCredentials {
+		if bytes.Equal(user.PasskeyCredentials[i].ID, credential.ID) {
+			user.PasskeyCredentials[i].Authenticator.SignCount = credential.Authenticator.SignCount
+			user.PasskeyCredentials[i].LastUsedAtUnixMs = time.Now().UnixMilli()
+			storedCred = &user.PasskeyCredentials[i]
+			break
+		}
+	}
+	if storedCred == nil {
+		return nil, fmt.Errorf("passkey: %w: credential not registered to user", constants.ErrNotFound)
+	}
+
+	if err := s.updateUser(ctx, userID, user); err != nil {
+		return nil, err
+	}
+	return storedCred, nil
+}
+
+func storedSignCount(user *models.User, credentialID []byte) uint32 {
+	for _, c := range user.PasskeyCredentials {
+		if bytes.Equal(c.ID, credentialID) {
+			return c.Authenticator.SignCount
+		}
+	}
+	return 0
 }
 
 func (s *PasskeyService) getUser(ctx context.Context, userID string) (*models.User, error) {

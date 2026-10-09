@@ -34,10 +34,31 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 )
 
 type publicConfigLoader func(string) (*config.Config, error)
 type publicFileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
+
+// openPublicKeystore opens the keystore that seals the public-feed signing key
+// and ingest token. Tests replace it with an in-memory keyring.
+var openPublicKeystore = func(fileSvc fs.RuntimeFileService, opts keystore.Options) (*keystore.Keystore, error) {
+	return keystore.Open(fileSvc, slog.Default(), opts)
+}
+
+// publicKeystore opens the keystore using the public command group's
+// --master-key-file flag.
+func publicKeystore(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (*keystore.Keystore, error) {
+	var opts keystore.Options
+	if flag := cmd.Flag("master-key-file"); flag != nil {
+		opts.MasterKeyFile = flag.Value.String()
+	}
+	ks, err := openPublicKeystore(fileSvc, opts)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: open keystore: %w", err)
+	}
+	return ks, nil
+}
 
 func publicInitCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
 	var sourceID string
@@ -97,11 +118,15 @@ func publicInitCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 			exportConfig.SourceID = sourceID
 			exportConfig.MirrorOrigin = mirrorOrigin
 			exportConfig.SigningKeyID = hex.EncodeToString(keyDigest[:])
-			if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
+			ks, err := publicKeystore(cmd, fileSvc)
+			if err != nil {
+				return err
+			}
+			if err := gateway.WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedSigningKeyPath, privateKey); err != nil {
 				return fmt.Errorf("public-feed: write signing key: %w", err)
 			}
 			createdPaths = append(createdPaths, constants.PublicFeedSigningKeyPath)
-			if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
+			if err := gateway.WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedIngestTokenPath, token); err != nil {
 				return rollback(fmt.Errorf("public-feed: write ingest token: %w", err))
 			}
 			createdPaths = append(createdPaths, constants.PublicFeedIngestTokenPath)
@@ -183,7 +208,11 @@ func publicSourceTransitionCmdWithConfig(configLoader publicConfigLoader, fileSv
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
-			newConfig, err := gateway.TransitionLocalPublicFeed(shared.CommandContext(cmd), fileSvc, sourceID)
+			ks, err := publicKeystore(cmd, fileSvc)
+			if err != nil {
+				return err
+			}
+			newConfig, err := gateway.TransitionLocalPublicFeed(shared.CommandContext(cmd), fileSvc, ks, sourceID)
 			if err != nil {
 				return err
 			}
@@ -258,6 +287,7 @@ func rejectTrailingPublicJSON(decoder *json.Decoder) error {
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "public", Short: "Manage the public spectator feed"}
+	cmd.PersistentFlags().String("master-key-file", "", "Absolute path to the master key file the Gateway was started with (default: OS key store)")
 	configCmd := &cobra.Command{Use: "config", Short: "Manage public-feed configuration"}
 	configCmd.AddCommand(publicConfigSetCmdWithConfig(shared.LoadConfig, shared.NewFileSvc))
 	sourceCmd := &cobra.Command{Use: "source", Short: "Manage the active public-feed source"}
@@ -340,12 +370,17 @@ func loadPublicCommandRuntime(cmd *cobra.Command, configLoader publicConfigLoade
 	return fileSvc, exportConfig, nil
 }
 
-func newPublicPublisherForCommand(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig) (*gateway.PublicPublisherService, error) {
-	key, err := gateway.ReadPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+func newPublicPublisherForCommand(cmd *cobra.Command, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig) (*gateway.PublicPublisherService, error) {
+	ctx := shared.CommandContext(cmd)
+	ks, err := publicKeystore(cmd, fileSvc)
 	if err != nil {
 		return nil, err
 	}
-	token, err := gateway.ReadPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
+	key, err := gateway.ReadPublicSecret(ctx, fileSvc, ks, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+	if err != nil {
+		return nil, err
+	}
+	token, err := gateway.ReadPublicSecret(ctx, fileSvc, ks, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +416,7 @@ func publicPublishCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory 
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(shared.CommandContext(cmd), fileSvc, exportConfig)
+			publisher, err := newPublicPublisherForCommand(cmd, fileSvc, exportConfig)
 			if err != nil {
 				return err
 			}
@@ -438,7 +473,7 @@ func publicRepairOutboxCmdWithConfig(configLoader publicConfigLoader, fileSvcFac
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(ctx, fileSvc, exportConfig)
+			publisher, err := newPublicPublisherForCommand(cmd, fileSvc, exportConfig)
 			if err != nil {
 				return err
 			}
@@ -473,7 +508,7 @@ func publicPushCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(shared.CommandContext(cmd), fileSvc, exportConfig)
+			publisher, err := newPublicPublisherForCommand(cmd, fileSvc, exportConfig)
 			if err != nil {
 				return err
 			}
@@ -519,7 +554,7 @@ func publicStatusCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory p
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(shared.CommandContext(cmd), fileSvc, exportConfig)
+			publisher, err := newPublicPublisherForCommand(cmd, fileSvc, exportConfig)
 			if err != nil {
 				return err
 			}
@@ -548,37 +583,43 @@ func publicStatusCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory p
 	}
 }
 
-func readPublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService) (*models.PublicKeyRotationState, error) {
+// readPublicKeyRotation loads pending rotation state and unseals its new
+// signing key. It returns nil state when no rotation is pending.
+func readPublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore) (*models.PublicKeyRotationState, ed25519.PrivateKey, error) {
 	exists, err := fileSvc.FileExists(ctx, constants.PublicFeedKeyRotationPath)
 	if err != nil {
-		return nil, fmt.Errorf("public-feed: inspect key rotation state: %w", err)
+		return nil, nil, fmt.Errorf("public-feed: inspect key rotation state: %w", err)
 	}
 	if !exists {
-		return nil, nil
+		return nil, nil, nil
 	}
 	data, err := fileSvc.ReadFile(ctx, constants.PublicFeedKeyRotationPath)
 	if err != nil {
-		return nil, fmt.Errorf("%w: read state: %v", constants.ErrPublicFeedKeyRotationPending, err)
+		return nil, nil, fmt.Errorf("%w: read state: %v", constants.ErrPublicFeedKeyRotationPending, err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var state models.PublicKeyRotationState
 	if err := decoder.Decode(&state); err != nil {
-		return nil, fmt.Errorf("%w: decode state: %v", constants.ErrPublicFeedKeyRotationPending, err)
+		return nil, nil, fmt.Errorf("%w: decode state: %v", constants.ErrPublicFeedKeyRotationPending, err)
 	}
 	var trailing json.RawMessage
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return nil, fmt.Errorf("%w: trailing JSON", constants.ErrPublicFeedKeyRotationPending)
+		return nil, nil, fmt.Errorf("%w: trailing JSON", constants.ErrPublicFeedKeyRotationPending)
 	}
-	privateKey, err := hex.DecodeString(state.NewPrivateKey)
+	privateKeyHex, err := ks.Decrypt(state.SealedNewPrivateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: unseal new signing key: %v", constants.ErrPublicFeedKeyRotationPending, err)
+	}
+	privateKey, err := hex.DecodeString(privateKeyHex)
 	if err != nil || len(privateKey) != ed25519.PrivateKeySize || state.SourceID == "" || state.OldKeyID == "" || state.NewKeyID == "" || state.OldKeyID == state.NewKeyID {
-		return nil, constants.ErrPublicFeedKeyRotationPending
+		return nil, nil, constants.ErrPublicFeedKeyRotationPending
 	}
 	digest := sha256.Sum256(ed25519.PrivateKey(privateKey).Public().(ed25519.PublicKey))
 	if state.NewKeyID != hex.EncodeToString(digest[:]) {
-		return nil, constants.ErrPublicFeedKeyRotationPending
+		return nil, nil, constants.ErrPublicFeedKeyRotationPending
 	}
-	return &state, nil
+	return &state, ed25519.PrivateKey(privateKey), nil
 }
 
 func writePublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService, state models.PublicKeyRotationState) error {
@@ -632,8 +673,8 @@ func publicKeyRotationOutboxStatus(ctx context.Context, fileSvc fs.RuntimeFileSe
 	return false, false, nil
 }
 
-func finalizePublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig, rotation models.PublicKeyRotationState) error {
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(rotation.NewPrivateKey), constants.PermFilePrivate); err != nil {
+func finalizePublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, exportConfig models.PublicExportConfig, rotation models.PublicKeyRotationState, newPrivateKey ed25519.PrivateKey) error {
+	if err := gateway.WritePublicSecret(ctx, fileSvc, ks, constants.PublicFeedSigningKeyPath, newPrivateKey); err != nil {
 		return fmt.Errorf("public-feed: persist rotated signing key: %w", err)
 	}
 	exportConfig.SigningKeyID = rotation.NewKeyID
@@ -656,7 +697,11 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 				return err
 			}
 			ctx := shared.CommandContext(cmd)
-			rotation, err := readPublicKeyRotation(ctx, fileSvc)
+			ks, err := publicKeystore(cmd, fileSvc)
+			if err != nil {
+				return err
+			}
+			rotation, newPrivateKey, err := readPublicKeyRotation(ctx, fileSvc, ks)
 			if err != nil {
 				return err
 			}
@@ -666,12 +711,17 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 					return fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
 				}
 				digest := sha256.Sum256(publicKey)
-				rotation = &models.PublicKeyRotationState{
-					SourceID:      exportConfig.SourceID,
-					OldKeyID:      exportConfig.SigningKeyID,
-					NewKeyID:      hex.EncodeToString(digest[:]),
-					NewPrivateKey: hex.EncodeToString(privateKey),
+				sealed, err := ks.Encrypt(hex.EncodeToString(privateKey))
+				if err != nil {
+					return fmt.Errorf("public-feed: seal new signing key: %w", err)
 				}
+				rotation = &models.PublicKeyRotationState{
+					SourceID:            exportConfig.SourceID,
+					OldKeyID:            exportConfig.SigningKeyID,
+					NewKeyID:            hex.EncodeToString(digest[:]),
+					SealedNewPrivateKey: sealed,
+				}
+				newPrivateKey = privateKey
 				if err := writePublicKeyRotation(ctx, fileSvc, *rotation); err != nil {
 					return err
 				}
@@ -687,15 +737,14 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 				if exportConfig.SigningKeyID != rotation.OldKeyID {
 					return constants.ErrPublicFeedKeyRotationPending
 				}
-				publisher, err := newPublicPublisherForCommand(ctx, fileSvc, exportConfig)
+				publisher, err := newPublicPublisherForCommand(cmd, fileSvc, exportConfig)
 				if err != nil {
 					return err
 				}
 				if found {
 					err = publisher.RetransmitOutbox(ctx)
 				} else {
-					privateKey, _ := hex.DecodeString(rotation.NewPrivateKey)
-					err = publisher.RotateKeyTo(ctx, ed25519.PrivateKey(privateKey), rotation.NewKeyID)
+					err = publisher.RotateKeyTo(ctx, newPrivateKey, rotation.NewKeyID)
 				}
 				if err != nil {
 					return err
@@ -708,7 +757,7 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 					return constants.ErrPublicFeedKeyRotationPending
 				}
 			}
-			if err := finalizePublicKeyRotation(ctx, fileSvc, exportConfig, *rotation); err != nil {
+			if err := finalizePublicKeyRotation(ctx, fileSvc, ks, exportConfig, *rotation, newPrivateKey); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public signing key rotated to %s\n", rotation.NewKeyID)

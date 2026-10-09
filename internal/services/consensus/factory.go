@@ -8,19 +8,15 @@
 package consensus
 
 import (
-	"context"
 	"crypto/ed25519"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
-	"path/filepath"
-	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
-	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
@@ -78,71 +74,50 @@ func NewConsensusFromPolicy(
 	return NewConsensusService(policy.ID, members, doctrine, logger, responder), nil
 }
 
-// FileKeyProvider loads Ed25519 private keys from disk-based files.
-// Each member's key is stored as a hex-encoded Ed25519 seed in a file named
-// {prefix}{consensusID}_{memberAppID}.key within the secrets directory.
-// This enables multi-member consensus co-signing without sharing a single key.
-type FileKeyProvider struct {
-	fileSvc     fs.RuntimeFileService
+// KeystoreKeyProvider loads per-member Ed25519 signing keys from runtime
+// secrets. Each member's seed is encrypted under the keystore master key in a
+// secret named {prefix}{consensusID}_{memberAppID}.key, so multi-member
+// co-signing never shares a key and no seed is stored in the clear.
+type KeystoreKeyProvider struct {
+	ks          *keystore.Keystore
 	consensusID string
-	keyPrefix   string
 }
 
-// NewFileKeyProvider creates a FileKeyProvider backed by runtime secrets using
-// the standard consensus member key naming convention.
-func NewFileKeyProvider(fileSvc fs.RuntimeFileService, consensusID string) (*FileKeyProvider, error) {
-	if fileSvc == nil || consensusID == "" {
-		return nil, fmt.Errorf("consensus file key provider: %w", constants.ErrMissingRequiredField)
+// NewKeystoreKeyProvider creates a KeystoreKeyProvider for consensusID.
+func NewKeystoreKeyProvider(ks *keystore.Keystore, consensusID string) (*KeystoreKeyProvider, error) {
+	if ks == nil || consensusID == "" {
+		return nil, fmt.Errorf("consensus key provider: %w", constants.ErrMissingRequiredField)
 	}
-	return &FileKeyProvider{
-		fileSvc:     fileSvc,
-		consensusID: consensusID,
-		keyPrefix:   constants.SecretsFileConsensusMemberKeyPrefix,
-	}, nil
+	return &KeystoreKeyProvider{ks: ks, consensusID: consensusID}, nil
 }
 
-func (p *FileKeyProvider) memberKeyPath(appID string) string {
-	filename := fmt.Sprintf("%s%s_%s.key", p.keyPrefix, p.consensusID, appID)
-	return filepath.Join(constants.SecretsDirname, filename)
+func memberKeySecretName(consensusID, appID string) string {
+	return fmt.Sprintf("%s%s_%s.key", constants.SecretsFileConsensusMemberKeyPrefix, consensusID, appID)
 }
 
-// GetMemberKey loads the Ed25519 private key for the given member AppID from
-// runtime secrets. Returns an error if the key file does not exist or contains
-// invalid data.
-func (p *FileKeyProvider) GetMemberKey(appID string) (ed25519.PrivateKey, error) {
+// GetMemberKey decrypts the Ed25519 private key for the given member AppID.
+// A member with no stored key returns an error wrapping constants.ErrNotFound.
+func (p *KeystoreKeyProvider) GetMemberKey(appID string) (ed25519.PrivateKey, error) {
 	if p == nil || appID == "" {
-		return nil, fmt.Errorf("consensus file key provider: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("consensus key provider: %w", constants.ErrMissingRequiredField)
 	}
-	keyPath := p.memberKeyPath(appID)
-	seedHex, err := p.fileSvc.ReadFile(context.Background(), keyPath)
+	seed, err := p.ks.LoadKeyMaterial(memberKeySecretName(p.consensusID, appID), ed25519.SeedSize)
 	if err != nil {
-		if errors.Is(err, constants.ErrNotFound) {
-			return nil, fmt.Errorf("consensus file key provider: key file not found for member %s: %w", appID, constants.ErrNotFound)
-		}
-		return nil, fmt.Errorf("consensus file key provider: read key for member %s: %w", appID, err)
+		return nil, fmt.Errorf("consensus key provider: load key for member %s: %w", appID, err)
 	}
-
-	seed, err := hex.DecodeString(strings.TrimSpace(string(seedHex)))
-	if err != nil {
-		return nil, fmt.Errorf("consensus file key provider: decode seed for member %s: %w", appID, err)
-	}
-	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("consensus file key provider: %w for member %s: got %d, expected %d", constants.ErrInvalidSeedLength, appID, len(seed), ed25519.SeedSize)
-	}
+	defer vault.SecureZero(seed)
 	return ed25519.NewKeyFromSeed(seed), nil
 }
 
-// SaveMemberKey writes an Ed25519 private key seed to runtime secrets for the
-// given member.
-func SaveMemberKey(fileSvc fs.RuntimeFileService, consensusID, appID string, privKey ed25519.PrivateKey) error {
-	if fileSvc == nil || consensusID == "" || appID == "" || len(privKey) != ed25519.PrivateKeySize {
+// SaveMemberKey encrypts a member's Ed25519 seed under the keystore master key.
+func SaveMemberKey(ks *keystore.Keystore, consensusID, appID string, privKey ed25519.PrivateKey) error {
+	if ks == nil || consensusID == "" || appID == "" || len(privKey) != ed25519.PrivateKeySize {
 		return fmt.Errorf("consensus: save member key: %w", constants.ErrMissingRequiredField)
 	}
-	seedHex := hex.EncodeToString(privKey.Seed())
-	filename := fmt.Sprintf("%s%s_%s.key", constants.SecretsFileConsensusMemberKeyPrefix, consensusID, appID)
-	keyPath := filepath.Join(constants.SecretsDirname, filename)
-	if err := fileSvc.WriteFile(context.Background(), keyPath, []byte(seedHex), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("consensus: save member key: write: %w", err)
+	seed := privKey.Seed()
+	defer vault.SecureZero(seed)
+	if err := ks.StoreKeyMaterial(memberKeySecretName(consensusID, appID), seed); err != nil {
+		return fmt.Errorf("consensus: save member key: %w", err)
 	}
 	return nil
 }

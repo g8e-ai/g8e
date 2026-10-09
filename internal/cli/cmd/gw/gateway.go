@@ -66,7 +66,7 @@ type GatewayFlags struct {
 	PKIDir              string
 	SecretsDir          string
 	VaultDir            string
-	VaultKeyPath        string
+	MasterKeyFile       string
 	PasskeyRpID         string
 	PasskeyRpName       string
 	PasskeyRpOrigins    []string
@@ -114,7 +114,7 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.PKIDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
 	cmd.Flags().StringVar(&f.SecretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
 	cmd.Flags().StringVar(&f.VaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
-	cmd.Flags().StringVar(&f.VaultKeyPath, "vault-key", "", fmt.Sprintf("Path to vault private key (default: %s)", constants.DefaultVaultKeyDesc))
+	cmd.Flags().StringVar(&f.MasterKeyFile, "master-key-file", "", "Absolute path to an operator-provisioned master key (base64 of 32 random bytes) outside the runtime directory, such as a Docker or Kubernetes secret. Required where no OS key store exists (containers, headless Linux without a Secret Service)")
 	cmd.Flags().StringVar(&f.PasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&f.PasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	cmd.Flags().StringArrayVar(&f.PasskeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
@@ -147,9 +147,6 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.VaultDir == "" {
 		f.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
-	}
-	if f.VaultKeyPath == "" {
-		f.VaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
 	}
 	if f.ConsensusID == "" {
 		f.ConsensusID = os.Getenv(string(constants.EnvVar.ConsensusID))
@@ -204,7 +201,7 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		PKIDir:                             f.PKIDir,
 		SecretsDir:                         f.SecretsDir,
 		VaultDir:                           f.VaultDir,
-		VaultKeyPath:                       f.VaultKeyPath,
+		MasterKeyFile:                      f.MasterKeyFile,
 		PasskeyRpID:                        f.PasskeyRpID,
 		PasskeyRpName:                      f.PasskeyRpName,
 		PasskeyRpOrigins:                   f.PasskeyRpOrigins,

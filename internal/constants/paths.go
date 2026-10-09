@@ -200,8 +200,6 @@ const (
 // Storage constants for database filenames and paths.
 const (
 	DbFilename             = "g8e.db"
-	VaultKeyFilename       = "key"
-	VaultNewKeyFilename    = "key.new"
 	VaultHeaderFilename    = "vault.header"
 	SuspendedTxFilename    = "suspended_transactions.db"
 	ReceiptsFilename       = "receipts.json"
@@ -224,11 +222,11 @@ const (
 	SuspendedTransactionDBRelPath = DataDirname + "/" + SuspendedTxFilename
 	ExecutionVaultDBRelPath       = DataDirname + "/" + ExecutionVaultDBFilename
 	ReplayStoreDBRelPath          = DataDirname + "/" + ReplayStoreDBFilename
-	DefaultVaultKeyRelPath        = VaultDirname + "/" + VaultKeyFilename
 
-	// Key filenames
-	MasterKeyFilename = ".master_key"
-	PublicKeySuffix   = ".pub"
+	// Key filenames. MasterKeyDPAPIFilename holds the Windows DPAPI-sealed
+	// master key; no platform stores the master key in the clear.
+	MasterKeyDPAPIFilename = ".master_key.dpapi"
+	PublicKeySuffix        = ".pub"
 )
 
 // Secrets filenames for bootstrap and runtime secret material.
@@ -245,6 +243,8 @@ const (
 	SecretsFileCLIPrivateKey            = "cli_private_key"
 	SecretsFileSessionToken             = "session_token"
 	SecretsFileConsensusMemberKeyPrefix = "consensus_member_"
+	SecretsFileVaultKey                 = "vault_key"
+	SecretsFileVaultKeyStaged           = "vault_key.rekey"
 )
 
 // Docker constants for the root unified-stack compose deployment.
@@ -450,7 +450,6 @@ const (
 // CLI default paths for config and help text (derived from primitives).
 const (
 	DefaultVaultDirDesc     = RuntimeDirname + "/" + VaultDirname
-	DefaultVaultKeyDesc     = RuntimeDirname + "/" + SecretsDirname + "/" + VaultKeyFilename
 	DefaultOperatorKeyDesc  = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorKey
 	DefaultClientKeyDesc    = RuntimeDirname + "/" + PkiDirname + "/" + CliKeyFilename
 	DefaultOperatorCertDesc = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorCert
@@ -511,13 +510,11 @@ const (
 	TestPathVarLibPKIDir                  = "/var/lib/g8e/pki"
 	TestPathVarLibSecretsDir              = "/var/lib/g8e/secrets"
 	TestPathVarLibVaultDir                = "/var/lib/g8e/vault"
-	TestPathVarLibVaultKey                = "/var/lib/g8e/vault/key"
 	TestPathEtcNetworkIdentity            = "/etc/g8e/network-identity.json"
 	TestPathShortData                     = "/data"
 	TestPathShortPKI                      = "/pki"
 	TestPathShortSecrets                  = "/secrets"
 	TestPathShortVault                    = "/vault"
-	TestPathShortVaultKey                 = "/vault/key"
 	TestPathIdentityFile                  = "/path/to/identity.json"
 	TestPathIdentityFileShort             = "/path/identity.json"
 	TestPathNonexistentConsensus          = "/nonexistent/path/consensus.json"

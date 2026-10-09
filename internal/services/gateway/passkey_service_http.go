@@ -637,6 +637,7 @@ func (h *PasskeyHandler) ListCredentials(w http.ResponseWriter, r *http.Request)
 // @Produce		json
 // @Param			id			path		string		true		"Credential ID"
 // @Success		200		{object}	models.PasskeyRevokeResponse
+// @Failure		409		{string}	string	"Conflict — credential is the user's last passkey"
 // @Router			/api/v1/auth/passkeys/{id} [delete]
 func (h *PasskeyHandler) RevokeCredential(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -657,6 +658,10 @@ func (h *PasskeyHandler) RevokeCredential(w http.ResponseWriter, r *http.Request
 	}
 
 	found, remaining, err := h.revokeCredential(r.Context(), userID, credentialID)
+	if errors.Is(err, constants.ErrLastPasskeyRevoke) {
+		h.responder.Error(w, http.StatusConflict, constants.ErrLastPasskeyRevoke.Error())
+		return
+	}
 	if err != nil {
 		h.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to revoke credential")

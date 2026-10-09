@@ -74,6 +74,8 @@ type LoadOptions struct {
 	// Git / Ledger
 	NoGit bool // --no-git flag: disables ledger (git-backed file versioning)
 
+	MasterKeyFile string // --master-key-file: operator-provisioned master key outside the runtime dir
+
 	// Working directory
 	WorkDir string // Absolute path of the directory the Operator was launched from (--working-dir or os.Getwd())
 
@@ -129,7 +131,7 @@ type GatewayConfig struct {
 	PKIDir              string         // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir          string         // Directory for platform secrets (default: .g8e/secrets)
 	VaultDir            string         // Directory for encryption vault (default: .g8e/vault)
-	VaultKeyPath        string         // Path to vault key file (default: .g8e/vault/key)
+	MasterKeyFile       string         // Operator-provisioned master key file outside the runtime dir (required where no OS key store exists)
 	PasskeyRpID         string         // RP ID for passkey operations (default: localhost)
 	PasskeyRpName       string         // RP Name for passkey operations (default: g8e)
 	PasskeyRpOrigins    []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
@@ -280,8 +282,10 @@ type Config struct {
 	SecretsDir string
 
 	// Vault configuration for encryption at rest
-	VaultDir     string // Directory for encryption vault (default: .g8e/vault)
-	VaultKeyPath string // Path to vault key file (default: .g8e/vault/key)
+	VaultDir string // Directory for encryption vault (default: .g8e/vault)
+	// MasterKeyFile is an operator-provisioned master key file outside the
+	// runtime directory, required where no OS key store exists.
+	MasterKeyFile string
 
 	// Execution vault configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
 	ExecutionVaultEnabled       bool
@@ -351,7 +355,7 @@ type GatewayOptions struct {
 	PKIDir              string
 	SecretsDir          string
 	VaultDir            string
-	VaultKeyPath        string
+	MasterKeyFile       string
 	PasskeyRpID         string
 	PasskeyRpName       string
 	PasskeyRpOrigins    []string
@@ -501,10 +505,6 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	if vaultDir == "" {
 		vaultDir = paths.Infra.VaultDir
 	}
-	vaultKeyPath := opts.VaultKeyPath
-	if vaultKeyPath == "" {
-		vaultKeyPath = paths.Infra.VaultKeyPath
-	}
 
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
@@ -566,7 +566,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PKIDir:              pkiDir,
 			SecretsDir:          secretsDir,
 			VaultDir:            vaultDir,
-			VaultKeyPath:        vaultKeyPath,
+			MasterKeyFile:       opts.MasterKeyFile,
 			PasskeyRpID:         passkeyRpID,
 			PasskeyRpName:       passkeyRpName,
 			PasskeyRpOrigins:    opts.PasskeyRpOrigins,
@@ -682,6 +682,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		// Git / Ledger
 		NoGit: opts.NoGit,
 
+		MasterKeyFile: opts.MasterKeyFile,
+
 		// System / process context
 		Shell: opts.Shell,
 		Lang:  opts.Lang,
@@ -721,11 +723,6 @@ func Load(opts LoadOptions) (*Config, error) {
 	// Default VaultDir to .g8e/vault if not explicitly set
 	if cfg.VaultDir == "" {
 		cfg.VaultDir = paths.Infra.VaultDir
-	}
-
-	// Default VaultKeyPath to .g8e/vault/key if not explicitly set
-	if cfg.VaultKeyPath == "" {
-		cfg.VaultKeyPath = paths.Infra.VaultKeyPath
 	}
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)

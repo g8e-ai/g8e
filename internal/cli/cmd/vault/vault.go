@@ -10,19 +10,17 @@ package vaultcmd
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
-
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 )
 
@@ -30,7 +28,10 @@ func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vault",
 		Short: "Manage the encryption vault",
-		Long:  `Initialize, unlock, re-key, and manage the g8e encryption vault.`,
+		Long: `Initialize, unlock, re-key, and manage the g8e encryption vault.
+
+The vault key is stored only encrypted under the master key held by the OS key
+store (or --master-key-file). It is never written or printed in the clear.`,
 	}
 
 	cmd.AddCommand(
@@ -39,150 +40,79 @@ func Cmd() *cobra.Command {
 		vaultRekeyCmd(),
 		vaultStatusCmd(),
 		vaultResetCmd(),
-		vaultExportCmd(),
-		vaultImportCmd(),
 	)
 
 	return cmd
 }
 
-func resolveRuntimePath(fileSvc fs.RuntimeFileService, path, defaultRel string) (string, error) {
-	if path == "" {
-		return defaultRel, nil
+type fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
+
+// keystoreFactory opens the keystore that holds the vault key. create reports
+// whether a missing master key may be generated; only init may create one.
+type keystoreFactory func(fileSvc fs.RuntimeFileService, opts keystore.Options, create bool) (*keystore.Keystore, error)
+
+func openKeystore(fileSvc fs.RuntimeFileService, opts keystore.Options, create bool) (*keystore.Keystore, error) {
+	if create {
+		return keystore.Open(fileSvc, slog.Default(), opts)
 	}
-	if filepath.IsAbs(path) {
-		rel, err := fileSvc.Rel(path)
-		if err != nil {
-			return "", fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
-		}
-		return rel, nil
-	}
-	return path, nil
+	return keystore.NewWithFS(fileSvc, slog.Default(), opts)
 }
 
-func readKeyFile(fileSvc fs.RuntimeFileService, relKeyPath string) ([]byte, error) {
-	data, err := fileSvc.ReadFile(context.Background(), relKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
-	}
-	keyHex := strings.TrimSpace(string(data))
-	key, err := hex.DecodeString(keyHex)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyDecodeFailed, err)
-	}
-	if len(key) != vault.KeySize {
-		return nil, fmt.Errorf("%w: expected %d bytes, got %d", constants.ErrVaultKeyInvalidSize, vault.KeySize, len(key))
-	}
-	return key, nil
+func addMasterKeyFlag(cmd *cobra.Command, path *string) {
+	cmd.Flags().StringVar(path, "master-key-file", "", "Absolute path to the master key file the runtime was started with (default: OS key store)")
 }
 
 func vaultInitCmd() *cobra.Command {
-	return vaultInitCmdWithConfig(shared.NewFileSvc)
+	return vaultInitCmdWithConfig(shared.NewFileSvc, openKeystore)
 }
 
-func vaultInitCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var vaultDir string
-	var keyPath string
+func vaultInitCmdWithConfig(newFileSvc fileSvcFactory, newKeystore keystoreFactory) *cobra.Command {
+	var masterKeyFile string
 
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a new encryption vault",
-		Long:  `Generate a new encryption vault with a random key. The key is saved to the specified key path.`,
+		Long:  `Generate a new encryption vault with a random key, stored encrypted under the master key.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
+			fileSvc, err := newFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
-
-			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
+			ks, err := newKeystore(fileSvc, keystore.Options{MasterKeyFile: masterKeyFile}, true)
 			if err != nil {
-				return err
+				return fmt.Errorf("vault init: %w", err)
 			}
-			keyPath, err = resolveRuntimePath(fileSvc, keyPath, vaultDir+"/"+constants.VaultKeyFilename)
-			if err != nil {
-				return err
-			}
-
-			vaultDirAbs := fileSvc.Resolve(vaultDir)
-			headerExists, err := vault.VaultHeaderExists(fileSvc)
-			if err != nil {
-				return fmt.Errorf("vault init: check header: %w", err)
-			}
-			if headerExists {
-				return fmt.Errorf("%w: %s", constants.ErrVaultAlreadyInitialized, vaultDirAbs)
+			if err := ks.InitVault(); err != nil {
+				return fmt.Errorf("vault init: %w", err)
 			}
 
-			privateKey := make([]byte, vault.KeySize)
-			if _, err := rand.Read(privateKey); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
-			}
-
-			header, dek, err := vault.NewVaultHeader(privateKey)
-			if err != nil {
-				vault.SecureZero(privateKey)
-				vault.SecureZero(dek)
-				return fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
-			}
-			vault.SecureZero(dek)
-
-			if err := fileSvc.MkdirAll(context.Background(), vaultDir, constants.PermDirPrivate); err != nil {
-				vault.SecureZero(privateKey)
-				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-			}
-
-			if err := header.Save(fileSvc); err != nil {
-				vault.SecureZero(privateKey)
-				return fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
-			}
-
-			if err := fileSvc.WriteFile(context.Background(), keyPath, []byte(hex.EncodeToString(privateKey)+"\n"), constants.PermFilePrivate); err != nil {
-				vault.SecureZero(privateKey)
-				return fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
-			}
-
-			vault.SecureZero(privateKey)
-
-			cmd.Printf("Vault initialized at %s\n", vaultDirAbs)
-			cmd.Printf("Key saved to %s\n", fileSvc.Resolve(keyPath))
-			cmd.Println("WARNING: Back up this key securely. If lost, all encrypted data is unrecoverable.")
+			cmd.Printf("Vault initialized at %s\n", fileSvc.Resolve(constants.VaultDirname))
+			cmd.Printf("Vault key sealed under the %s master key\n", ks.KeyringName())
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Vault directory (default: "+constants.DefaultVaultDirDesc+")")
-	cmd.Flags().StringVar(&keyPath, "key-path", "", "Path to save the vault key")
-
+	addMasterKeyFlag(cmd, &masterKeyFile)
 	return cmd
 }
 
 func vaultUnlockCmd() *cobra.Command {
-	return vaultUnlockCmdWithConfig(shared.NewFileSvc)
+	return vaultUnlockCmdWithConfig(shared.NewFileSvc, openKeystore)
 }
 
-func vaultUnlockCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var vaultDir string
-	var keyPath string
+func vaultUnlockCmdWithConfig(newFileSvc fileSvcFactory, newKeystore keystoreFactory) *cobra.Command {
+	var masterKeyFile string
 
 	cmd := &cobra.Command{
 		Use:   "unlock",
-		Short: "Unlock the encryption vault",
-		Long:  `Unlock an existing vault using the private key.`,
+		Short: "Verify the vault unlocks with the stored key",
+		Long:  `Unlock the vault with the vault key held in the keystore to confirm the key and header match.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
+			fileSvc, err := newFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
-			if err != nil {
-				return err
-			}
-			keyPath, err = resolveRuntimePath(fileSvc, keyPath, vaultDir+"/"+constants.VaultKeyFilename)
-			if err != nil {
-				return err
-			}
-
-			vaultDirAbs := fileSvc.Resolve(vaultDir)
+			vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
 			headerExists, err := vault.VaultHeaderExists(fileSvc)
 			if err != nil {
 				return fmt.Errorf("vault unlock: check header: %w", err)
@@ -191,68 +121,51 @@ func vaultUnlockCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runt
 				return fmt.Errorf("%w: %s. Run 'g8e vault init' first", constants.ErrVaultNotInitialized, vaultDirAbs)
 			}
 
-			privateKey, err := readKeyFile(fileSvc, keyPath)
+			ks, err := newKeystore(fileSvc, keystore.Options{MasterKeyFile: masterKeyFile}, false)
 			if err != nil {
 				return fmt.Errorf("vault unlock: %w", err)
 			}
+			privateKey, err := ks.LoadVaultKey()
+			if err != nil {
+				return fmt.Errorf("vault unlock: %w: %w", constants.ErrVaultKeyReadFailed, err)
+			}
 			defer vault.SecureZero(privateKey)
 
-			v, err := vault.NewVault(&vault.VaultConfig{
-				FileSvc: fileSvc,
-				Logger:  nil,
-			})
+			v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc})
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 			}
-
 			if err := v.Unlock(privateKey); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
 			}
+			v.Lock()
 
 			cmd.Println("Vault unlocked successfully")
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Vault directory (default: "+constants.DefaultVaultDirDesc+")")
-	cmd.Flags().StringVar(&keyPath, "key-path", "", "Path to the vault key")
-
+	addMasterKeyFlag(cmd, &masterKeyFile)
 	return cmd
 }
 
 func vaultRekeyCmd() *cobra.Command {
-	return vaultRekeyCmdWithConfig(shared.NewFileSvc)
+	return vaultRekeyCmdWithConfig(shared.NewFileSvc, openKeystore)
 }
 
-func vaultRekeyCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var vaultDir string
-	var keyPath string
-	var newKeyPath string
+func vaultRekeyCmdWithConfig(newFileSvc fileSvcFactory, newKeystore keystoreFactory) *cobra.Command {
+	var masterKeyFile string
 
 	cmd := &cobra.Command{
 		Use:   "rekey",
-		Short: "Re-key the vault with a new private key",
-		Long:  `Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.`,
+		Short: "Re-key the vault with a new vault key",
+		Long:  `Re-wrap the vault's DEK under a newly generated vault key and replace the stored key. Stop the runtime first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
+			fileSvc, err := newFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
-			if err != nil {
-				return err
-			}
-			keyPath, err = resolveRuntimePath(fileSvc, keyPath, vaultDir+"/"+constants.VaultKeyFilename)
-			if err != nil {
-				return err
-			}
-			newKeyPath, err = resolveRuntimePath(fileSvc, newKeyPath, vaultDir+"/"+constants.VaultNewKeyFilename)
-			if err != nil {
-				return err
-			}
-
-			vaultDirAbs := fileSvc.Resolve(vaultDir)
+			vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
 			headerExists, err := vault.VaultHeaderExists(fileSvc)
 			if err != nil {
 				return fmt.Errorf("vault: check header: %w", err)
@@ -261,49 +174,19 @@ func vaultRekeyCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 				return fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDirAbs)
 			}
 
-			oldKey, err := readKeyFile(fileSvc, keyPath)
+			ks, err := newKeystore(fileSvc, keystore.Options{MasterKeyFile: masterKeyFile}, false)
 			if err != nil {
 				return fmt.Errorf("vault rekey: %w", err)
 			}
-			defer vault.SecureZero(oldKey)
-
-			newKey := make([]byte, vault.KeySize)
-			if _, err := rand.Read(newKey); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
+			if err := ks.RekeyVault(); err != nil {
+				return fmt.Errorf("vault rekey: %w", err)
 			}
-
-			v, err := vault.NewVault(&vault.VaultConfig{
-				FileSvc: fileSvc,
-				Logger:  nil,
-			})
-			if err != nil {
-				vault.SecureZero(newKey)
-				return fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
-			}
-
-			if err := v.Rekey(oldKey, newKey); err != nil {
-				vault.SecureZero(newKey)
-				return fmt.Errorf("%w: %w", constants.ErrVaultRekeyFailed, err)
-			}
-
-			if err := fileSvc.WriteFile(context.Background(), newKeyPath, []byte(hex.EncodeToString(newKey)+"\n"), constants.PermFilePrivate); err != nil {
-				vault.SecureZero(newKey)
-				return fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
-			}
-
-			vault.SecureZero(newKey)
 
 			cmd.Println("Vault rekeyed successfully")
-			cmd.Printf("New key saved to %s\n", fileSvc.Resolve(newKeyPath))
-			cmd.Println("WARNING: The old key is no longer valid. Remove it after confirming the new key works.")
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Vault directory (default: "+constants.DefaultVaultDirDesc+")")
-	cmd.Flags().StringVar(&keyPath, "key-path", "", "Path to the current vault key")
-	cmd.Flags().StringVar(&newKeyPath, "new-key-path", "", "Path to save the new vault key (default: <key-path>.new)")
-
+	addMasterKeyFlag(cmd, &masterKeyFile)
 	return cmd
 }
 
@@ -311,25 +194,18 @@ func vaultStatusCmd() *cobra.Command {
 	return vaultStatusCmdWithConfig(shared.NewFileSvc)
 }
 
-func vaultStatusCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var vaultDir string
-
+func vaultStatusCmdWithConfig(newFileSvc fileSvcFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show vault status",
 		Long:  `Display whether the vault is initialized and unlocked.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
+			fileSvc, err := newFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
-			if err != nil {
-				return err
-			}
-
-			vaultDirAbs := fileSvc.Resolve(vaultDir)
+			vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
 			v, err := vault.NewVault(&vault.VaultConfig{
 				FileSvc: fileSvc,
 				Logger:  nil,
@@ -357,8 +233,6 @@ func vaultStatusCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runt
 		},
 	}
 
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Vault directory (default: "+constants.DefaultVaultDirDesc+")")
-
 	return cmd
 }
 
@@ -366,8 +240,7 @@ func vaultResetCmd() *cobra.Command {
 	return vaultResetCmdWithConfig(shared.NewFileSvc)
 }
 
-func vaultResetCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var vaultDir string
+func vaultResetCmdWithConfig(newFileSvc fileSvcFactory) *cobra.Command {
 	var confirm bool
 
 	cmd := &cobra.Command{
@@ -375,17 +248,12 @@ func vaultResetCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 		Short: "Destroy the vault and all encrypted data",
 		Long:  `Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
+			fileSvc, err := newFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
-			if err != nil {
-				return err
-			}
-
-			vaultDirAbs := fileSvc.Resolve(vaultDir)
+			vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
 			headerExists, err := vault.VaultHeaderExists(fileSvc)
 			if err != nil {
 				return fmt.Errorf("vault: check header: %w", err)
@@ -419,119 +287,16 @@ func vaultResetCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 			if err := v.Reset(true); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrVaultResetFailed, err)
 			}
+			if err := fileSvc.Remove(context.Background(), filepath.Join(constants.SecretsDirname, constants.SecretsFileVaultKey)); err != nil {
+				return fmt.Errorf("%w: remove sealed vault key: %w", constants.ErrVaultResetFailed, err)
+			}
 
 			cmd.Println("Vault reset complete. All encrypted data has been destroyed.")
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Vault directory (default: "+constants.DefaultVaultDirDesc+")")
 	cmd.Flags().BoolVar(&confirm, "confirm", false, "Skip interactive confirmation (dangerous)")
-
-	return cmd
-}
-
-func vaultExportCmd() *cobra.Command {
-	return vaultExportCmdWithConfig(shared.NewFileSvc)
-}
-
-func vaultExportCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var keyPath string
-
-	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Export the vault key",
-		Long:  `Export the vault private key in hex format. Use with extreme caution.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			vaultDir := constants.VaultDirname
-			keyPath, err = resolveRuntimePath(fileSvc, keyPath, vaultDir+"/"+constants.VaultKeyFilename)
-			if err != nil {
-				return err
-			}
-
-			key, err := readKeyFile(fileSvc, keyPath)
-			if err != nil {
-				return fmt.Errorf("vault export: %w", err)
-			}
-			defer vault.SecureZero(key)
-
-			cmd.Println(hex.EncodeToString(key))
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&keyPath, "key-path", "", "Path to the vault key")
-
-	return cmd
-}
-
-func vaultImportCmd() *cobra.Command {
-	return vaultImportCmdWithConfig(shared.NewFileSvc)
-}
-
-func vaultImportCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var keyPath string
-	var keyHex string
-
-	cmd := &cobra.Command{
-		Use:   "import",
-		Short: "Import a vault key",
-		Long:  `Import a vault private key from hex string or stdin.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			vaultDir := constants.VaultDirname
-			keyPath, err = resolveRuntimePath(fileSvc, keyPath, vaultDir+"/"+constants.VaultKeyFilename)
-			if err != nil {
-				return err
-			}
-
-			var key []byte
-			if keyHex != "" {
-				key, err = hex.DecodeString(strings.TrimSpace(keyHex))
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrVaultKeyDecodeFailed, err)
-				}
-			} else {
-				reader := bufio.NewReader(cmd.InOrStdin())
-				cmd.Print("Enter vault key (hex): ")
-				input, readErr := reader.ReadString('\n')
-				if readErr != nil {
-					return fmt.Errorf("%w: %w", constants.ErrVaultStdinReadFailed, readErr)
-				}
-				key, err = hex.DecodeString(strings.TrimSpace(input))
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrVaultKeyDecodeFailed, err)
-				}
-			}
-
-			if len(key) != vault.KeySize {
-				vault.SecureZero(key)
-				return fmt.Errorf("%w: expected %d bytes, got %d", constants.ErrVaultKeyInvalidSize, vault.KeySize, len(key))
-			}
-
-			if err := fileSvc.WriteFile(context.Background(), keyPath, []byte(hex.EncodeToString(key)+"\n"), constants.PermFilePrivate); err != nil {
-				vault.SecureZero(key)
-				return fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
-			}
-
-			vault.SecureZero(key)
-
-			cmd.Printf("Key imported to %s\n", fileSvc.Resolve(keyPath))
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&keyPath, "key-path", "", "Path to save the vault key")
-	cmd.Flags().StringVar(&keyHex, "key-hex", "", "Vault key as hex string (if not provided, reads from stdin)")
 
 	return cmd
 }

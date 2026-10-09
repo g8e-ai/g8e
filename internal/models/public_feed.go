@@ -356,10 +356,12 @@ type PublicFeedRecordInput struct {
 }
 
 type PublicKeyRotationState struct {
-	SourceID      string `json:"source_id"`
-	OldKeyID      string `json:"old_key_id"`
-	NewKeyID      string `json:"new_key_id"`
-	NewPrivateKey string `json:"new_private_key"`
+	SourceID string `json:"source_id"`
+	OldKeyID string `json:"old_key_id"`
+	NewKeyID string `json:"new_key_id"`
+	// SealedNewPrivateKey is the pending signing key, hex-encoded and then
+	// encrypted under the keystore master key. It is never stored in the clear.
+	SealedNewPrivateKey string `json:"sealed_new_private_key"`
 }
 
 type PublicPublisherStatus struct {

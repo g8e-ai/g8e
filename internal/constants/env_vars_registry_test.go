@@ -45,7 +45,6 @@ var allowedEnvViolations = map[string]bool{
 	"G8E_CONSENSUS_URL":        true,
 	"G8E_CONSENSUS_BOOTSTRAP":  true,
 	"G8E_VAULT_DIR":            true,
-	"G8E_VAULT_KEY":            true,
 	"G8E_OPERATOR_SESSION_ID":  true,
 	"G8E_PASSKEY_RP_ID":        true,
 	"G8E_PASSKEY_RP_NAME":      true,

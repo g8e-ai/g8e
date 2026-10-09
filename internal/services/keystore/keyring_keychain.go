@@ -71,21 +71,25 @@ func (c *keychainKeyring) RetrieveMasterKey() ([]byte, error) {
 	return key, nil
 }
 
+// StoreMasterKey writes the key through `security -i`, which reads commands
+// from stdin. Passing it with `add-generic-password -w <key>` would put the
+// master key in argv, visible to every local user through ps while the command
+// runs. Interactive mode does not report subcommand failures in its exit code,
+// so Keystore reads the key back after storing it.
 func (c *keychainKeyring) StoreMasterKey(key []byte) error {
 	account := fmt.Sprintf("%s/%s", keyStoreName, masterKeyName)
 	encoded := base64.StdEncoding.EncodeToString(key)
 
-	args := []string{
-		"add-generic-password",
-		"-a", account,
-		"-s", keyStoreName,
-		"-w", encoded,
-		"-U", // Update if exists
-	}
-
-	cmd := exec.Command("security", args...)
+	command := fmt.Sprintf("add-generic-password -U -a %s -s %s -w %s\n", account, keyStoreName, encoded)
+	cmd := exec.Command("security", "-i")
+	cmd.Stdin = strings.NewReader(command)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyStoreStoreFailed, err)
+		return fmt.Errorf("%w: %w: %s", constants.ErrKeyStoreStoreFailed, err, strings.TrimSpace(stderr.String()))
+	}
+	if msg := strings.TrimSpace(stderr.String()); msg != "" {
+		return fmt.Errorf("%w: %s", constants.ErrKeyStoreStoreFailed, msg)
 	}
 
 	return nil

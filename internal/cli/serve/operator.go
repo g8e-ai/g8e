@@ -81,6 +81,10 @@ type ServeOperatorOptions struct {
 	ProvenanceOperatorEnabled          bool
 	ProvenanceOperatorID               string
 	ProvenanceOperatorModelStorageRoot string
+
+	// MasterKeyFile is an operator-provisioned master key outside the runtime
+	// directory, required where no OS key store exists.
+	MasterKeyFile string
 }
 
 // resolveOperatorEndpoint returns the trimmed endpoint if non-empty, otherwise the default endpoint.
@@ -255,6 +259,7 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		CloudProvider:         opts.CloudProvider,
 		ExecutionVaultEnabled: opts.ExecutionVault,
 		NoGit:                 opts.NoGit,
+		MasterKeyFile:         opts.MasterKeyFile,
 		LogLevel:              opts.LogLevel,
 		WorkDir:               effectiveWorkDir,
 		PKIDir:                "",

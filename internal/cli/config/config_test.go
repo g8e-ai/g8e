@@ -111,7 +111,6 @@ func TestConfig_CustomTrustBundlePath(t *testing.T) {
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
 					VaultDir             string `json:"vault_dir"`
-					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: caPath,
 				},
@@ -139,7 +138,6 @@ func TestConfig_CustomTrustBundlePath(t *testing.T) {
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
 					VaultDir             string `json:"vault_dir"`
-					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: "relative/path/to/ca.pem",
 				},
@@ -166,7 +164,6 @@ func TestConfig_CustomTrustBundlePath(t *testing.T) {
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
 					VaultDir             string `json:"vault_dir"`
-					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: "",
 				},
@@ -197,7 +194,6 @@ func TestConfig_CustomTrustBundlePath(t *testing.T) {
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
 					VaultDir             string `json:"vault_dir"`
-					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: defaultPath,
 				},
@@ -227,7 +223,6 @@ func TestConfig_ResolvedTrustBundlePath(t *testing.T) {
 					SecretsDir           string `json:"secrets_dir"`
 					SSHConfigPath        string `json:"ssh_config_path"`
 					VaultDir             string `json:"vault_dir"`
-					VaultKeyPath         string `json:"vault_key_path"`
 				}{
 					CACertPath: caPath,
 				},

@@ -8,23 +8,10 @@
 package keystore
 
 import (
-	"fmt"
-	"log/slog"
-
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-// NewWithFS creates a new Keystore instance with the keychain keyring
-// and the provided RuntimeFileService for file I/O.
-func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
-	keyring, err := newKeychainKeyring()
-	if err != nil {
-		return nil, fmt.Errorf("keystore: initialize keychain keyring: %w", err)
-	}
-
-	return &Keystore{
-		logger:  logger,
-		keyring: keyring,
-		fileSvc: fileSvc,
-	}, nil
+// platformKeyring returns the macOS login Keychain.
+func platformKeyring(fs.RuntimeFileService) (Keyring, error) {
+	return newKeychainKeyring()
 }

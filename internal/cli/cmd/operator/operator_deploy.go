@@ -681,7 +681,7 @@ var operatorDeployForwardFlags = []string{
 	"provider-boundary-observer-enabled", "provider-boundary-observer-id",
 	"provenance-operator-enabled", "provenance-operator-id", "model-storage-root",
 	"gateway-http-port", "gateway-https-port",
-	"heartbeat-interval", "no-git", "execution-vault", "log", "trust-bundle",
+	"heartbeat-interval", "no-git", "execution-vault", "log", "trust-bundle", "master-key-file",
 }
 
 // operatorDeployPreflightArgs returns the gateway-preflight arguments that probe

@@ -14,11 +14,8 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 
 	"golang.org/x/crypto/hkdf"
 
@@ -279,22 +276,4 @@ func SecureZero(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
-}
-
-// ReadVaultKey reads and decodes the vault private key from a file.
-// The key file should contain a hex-encoded private key.
-func ReadVaultKey(keyPath string) ([]byte, error) {
-	data, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read key file: %w", err)
-	}
-	keyHex := strings.TrimSpace(string(data))
-	key, err := hex.DecodeString(keyHex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode key: %w", err)
-	}
-	if len(key) != KeySize {
-		return nil, fmt.Errorf("invalid key size: expected %d bytes, got %d", KeySize, len(key))
-	}
-	return key, nil
 }

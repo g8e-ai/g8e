@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 )
 
 // PublicSpectatorConfig configures the gateway-owned public mirror, publisher
@@ -57,6 +58,7 @@ func DefaultPublicSpectatorConfig() PublicSpectatorConfig {
 type PublicSpectatorRuntime struct {
 	cfg       PublicSpectatorConfig
 	fileSvc   fs.RuntimeFileService
+	keystore  *keystore.Keystore
 	logger    *slog.Logger
 	publisher *PublicPublisherService
 	mirror    *PublicMirrorServer
@@ -79,7 +81,10 @@ func (runtime *PublicSpectatorRuntime) Mirror() *PublicMirrorServer {
 }
 
 // NewPublicSpectatorRuntime prepares the gateway-owned public spectator stack.
-func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*PublicSpectatorRuntime, error) {
+func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFileService, ks *keystore.Keystore, logger *slog.Logger) (*PublicSpectatorRuntime, error) {
+	if ks == nil {
+		return nil, fmt.Errorf("public spectator: %w: keystore", constants.ErrMissingRequiredField)
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -99,9 +104,10 @@ func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFile
 		return nil, err
 	}
 	return &PublicSpectatorRuntime{
-		cfg:     cfg,
-		fileSvc: fileSvc,
-		logger:  logger,
+		cfg:      cfg,
+		fileSvc:  fileSvc,
+		keystore: ks,
+		logger:   logger,
 	}, nil
 }
 
@@ -119,7 +125,7 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	runtime.mu.Unlock()
 
 	privateMirrorOrigin := "http://" + runtime.cfg.PrivateListenAddress
-	exportConfig, err := EnsureLocalPublicFeed(ctx, runtime.fileSvc, runtime.cfg.SourceID, privateMirrorOrigin)
+	exportConfig, err := EnsureLocalPublicFeed(ctx, runtime.fileSvc, runtime.keystore, runtime.cfg.SourceID, privateMirrorOrigin)
 	if err != nil {
 		return fmt.Errorf("public spectator: ensure feed: %w", err)
 	}
@@ -135,11 +141,11 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 		}
 	}
 
-	key, err := readPublicSecret(ctx, runtime.fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+	key, err := ReadPublicSecret(ctx, runtime.fileSvc, runtime.keystore, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
 	if err != nil {
 		return fmt.Errorf("public spectator: %w", err)
 	}
-	token, err := readPublicSecret(ctx, runtime.fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
+	token, err := ReadPublicSecret(ctx, runtime.fileSvc, runtime.keystore, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
 	if err != nil {
 		return fmt.Errorf("public spectator: %w", err)
 	}

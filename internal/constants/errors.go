@@ -19,6 +19,9 @@ var (
 var (
 	ErrUserNotFound                 = errors.New("user not found")
 	ErrNoPasskeysRegistered         = errors.New("no passkeys registered")
+	ErrPasskeyCloneDetected         = errors.New("passkey signature counter did not advance; authenticator may be cloned")
+	ErrLastPasskeyRevoke            = errors.New("cannot revoke the last passkey; register a replacement first")
+	ErrBootstrapSecretsMissing      = errors.New("platform settings exist but bootstrap secrets are missing or incomplete; restore .g8e/secrets from backup or reset the Gateway with 'g8e gw clean'")
 	ErrOperatorRoleInvalid          = errors.New("invalid operator role")
 	ErrInvalidJSONBody              = errors.New("invalid JSON body")
 	ErrUserIDRequired               = errors.New("user_id required")
@@ -97,6 +100,12 @@ var (
 	ErrKeyStoreChmodDir           = errors.New("failed to chmod secrets directory")
 	ErrKeyStoreChmodFile          = errors.New("failed to chmod secret file")
 	ErrKeyStorePurgeFailed        = errors.New("purge failed with one or more errors")
+	ErrKeyStoreOSKeyringRequired  = errors.New("an OS-protected master key store is required but none is available")
+	ErrKeyStoreVerifyFailed       = errors.New("stored master key could not be read back unchanged")
+	ErrKeyStoreExternalKeyPath    = errors.New("master key file must be an absolute path outside the runtime directory")
+	ErrKeyStoreExternalReadOnly   = errors.New("operator-provisioned master key file is read-only")
+	ErrKeyStoreSecretServiceDown  = errors.New("libsecret: secret service unavailable")
+	ErrKeyStoreDPAPIFailed        = errors.New("dpapi: protect or unprotect master key failed")
 
 	// Ledger errors
 	ErrLedgerDisabled       = errors.New("ledger is disabled")

@@ -10,12 +10,14 @@ package keystore
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -35,7 +37,18 @@ type EncryptedSecret struct {
 	Ciphertext []byte `json:"ciphertext"`
 }
 
-// Keystore provides OS-native key storage and encryption for platform secrets.
+// Options selects where the master key lives. The zero value uses the
+// platform's OS-protected store: the macOS Keychain, the Linux Secret Service
+// (libsecret), or Windows DPAPI. There is no plaintext fallback.
+type Options struct {
+	// MasterKeyFile is an absolute path to an operator-provisioned master key
+	// (base64 of 32 random bytes), such as a Docker or Kubernetes secret mount.
+	// It must live outside the runtime directory and is never written by g8e.
+	// Use it where no OS key store exists, such as containers.
+	MasterKeyFile string
+}
+
+// Keystore provides OS-protected key storage and encryption for platform secrets.
 type Keystore struct {
 	logger  *slog.Logger
 	keyring Keyring
@@ -52,7 +65,49 @@ func NewWithKeyringAndFS(logger *slog.Logger, keyring Keyring, fileSvc fs.Runtim
 	}, nil
 }
 
-// Initialize creates or retrieves the master encryption key from the OS key store.
+// NewWithFS creates a Keystore backed by the master key store that opts
+// selects. It fails closed when no OS-protected store is available.
+func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger, opts Options) (*Keystore, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("keystore: %w: runtime file service", constants.ErrMissingRequiredField)
+	}
+	var keyring Keyring
+	var err error
+	if strings.TrimSpace(opts.MasterKeyFile) != "" {
+		keyring, err = newExternalFileKeyring(fileSvc, opts.MasterKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("keystore: %w", err)
+		}
+	} else {
+		keyring, err = platformKeyring(fileSvc)
+		if err != nil {
+			return nil, fmt.Errorf("keystore: %w: %w (provision a master key with --master-key-file)", constants.ErrKeyStoreOSKeyringRequired, err)
+		}
+	}
+	return &Keystore{
+		logger:  logger,
+		keyring: keyring,
+		fileSvc: fileSvc,
+	}, nil
+}
+
+// Open creates a Keystore, loads or generates its master key, and enforces
+// permissions on the secrets directory.
+func Open(fileSvc fs.RuntimeFileService, logger *slog.Logger, opts Options) (*Keystore, error) {
+	ks, err := NewWithFS(fileSvc, logger, opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := ks.Initialize(); err != nil {
+		return nil, fmt.Errorf("keystore: master key: %w", err)
+	}
+	if err := ks.EnforcePermissions(); err != nil {
+		return nil, fmt.Errorf("keystore: permissions: %w", err)
+	}
+	return ks, nil
+}
+
+// Initialize creates or retrieves the master encryption key from the key store.
 func (k *Keystore) Initialize() error {
 	key, err := k.keyring.RetrieveMasterKey()
 	if err != nil {
@@ -68,11 +123,13 @@ func (k *Keystore) Initialize() error {
 		return fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreInvalidKeyLength, len(key), vault.KeySize)
 	}
 
-	k.logger.Info("[Keystore] Master key retrieved from OS key store", "keyring", k.keyring.Name())
+	k.logger.Info("[Keystore] Master key retrieved", "keyring", k.keyring.Name())
 	return nil
 }
 
-// generateAndStoreMasterKey generates a new AES-256 key and stores it in the OS key store.
+// generateAndStoreMasterKey generates a new AES-256 key, stores it, and reads
+// it back so a store that silently dropped or altered the key fails startup
+// instead of leaving secrets encrypted under a key nobody holds.
 func (k *Keystore) generateAndStoreMasterKey() error {
 	key := make([]byte, vault.KeySize)
 	defer vault.SecureZero(key)
@@ -84,7 +141,16 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreStoreFailed, err)
 	}
 
-	k.logger.Info("[Keystore] Master key generated and stored in OS key store", "keyring", k.keyring.Name())
+	stored, err := k.keyring.RetrieveMasterKey()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrKeyStoreVerifyFailed, err)
+	}
+	defer vault.SecureZero(stored)
+	if subtle.ConstantTimeCompare(stored, key) != 1 {
+		return constants.ErrKeyStoreVerifyFailed
+	}
+
+	k.logger.Info("[Keystore] Master key generated and stored", "keyring", k.keyring.Name())
 	return nil
 }
 
@@ -218,7 +284,7 @@ func (k *Keystore) DeleteSecret(name string) error {
 	return nil
 }
 
-// Purge removes all secrets from disk and deletes the master key from the OS key store.
+// Purge removes all secrets from disk and deletes the master key from its key store.
 func (k *Keystore) Purge() error {
 	if err := k.keyring.DeleteMasterKey(); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreDeleteFailed, err)
@@ -271,7 +337,7 @@ func (k *Keystore) EnforcePermissions() error {
 	return nil
 }
 
-// KeyringName returns the name of the OS-native keyring.
+// KeyringName returns the name of the master key store.
 func (k *Keystore) KeyringName() string {
 	return k.keyring.Name()
 }

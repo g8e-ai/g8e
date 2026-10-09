@@ -8,26 +8,11 @@
 package keystore
 
 import (
-	"fmt"
-	"log/slog"
-
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-// NewWithFS creates a new Keystore instance with file-based storage on Windows
-// and the provided RuntimeFileService for file I/O.
-// Windows Credential Manager integration could be added in the future.
-func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
-	keyring, err := newFileKeyring(fileSvc)
-	if err != nil {
-		return nil, fmt.Errorf("keystore: initialize file keyring: %w", err)
-	}
-
-	logger.Info("[Keystore] Using file-based storage (Windows)", "keyring", keyring.Name())
-
-	return &Keystore{
-		logger:  logger,
-		keyring: keyring,
-		fileSvc: fileSvc,
-	}, nil
+// platformKeyring returns the DPAPI keyring, which seals the master key to the
+// current Windows user.
+func platformKeyring(fileSvc fs.RuntimeFileService) (Keyring, error) {
+	return newDPAPIKeyring(fileSvc)
 }

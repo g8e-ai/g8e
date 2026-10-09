@@ -7,10 +7,12 @@
 
 package keystore
 
-// Keyring abstracts the OS-native credential store that holds the master
-// encryption key. Implementations wrap platform facilities such as the macOS
-// Keychain (darwin), libsecret/GNOME Keyring (linux), or a file fallback, plus
-// an in-memory implementation for tests.
+// Keyring abstracts the protected store that holds the master encryption key.
+// Implementations wrap the macOS Keychain (darwin), the Secret Service via
+// libsecret (linux), DPAPI (windows), or an operator-provisioned key file kept
+// outside the runtime directory, plus an in-memory implementation for tests.
+// There is deliberately no implementation that writes the master key in
+// plaintext next to the secrets it protects.
 type Keyring interface {
 	// RetrieveMasterKey retrieves the master encryption key from the keyring.
 	RetrieveMasterKey() ([]byte, error)

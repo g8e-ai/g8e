@@ -8,28 +8,11 @@
 package keystore
 
 import (
-	"fmt"
-	"log/slog"
-
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-// NewWithFS creates a new Keystore instance with the libsecret keyring
-// and the provided RuntimeFileService for file I/O.
-// Falls back to file-based storage if libsecret is not available.
-func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
-	keyring, err := newLibsecretKeyring()
-	if err != nil {
-		keyring, err = newFileKeyring(fileSvc)
-		if err != nil {
-			return nil, fmt.Errorf("keystore: initialize file keyring: %w", err)
-		}
-		logger.Info("[Keystore] Using file-based storage (libsecret unavailable)", "keyring", keyring.Name())
-	}
-
-	return &Keystore{
-		logger:  logger,
-		keyring: keyring,
-		fileSvc: fileSvc,
-	}, nil
+// platformKeyring returns the Secret Service keyring. Hosts without one
+// (headless servers, containers) must provision --master-key-file instead.
+func platformKeyring(fs.RuntimeFileService) (Keyring, error) {
+	return newLibsecretKeyring(runSecretTool)
 }

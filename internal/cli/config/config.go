@@ -43,7 +43,6 @@ type PathsConfig struct {
 		SecretsDir           string `json:"secrets_dir"`
 		SSHConfigPath        string `json:"ssh_config_path"`
 		VaultDir             string `json:"vault_dir"`
-		VaultKeyPath         string `json:"vault_key_path"`
 	} `json:"infra"`
 }
 
@@ -69,7 +68,6 @@ func DefaultInfraPaths() PathsConfig {
 	cfg.Infra.SecretsDir = paths.Infra.SecretsDir
 	cfg.Infra.SSHConfigPath = paths.Infra.SshConfigPath
 	cfg.Infra.VaultDir = paths.Infra.VaultDir
-	cfg.Infra.VaultKeyPath = paths.Infra.VaultKeyPath
 	return cfg
 }
 
@@ -112,7 +110,6 @@ func Load(projectRoot string) (*Config, error) {
 	pathsCfg.Infra.DocsDir = paths.Infra.DocsDir
 	pathsCfg.Infra.SSHConfigPath = paths.Infra.SshConfigPath
 	pathsCfg.Infra.VaultDir = paths.Infra.VaultDir
-	pathsCfg.Infra.VaultKeyPath = paths.Infra.VaultKeyPath
 
 	return &Config{
 		ProjectRoot: projectRoot,

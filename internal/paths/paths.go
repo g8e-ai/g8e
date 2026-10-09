@@ -39,7 +39,6 @@ var Infra struct {
 	RuntimeDir                  string
 	DataDir                     string
 	VaultDir                    string
-	VaultKeyPath                string
 	TestVaultDir                string
 	LocalStateDBPath            string
 	SuspendedTransactionsDBPath string
@@ -108,7 +107,6 @@ var Infra struct {
 	RuntimeDir                  string
 	DataDir                     string
 	VaultDir                    string
-	VaultKeyPath                string
 	TestVaultDir                string
 	LocalStateDBPath            string
 	SuspendedTransactionsDBPath string
@@ -171,7 +169,6 @@ var Infra struct {
 	RuntimeDir:              constants.RuntimeDirname,
 	DataDir:                 constants.RuntimeDirname + "/" + constants.DataDirname,
 	VaultDir:                constants.RuntimeDirname + "/" + constants.VaultDirname,
-	VaultKeyPath:            constants.RuntimeDirname + "/" + constants.VaultDirname + "/" + constants.VaultKeyFilename,
 	TestVaultDir:            constants.RuntimeDirname + "/" + constants.TestVaultDirname,
 	LocalStateDBPath:        constants.RuntimeDirname + "/" + constants.LocalStateDBFilename,
 	AuditVaultDBPath:        constants.RuntimeDirname + "/" + constants.AuditVaultDBFilename,
@@ -252,7 +249,6 @@ func InitWithBase(baseDir string) error {
 	Infra.SecretsDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.SecretsDirname)
 	Infra.ProtocolDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.ProtocolDirname)
 	Infra.VaultDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.VaultDirname)
-	Infra.VaultKeyPath = pathutil.SafeJoin(Infra.VaultDir, constants.VaultKeyFilename)
 
 	Infra.ProtocolConstantsDir = pathutil.SafeJoin(Infra.ProtocolDir, constants.ProtocolConstantsDirname)
 	Infra.ProtocolModelsDir = pathutil.SafeJoin(Infra.ProtocolDir, constants.ProtocolModelsDirname)

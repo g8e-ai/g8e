@@ -289,8 +289,8 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.VaultDir != "" {
 		args = append(args, "--vault-dir", opts.VaultDir)
 	}
-	if opts.VaultKeyPath != "" {
-		args = append(args, "--vault-key", opts.VaultKeyPath)
+	if opts.MasterKeyFile != "" {
+		args = append(args, "--master-key-file", opts.MasterKeyFile)
 	}
 
 	if opts.CertIdentityMode != "" {
@@ -413,7 +413,6 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 	effectivePKIDir := opts.PKIDir
 	effectiveSecretsDir := opts.SecretsDir
 	effectiveVaultDir := opts.VaultDir
-	effectiveVaultKeyPath := opts.VaultKeyPath
 	effectivePasskeyRpID := opts.PasskeyRpID
 	effectivePasskeyRpName := opts.PasskeyRpName
 
@@ -478,7 +477,6 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 	opts.PKIDir = effectivePKIDir
 	opts.SecretsDir = effectiveSecretsDir
 	opts.VaultDir = effectiveVaultDir
-	opts.VaultKeyPath = effectiveVaultKeyPath
 	opts.PasskeyRpID = effectivePasskeyRpID
 	opts.PasskeyRpName = effectivePasskeyRpName
 	opts.RateLimitRPS = effectiveRateLimitRPS
