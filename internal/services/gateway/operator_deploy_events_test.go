@@ -228,7 +228,10 @@ func TestPubSubCommandSubscription_AnnouncesOnlyDeployLaunchedWorkers(t *testing
 func operatorCreateRequest(t *testing.T, deploymentID string) models.PlatformEnrollmentCreateRequest {
 	t.Helper()
 	operatorCSR, _, cliCSR, _ := generateOperatorCSRsAndKeys(t)
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
+	platformEnrollmentTestTokensByHash.Store(tokenHash, token)
 	return models.PlatformEnrollmentCreateRequest{
+		TokenHash:         tokenHash,
 		ComponentKind:     models.PlatformComponentOperator,
 		InstanceID:        "operator-1",
 		Hostname:          "operator.local",
@@ -260,13 +263,13 @@ func TestPlatformEnrollmentCreateRequest_AnnouncesTheLaunchToTheOwnersCLISession
 	const launchID = "35fe96f6-cb3c-4e7e-a392-ed72e84ac9ad"
 
 	req := operatorCreateRequest(t, launchID)
-	created, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	created, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 	// The same worker restarting under a new launch finds its live request and
 	// must still be announced under the new launch ID.
 	const restartedLaunchID = "7c0f2f4e-1c6b-4a52-9c52-6d7a6d1d6a11"
 	req.DeploymentID = restartedLaunchID
-	deduplicated, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	deduplicated, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 	require.Equal(t, created.RequestID, deduplicated.RequestID)
 
@@ -282,7 +285,7 @@ func TestPlatformEnrollmentCreateRequest_AnnouncesTheLaunchToTheOwnersCLISession
 func TestPlatformEnrollmentCreateRequest_RejectsAMalformedLaunchID(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
-	_, err := env.enrollSvc.CreateRequest(context.Background(), operatorCreateRequest(t, "not-a-uuid"), "https://gateway.local/console")
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), operatorCreateRequest(t, "not-a-uuid"), "https://gateway.local/console")
 
 	require.ErrorIs(t, err, constants.ErrPlatformEnrollmentInvalidDeploymentID)
 }

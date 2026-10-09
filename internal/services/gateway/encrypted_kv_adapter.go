@@ -46,7 +46,7 @@ func (a *EncryptedKVAdapter) KVSet(ctx context.Context, key, value string, ttlSe
 }
 
 func (a *EncryptedKVAdapter) KVGet(ctx context.Context, key string) (string, error) {
-	value, found := a.kv.KVGet(ctx, constants.SentinelKeyPrefix + key)
+	value, found := a.kv.KVGet(ctx, constants.SentinelKeyPrefix+key)
 	if !found {
 		return "", fmt.Errorf("encrypted_kv_adapter: key %s: %w", key, constants.ErrKeyNotFound)
 	}
@@ -61,7 +61,7 @@ func (a *EncryptedKVAdapter) KVGet(ctx context.Context, key string) (string, err
 }
 
 func (a *EncryptedKVAdapter) KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error) {
-	fullKeys, err := a.kv.KVKeys(ctx, constants.SentinelKeyPrefix + prefix + "*")
+	fullKeys, err := a.kv.KVKeys(ctx, constants.SentinelKeyPrefix+prefix+"*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan keys with prefix %q: %w", prefix, err)
 	}

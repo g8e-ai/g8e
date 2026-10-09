@@ -75,7 +75,7 @@ func statusReply(state models.PlatformEnrollmentState) http.HandlerFunc {
 func createdReply(requestID, token string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusCreated, models.PlatformEnrollmentCreateResponse{
-			RequestID: requestID, Token: token, ComponentKind: models.PlatformComponentOperator,
+			RequestID: requestID, ComponentKind: models.PlatformComponentOperator,
 			ExpiresAt: time.Now().Add(30 * time.Minute).UTC(),
 		})
 	}

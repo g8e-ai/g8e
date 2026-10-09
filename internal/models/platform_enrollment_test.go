@@ -8,6 +8,7 @@
 package models
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,8 +136,35 @@ func TestPlatformEnrollmentCreateRequestValidateShape(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.request.TokenHash = strings.Repeat("a", 64)
 			err := tt.request.ValidateShape()
 			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestPlatformEnrollmentCreateRequestRequiresLowercaseSHA256TokenHash(t *testing.T) {
+	base := PlatformEnrollmentCreateRequest{
+		ComponentKind: PlatformComponentDashboard,
+		InstanceID:    "dashboard-1",
+		Hostname:      "dashboard-host",
+		App:           &PlatformAppCSRPayload{CSRPEM: "csr"},
+	}
+	tests := []struct {
+		name    string
+		hash    string
+		wantErr error
+	}{
+		{name: "missing", wantErr: constants.ErrPlatformEnrollmentTokenRequired},
+		{name: "uppercase", hash: strings.Repeat("A", 64), wantErr: constants.ErrPlatformEnrollmentInvalidToken},
+		{name: "short", hash: strings.Repeat("a", 62), wantErr: constants.ErrPlatformEnrollmentInvalidToken},
+		{name: "non hexadecimal", hash: strings.Repeat("g", 64), wantErr: constants.ErrPlatformEnrollmentInvalidToken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := base
+			req.TokenHash = tt.hash
+			assert.ErrorIs(t, req.ValidateShape(), tt.wantErr)
 		})
 	}
 }

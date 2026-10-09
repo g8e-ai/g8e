@@ -121,6 +121,7 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 		statusCount      int32
 		completeReceived int32
 		issuedCertPEM    string
+		tokenHash        string
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +134,7 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 			assert.Equal(t, models.PlatformComponentApplication, createReq.ComponentKind)
 			assert.Equal(t, appName, createReq.AppName)
 			assert.NotEmpty(t, createReq.App.CSRPEM)
+			tokenHash = createReq.TokenHash
 
 			block, _ := pem.Decode([]byte(createReq.App.CSRPEM))
 			require.NotNil(t, block)
@@ -157,7 +159,6 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(models.PlatformEnrollmentCreateResponse{
 				RequestID:     "req-12345",
-				Token:         "tok-secret-abc",
 				ComponentKind: models.PlatformComponentApplication,
 				ComponentName: "g8e-app-" + appName,
 				ApprovalURL:   "http://localhost/approve/req-12345",
@@ -167,7 +168,7 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 		case constants.APIPaths.AuthPlatformEnrollmentStatus:
 			count := atomic.AddInt32(&statusCount, 1)
 			assert.Equal(t, http.MethodGet, r.Method)
-			assert.Equal(t, "tok-secret-abc", r.URL.Query().Get("token"))
+			assert.Equal(t, tokenHash, models.PlatformEnrollmentTokenHash(r.URL.Query().Get("token")))
 
 			state := models.PlatformEnrollmentStatePending
 			if count >= 2 {
@@ -186,7 +187,7 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 			assert.Equal(t, http.MethodPost, r.Method)
 			var compReq models.PlatformEnrollmentCompleteRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&compReq))
-			assert.Equal(t, "tok-secret-abc", compReq.Token)
+			assert.Equal(t, tokenHash, models.PlatformEnrollmentTokenHash(compReq.Token))
 			assert.NotEmpty(t, compReq.Proofs.App)
 
 			w.WriteHeader(http.StatusCreated)
@@ -231,4 +232,76 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 	// Verify pending state was cleared
 	pendingExists, _ := fileSvc.FileExists(context.Background(), client.pendingStatePath())
 	assert.False(t, pendingExists)
+}
+
+func TestAppPlatformEnrollmentClient_LostCreateResponseResumesSameRequest(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	var requestHits int32
+	var submitted []models.PlatformEnrollmentCreateRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.APIPaths.AuthPlatformEnrollmentRequest:
+			var req models.PlatformEnrollmentCreateRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			submitted = append(submitted, req)
+			if atomic.AddInt32(&requestHits, 1) == 1 {
+				conn, _, err := w.(http.Hijacker).Hijack()
+				require.NoError(t, err)
+				_ = conn.Close()
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(models.PlatformEnrollmentCreateResponse{RequestID: "app-req-after-loss", ComponentKind: models.PlatformComponentApplication})
+		case constants.APIPaths.AuthPlatformEnrollmentStatus:
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(models.PlatformEnrollmentStatusResponse{RequestID: "app-req-after-loss", ComponentKind: models.PlatformComponentApplication, State: models.PlatformEnrollmentStatePending, ExpiresAt: time.Now().Add(time.Minute)})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewAppPlatformEnrollmentClient("lost-response-app", fileSvc, cfg, nil, AppEnrollmentOptions{GatewayHTTPURL: server.URL})
+	require.NoError(t, err)
+
+	firstCtx, cancelFirst := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	_, firstErr := client.Enroll(firstCtx, nil)
+	cancelFirst()
+	require.Error(t, firstErr)
+	pending, err := client.loadPendingState(client.pendingStatePath())
+	require.NoError(t, err)
+	require.NotNil(t, pending)
+	assert.Empty(t, pending.RequestID)
+	assert.NotEmpty(t, pending.Token)
+	assert.NotEmpty(t, pending.CSRPEM)
+
+	secondCtx, cancelSecond := context.WithTimeout(t.Context(), 150*time.Millisecond)
+	_, _ = client.Enroll(secondCtx, nil)
+	cancelSecond()
+	require.Len(t, submitted, 2)
+	assert.Equal(t, submitted[0].TokenHash, submitted[1].TokenHash)
+	assert.Equal(t, submitted[0].App.CSRPEM, submitted[1].App.CSRPEM)
+	assert.Equal(t, models.PlatformEnrollmentTokenHash(pending.Token), submitted[0].TokenHash)
+}
+
+func TestAppPlatformEnrollmentClient_ConflictClearsPendingForFreshStart(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == constants.APIPaths.AuthPlatformEnrollmentRequest {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	client, err := NewAppPlatformEnrollmentClient("conflict-app", fileSvc, cfg, nil, AppEnrollmentOptions{GatewayHTTPURL: server.URL})
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, err = client.Enroll(ctx, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "start enrollment again")
+	exists, err := fileSvc.FileExists(t.Context(), client.pendingStatePath())
+	require.NoError(t, err)
+	assert.False(t, exists)
 }

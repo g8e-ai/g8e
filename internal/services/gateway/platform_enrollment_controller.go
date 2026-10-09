@@ -79,9 +79,21 @@ func newPlatformEnrollmentController(deps PlatformEnrollmentControllerDeps) *Pla
 // handlePlatformEnrollmentRequest creates a new pending platform
 // enrollment request. The requester (dashboard, ensemble, or operator)
 // generates its key pair(s), builds a CSR, and posts the typed request.
-// The gateway validates bootstrap state and CSRs, deduplicates a live request,
-// and returns the request ID, requester token, approval URL, fingerprints,
-// and expiry. The raw token is returned once and never persisted.
+// The gateway validates bootstrap state and CSRs, stores the requester-provided
+// token hash, and returns the request ID, approval URL, fingerprints, and expiry.
+// Resubmitting the same hash and CSRs recovers the live request; token conflicts
+// return HTTP 409. The raw token never reaches the Gateway during creation.
+// @Summary Create or recover a platform enrollment request
+// @Description The requester supplies its SHA-256 token hash. Resubmitting the same hash and CSRs recovers the same live request; token conflicts return 409.
+// @Tags Platform enrollment
+// @Accept json
+// @Produce json
+// @Param request body models.PlatformEnrollmentCreateRequest true "Enrollment request"
+// @Success 201 {object} models.PlatformEnrollmentCreateResponse
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Router /api/v1/auth/platform-enrollments/request [post]
 //
 // POST /api/v1/auth/platform-enrollments/request  (RouteAuthNone)
 func (c *PlatformEnrollmentController) handlePlatformEnrollmentRequest(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +115,10 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentRequest(w http.Re
 	}
 
 	if err := req.ValidateShape(); err != nil {
+		if errors.Is(err, constants.ErrPlatformEnrollmentInvalidToken) {
+			c.responder.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		c.writeEnrollmentError(w, err)
 		return
 	}
@@ -121,7 +137,6 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentRequest(w http.Re
 		"request_id", resp.RequestID,
 		"component_kind", string(req.ComponentKind),
 		"instance_id", req.InstanceID,
-		"token_present", resp.Token != "",
 	)
 
 	c.responder.JSON(w, http.StatusCreated, resp)
@@ -490,6 +505,8 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentInvalidToken):
 		c.responder.Error(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, constants.ErrPlatformEnrollmentTokenConflict):
+		c.responder.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentRequestNotFound):
 		c.responder.Error(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, constants.ErrPlatformEnrollmentRequestExpired):

@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import datetime as _dt
+import hashlib
 import json
 import stat
 import sys
@@ -164,7 +165,6 @@ def _patch_httpx_with_mock_transport(
 def _mock_platform_enrollment_handler(
     *,
     request_id: str = "test-req-123",
-    token: str = "test-token-abc",
     app_cert: str = "FAKE-APP-CERT-PEM",
     cert_chain: str = "",
     trust_bundle: str = "CA-BUNDLE-PEM",
@@ -205,7 +205,6 @@ def _mock_platform_enrollment_handler(
                 201,
                 json={
                     "request_id": request_id,
-                    "token": token,
                     "component_kind": "ensemble",
                     "component_name": "g8ee",
                     "fingerprints": {"app": "test-fp"},
@@ -387,6 +386,90 @@ class TestLoadIdentityNoSan:
 
 
 class TestEnrollPlatformEnrollment:
+    async def test_lost_create_response_resumes_same_token_hash_and_csr(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+        _set_gateway_http_url("http://g8e.local:8080")
+        cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
+        creates: list[dict] = []
+        first = True
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal first
+            if request.url.path == "/.well-known/g8e/pki/ca-bundle":
+                return httpx.Response(200, text="CA-BUNDLE")
+            if request.url.path == "/api/v1/auth/platform-enrollments/request":
+                body = json.loads(request.content)
+                creates.append(body)
+                pending_path = pki_dir / "pending-enrollment" / "g8ee.json"
+                state = json.loads(pending_path.read_text(encoding="utf-8"))
+                assert state["request_id"] == ""
+                assert state["csr_pem"] == body["app"]["csr_pem"]
+                assert hashlib.sha256(state["token"].encode()).hexdigest() == body["token_hash"]
+                assert "token" not in body
+                if first:
+                    first = False
+                    raise httpx.ConnectError("response lost after commit", request=request)
+                return httpx.Response(
+                    201,
+                    json={
+                        "request_id": "recovered-request",
+                        "expires_at": (
+                            _dt.datetime.now(_dt.UTC) + _dt.timedelta(minutes=30)
+                        ).isoformat(),
+                    },
+                )
+            if request.url.path == "/api/v1/auth/platform-enrollments/status":
+                return httpx.Response(200, json={"state": "approved"})
+            if request.url.path == "/api/v1/auth/platform-enrollments/complete":
+                return httpx.Response(
+                    200,
+                    json={
+                        "app": {
+                            "app_id": "spiffe://g8e.local/app/g8ee",
+                            "app_cert": cert_pem,
+                            "cert_chain": "",
+                            "trust_bundle": "CA-BUNDLE",
+                        }
+                    },
+                )
+            return httpx.Response(404)
+
+        _patch_httpx_with_mock_transport(monkeypatch, handler)
+        service = AppEnrollmentService(instance_id="resume-lost-response", hostname="test.local")
+        with pytest.raises(ConfigurationError, match="enrollment request POST"):
+            await service.enroll()
+
+        pending_path = pki_dir / "pending-enrollment" / "g8ee.json"
+        saved = json.loads(pending_path.read_text(encoding="utf-8"))
+        assert saved["request_id"] == ""
+        await service.enroll()
+        assert len(creates) == 2
+        assert creates[0]["token_hash"] == creates[1]["token_hash"]
+        assert creates[0]["app"]["csr_pem"] == creates[1]["app"]["csr_pem"]
+        assert not pending_path.exists()
+
+    async def test_token_conflict_clears_pending_state(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+        _set_gateway_http_url("http://g8e.local:8080")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/g8e/pki/ca-bundle":
+                return httpx.Response(200, text="CA-BUNDLE")
+            if request.url.path == "/api/v1/auth/platform-enrollments/request":
+                return httpx.Response(409, json={"error": "token conflict"})
+            return httpx.Response(404)
+
+        _patch_httpx_with_mock_transport(monkeypatch, handler)
+        with pytest.raises(
+            ConfigurationError, match=r"no longer recoverable.*next start will enroll fresh"
+        ):
+            await AppEnrollmentService().enroll()
+        assert not (pki_dir / "pending-enrollment" / "g8ee.json").exists()
+
     """enroll drives the full platform enrollment protocol."""
 
     pytestmark = pytest.mark.asyncio
@@ -510,7 +593,6 @@ class TestEnrollPlatformEnrollment:
                     201,
                     json={
                         "request_id": "test-req-pending",
-                        "token": "test-token-pending",
                         "component_kind": "ensemble",
                         "component_name": "g8ee",
                         "fingerprints": {"app": "test-fp"},

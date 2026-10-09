@@ -16,7 +16,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -74,6 +73,7 @@ type appPendingState struct {
 	AppName        string    `json:"app_name"`
 	InstanceID     string    `json:"instance_id"`
 	Hostname       string    `json:"hostname"`
+	CSRPEM         string    `json:"csr_pem"`
 }
 
 // AppPlatformEnrollmentClient drives the owner-approved platform
@@ -159,7 +159,7 @@ func (c *AppPlatformEnrollmentClient) Enroll(ctx context.Context, out io.Writer)
 		appKey           *ecdsa.PrivateKey
 	)
 
-	if pending != nil && pending.Token != "" && pending.RequestID != "" && time.Now().Before(pending.ExpiresAt) {
+	if pending != nil && pending.Token != "" && (pending.ExpiresAt.IsZero() || time.Now().Before(pending.ExpiresAt)) {
 		token = pending.Token
 		requestID = pending.RequestID
 		appFP = pending.AppFingerprint
@@ -168,7 +168,20 @@ func (c *AppPlatformEnrollmentClient) Enroll(ctx context.Context, out io.Writer)
 		if err != nil {
 			return nil, fmt.Errorf("app enrollment: resume private key: %w", err)
 		}
-		c.logger.Info("app enrollment: resuming pending attempt", "app_name", c.appName, "request_id", requestID)
+		if requestID != "" {
+			c.logger.Info("app enrollment: resuming pending attempt", "app_name", c.appName, "request_id", requestID)
+		} else {
+			createResp, submitErr := c.submitRequest(ctx, pending.CSRPEM, token)
+			if submitErr != nil {
+				return nil, submitErr
+			}
+			requestID = createResp.RequestID
+			pending.RequestID = requestID
+			pending.ExpiresAt = createResp.ExpiresAt
+			if err := c.persistPendingState(pendingPath, pending); err != nil {
+				return nil, err
+			}
+		}
 	} else {
 		// Step 2: Generate new key and CSR.
 		csrPEM, key, err := GenerateCSR(fmt.Sprintf("g8e-app-%s", c.appName))
@@ -187,14 +200,9 @@ func (c *AppPlatformEnrollmentClient) Enroll(ctx context.Context, out io.Writer)
 			return nil, fmt.Errorf("app enrollment: encode app key: %w", err)
 		}
 
-		createResp, err := c.submitRequest(ctx, csrPEM)
+		token, err = models.NewPlatformEnrollmentToken()
 		if err != nil {
-			return nil, err
-		}
-		requestID = createResp.RequestID
-		token = createResp.Token
-		if token == "" {
-			return nil, fmt.Errorf("app enrollment: gateway returned a deduplicated response with no token; a pending state file is required to resume. Request ID: %s", requestID)
+			return nil, fmt.Errorf("app enrollment: generate request token: %w", err)
 		}
 
 		// Persist pending state with 0600 permissions.
@@ -203,11 +211,21 @@ func (c *AppPlatformEnrollmentClient) Enroll(ctx context.Context, out io.Writer)
 			Token:          token,
 			AppFingerprint: appFP,
 			KeyPEM:         appKeyPEM,
-			ExpiresAt:      createResp.ExpiresAt,
 			AppName:        c.appName,
 			InstanceID:     c.instanceID,
 			Hostname:       c.hostname,
+			CSRPEM:         csrPEM,
 		}
+		if err := c.persistPendingState(pendingPath, pending); err != nil {
+			return nil, err
+		}
+		createResp, err := c.submitRequest(ctx, csrPEM, token)
+		if err != nil {
+			return nil, err
+		}
+		requestID = createResp.RequestID
+		pending.RequestID = requestID
+		pending.ExpiresAt = createResp.ExpiresAt
 		if err := c.persistPendingState(pendingPath, pending); err != nil {
 			return nil, err
 		}
@@ -229,7 +247,7 @@ func (c *AppPlatformEnrollmentClient) Enroll(ctx context.Context, out io.Writer)
 	}
 
 	// Step 4: Sign the completion transcript.
-	tokenHashStr := tokenHash(token)
+	tokenHashStr := models.PlatformEnrollmentTokenHash(token)
 	transcript, err := buildAppCompletionTranscript(requestID, tokenHashStr, c.instanceID, appFP)
 	if err != nil {
 		return nil, err
@@ -399,13 +417,14 @@ func (c *AppPlatformEnrollmentClient) removePendingState(relPath string) error {
 	return c.fileSvc.Remove(context.Background(), relPath)
 }
 
-func (c *AppPlatformEnrollmentClient) submitRequest(ctx context.Context, csrPEM string) (*models.PlatformEnrollmentCreateResponse, error) {
+func (c *AppPlatformEnrollmentClient) submitRequest(ctx context.Context, csrPEM, token string) (*models.PlatformEnrollmentCreateResponse, error) {
 	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentRequest
 	payload := models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentApplication,
 		AppName:       c.appName,
 		InstanceID:    c.instanceID,
 		Hostname:      c.hostname,
+		TokenHash:     models.PlatformEnrollmentTokenHash(token),
 		App: &models.PlatformAppCSRPayload{
 			CSRPEM: csrPEM,
 		},
@@ -430,14 +449,7 @@ func (c *AppPlatformEnrollmentClient) submitRequest(ctx context.Context, csrPEM 
 
 		resp, err := doHTTPRequest(ctx, req)
 		if err != nil {
-			if time.Now().After(deadline) {
-				return nil, fmt.Errorf("app enrollment: submit request timed out: %w", err)
-			}
-			if waitErr := c.sleep(ctx, delay, appEnrollSubmitJitter); waitErr != nil {
-				return nil, waitErr
-			}
-			delay = time.Duration(math.Min(float64(delay*2), float64(appEnrollSubmitMax)))
-			continue
+			return nil, fmt.Errorf("app enrollment: submit request: %w", err)
 		}
 
 		respBody, err := io.ReadAll(resp.Body)
@@ -458,6 +470,10 @@ func (c *AppPlatformEnrollmentClient) submitRequest(ctx context.Context, csrPEM 
 		}
 
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusConflict {
+				_ = c.removePendingState(c.pendingStatePath())
+				return nil, fmt.Errorf("app enrollment: pending request conflicts with gateway state (HTTP 409); pending state cleared, start enrollment again to create a fresh request")
+			}
 			return nil, fmt.Errorf("app enrollment: request rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
 		}
 
@@ -664,11 +680,6 @@ func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, er
 
 func csrFingerprint(csrPEM string) (string, error) {
 	return serviceauth.CSRFingerprint(csrPEM)
-}
-
-func tokenHash(token string) string {
-	digest := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(digest[:])
 }
 
 func parseECPrivateKeyPEM(keyPEM string) (*ecdsa.PrivateKey, error) {

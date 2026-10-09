@@ -1421,6 +1421,75 @@ definitions:
       web_session_id:
         type: string
     type: object
+  models.PlatformAppCSRPayload:
+    properties:
+      csr_pem:
+        type: string
+    type: object
+  models.PlatformComponentKind:
+    enum:
+    - dashboard
+    - ensemble
+    - operator
+    - application
+    type: string
+    x-enum-varnames:
+    - PlatformComponentDashboard
+    - PlatformComponentEnsemble
+    - PlatformComponentOperator
+    - PlatformComponentApplication
+  models.PlatformEnrollmentCSRFingerprints:
+    properties:
+      app:
+        type: string
+      cli:
+        type: string
+      operator:
+        type: string
+    type: object
+  models.PlatformEnrollmentCreateRequest:
+    properties:
+      app:
+        $ref: '#/definitions/models.PlatformAppCSRPayload'
+      app_name:
+        type: string
+      component_kind:
+        $ref: '#/definitions/models.PlatformComponentKind'
+      deployment_id:
+        type: string
+      hostname:
+        type: string
+      instance_id:
+        type: string
+      operator:
+        $ref: '#/definitions/models.PlatformOperatorCSRPayload'
+      system_fingerprint:
+        type: string
+      token_hash:
+        type: string
+    type: object
+  models.PlatformEnrollmentCreateResponse:
+    properties:
+      approval_url:
+        type: string
+      component_kind:
+        $ref: '#/definitions/models.PlatformComponentKind'
+      component_name:
+        type: string
+      expires_at:
+        type: string
+      fingerprints:
+        $ref: '#/definitions/models.PlatformEnrollmentCSRFingerprints'
+      request_id:
+        type: string
+    type: object
+  models.PlatformOperatorCSRPayload:
+    properties:
+      cli_csr_pem:
+        type: string
+      operator_csr_pem:
+        type: string
+    type: object
   models.ProviderObservationResponse:
     properties:
       provider_attempt:
@@ -3307,6 +3376,48 @@ paths:
       summary: Verify WebAuthn registration
       tags:
       - passkey
+  /api/v1/auth/platform-enrollments/request:
+    post:
+      consumes:
+      - application/json
+      description: The requester supplies its SHA-256 token hash. Resubmitting the
+        same hash and CSRs recovers the same live request; token conflicts return
+        409.
+      parameters:
+      - description: Enrollment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PlatformEnrollmentCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.PlatformEnrollmentCreateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create or recover a platform enrollment request
+      tags:
+      - Platform enrollment
   /api/v1/auth/sessions/me:
     get:
       description: Returns the authenticated user's ID and web session ID from the

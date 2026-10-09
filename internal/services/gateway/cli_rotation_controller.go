@@ -152,7 +152,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 	// Verify the user is still active. The auth middleware does this on
 	// every request, but a race between middleware and rotation could
 	// leave a disabled user with a still-active session.
-	user, err := c.userSvc.GetByID(r.Context(),userID)
+	user, err := c.userSvc.GetByID(r.Context(), userID)
 	if err != nil {
 		c.logger.Error("CLI rotation: failed to look up user", "error", err, "user_id", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
@@ -229,7 +229,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID),
 			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID),
 		)
-		if revokeErr := c.pki.RevokeCertificate(r.Context(), newCertSerial,"rotation_race_lost"); revokeErr != nil {
+		if revokeErr := c.pki.RevokeCertificate(r.Context(), newCertSerial, "rotation_race_lost"); revokeErr != nil {
 			c.logger.Error("CLI rotation: failed to revoke orphaned new cert after race loss",
 				"error", revokeErr, "new_cert_serial", newCertSerial)
 		}
@@ -244,7 +244,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 	// a non-fatal warning to the caller via the response — the rotation
 	// itself succeeded.
 	if oldSession.CertSerial != "" {
-		if revokeErr := c.pki.RevokeCertificate(r.Context(), oldSession.CertSerial,"cli_rotation"); revokeErr != nil {
+		if revokeErr := c.pki.RevokeCertificate(r.Context(), oldSession.CertSerial, "cli_rotation"); revokeErr != nil {
 			c.logger.Error("CLI rotation: failed to revoke old cert (rotation succeeded; old session inactive)",
 				"error", revokeErr,
 				"old_cert_serial", oldSession.CertSerial,

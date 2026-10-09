@@ -74,7 +74,7 @@ func TestVerifyPlatformEnrollmentProofsRequiresEverySubmittedKey(t *testing.T) {
 	cliCSR, cliKey := newPlatformEnrollmentCSR(t)
 	request := &models.PlatformEnrollmentRequest{
 		ID:            "request-id",
-		TokenHash:     platformEnrollmentTokenHash("token"),
+		TokenHash:     models.PlatformEnrollmentTokenHash("token"),
 		ComponentKind: models.PlatformComponentOperator,
 		InstanceID:    "operator-1",
 		Operator: &models.PlatformOperatorCSRPayload{
@@ -114,7 +114,7 @@ func TestVerifyPlatformEnrollmentProofsRequiresEverySubmittedKey(t *testing.T) {
 func TestPlatformEnrollmentCompletionTranscriptIsDeterministicAndBound(t *testing.T) {
 	request := &models.PlatformEnrollmentRequest{
 		ID:            "request-id",
-		TokenHash:     platformEnrollmentTokenHash("token"),
+		TokenHash:     models.PlatformEnrollmentTokenHash("token"),
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Fingerprints:  models.PlatformEnrollmentCSRFingerprints{App: "app-fingerprint"},

@@ -8,7 +8,12 @@
 package models
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -70,6 +75,7 @@ func (s PlatformEnrollmentState) IsTerminal() bool {
 // it is never persisted and only keys the pending-request event to the CLI
 // that launched the worker.
 type PlatformEnrollmentCreateRequest struct {
+	TokenHash         string                      `json:"token_hash" binding:"required"` // SHA-256 hex of the requester-generated token.
 	ComponentKind     PlatformComponentKind       `json:"component_kind"`
 	AppName           string                      `json:"app_name,omitempty"`
 	InstanceID        string                      `json:"instance_id"`
@@ -81,6 +87,15 @@ type PlatformEnrollmentCreateRequest struct {
 }
 
 func (r PlatformEnrollmentCreateRequest) ValidateShape() error {
+	if r.TokenHash == "" {
+		return constants.ErrPlatformEnrollmentTokenRequired
+	}
+	if len(r.TokenHash) != sha256.Size*2 || strings.ToLower(r.TokenHash) != r.TokenHash {
+		return constants.ErrPlatformEnrollmentInvalidToken
+	}
+	if _, err := hex.DecodeString(r.TokenHash); err != nil {
+		return constants.ErrPlatformEnrollmentInvalidToken
+	}
 	if _, err := r.ComponentKind.CanonicalName(r.AppName); err != nil {
 		return err
 	}
@@ -124,6 +139,22 @@ func (r PlatformEnrollmentCreateRequest) ValidateShape() error {
 	return nil
 }
 
+// NewPlatformEnrollmentToken creates the requester's opaque recovery token.
+// Callers must persist it before submitting an enrollment request.
+func NewPlatformEnrollmentToken() (string, error) {
+	value := make([]byte, constants.PlatformEnrollmentTokenBytes)
+	if _, err := rand.Read(value); err != nil {
+		return "", fmt.Errorf("platform enrollment: generate token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+// PlatformEnrollmentTokenHash returns the lowercase SHA-256 hex digest of token.
+func PlatformEnrollmentTokenHash(token string) string {
+	digest := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(digest[:])
+}
+
 type PlatformAppCSRPayload struct {
 	CSRPEM string `json:"csr_pem"`
 }
@@ -141,7 +172,6 @@ type PlatformEnrollmentCSRFingerprints struct {
 
 type PlatformEnrollmentCreateResponse struct {
 	RequestID     string                            `json:"request_id"`
-	Token         string                            `json:"token"`
 	ComponentKind PlatformComponentKind             `json:"component_kind"`
 	ComponentName string                            `json:"component_name"`
 	Fingerprints  PlatformEnrollmentCSRFingerprints `json:"fingerprints"`

@@ -192,9 +192,9 @@ func (s *PlatformEnrollmentService) runCleanup(ctx context.Context) {
 // request for the same component kind, instance ID, and key fingerprint
 // set, atomically reserves capacity and inserts the pending request (CREATE
 // is classified as non-mutation), submits a PLATFORM_ENROLLMENT_CREATE
-// envelope for audit, and returns the request ID, requester token,
-// component name, fingerprints, approval URL, and expiry. The raw token
-// is returned once and never persisted; only its SHA-256 hash is stored.
+// envelope for audit, and returns the request ID, component name, fingerprints,
+// approval URL, and expiry. The requester supplies token_hash; the Gateway
+// stores only that hash and never receives or returns the raw token on creation.
 func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req models.PlatformEnrollmentCreateRequest, approvalURLBase string) (*models.PlatformEnrollmentCreateResponse, error) {
 	select {
 	case <-ctx.Done():
@@ -221,11 +221,6 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		return nil, err
 	}
 
-	token, err := newPlatformEnrollmentToken()
-	if err != nil {
-		return nil, err
-	}
-	tokenHash := platformEnrollmentTokenHash(token)
 	requestID, err := uuid.NewString()
 	if err != nil {
 		return nil, err
@@ -235,7 +230,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 
 	persistedReq := &models.PlatformEnrollmentRequest{
 		ID:                requestID,
-		TokenHash:         tokenHash,
+		TokenHash:         req.TokenHash,
 		ComponentKind:     req.ComponentKind,
 		ComponentName:     componentName,
 		AppName:           req.AppName,
@@ -293,11 +288,11 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		}
 	}
 	if err != nil {
-		// The raw token has not been returned. Remove only this still-pending
-		// reservation so a failed audit does not strand an unusable request.
+		// The response was not returned, so the requester still holds its token
+		// and can resubmit the same request after the failed audit.
 		_, cleanupErr := s.db.db.ExecContext(context.WithoutCancel(ctx),
 			`DELETE FROM documents WHERE collection = ? AND id = ? AND json_extract(data, '$.state') = ? AND json_extract(data, '$.token_hash') = ?`,
-			platformEnrollmentCollectionName(), requestID, models.PlatformEnrollmentStatePending, tokenHash)
+			platformEnrollmentCollectionName(), requestID, models.PlatformEnrollmentStatePending, req.TokenHash)
 		if cleanupErr != nil {
 			err = errors.Join(err, fmt.Errorf("release failed enrollment reservation: %w", cleanupErr))
 		}
@@ -313,7 +308,6 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 
 	return &models.PlatformEnrollmentCreateResponse{
 		RequestID:     requestID,
-		Token:         token,
 		ComponentKind: req.ComponentKind,
 		ComponentName: componentName,
 		Fingerprints:  fingerprints,
@@ -328,7 +322,6 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 // is still in a non-terminal state, it is atomically transitioned to
 // the expired state before returning.
 func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string) (*models.PlatformEnrollmentStatusResponse, error) {
-	_ = ctx
 	if token == "" {
 		return nil, constants.ErrPlatformEnrollmentTokenRequired
 	}
@@ -340,7 +333,7 @@ func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string)
 		return s.statusResponse(req), nil
 	}
 	if time.Now().UTC().After(req.ExpiresAt) {
-		s.expireRequest(ctx,req)
+		s.expireRequest(ctx, req)
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
 	}
 	return s.statusResponse(req), nil
@@ -427,7 +420,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	// submitting the envelope. The handler re-checks the state via
 	// conditional update, but an early check gives a precise error
 	// without consuming a governance receipt.
-	existing, err := s.loadByID(ctx,req.RequestID)
+	existing, err := s.loadByID(ctx, req.RequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +434,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 		return nil, constants.ErrPlatformEnrollmentAlreadyDecided
 	}
 	if time.Now().UTC().After(existing.ExpiresAt) {
-		s.expireRequest(ctx,existing)
+		s.expireRequest(ctx, existing)
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
 	}
 
@@ -464,7 +457,7 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	}
 
 	// Reload to get the post-decision state.
-	updated, err := s.loadByID(ctx,req.RequestID)
+	updated, err := s.loadByID(ctx, req.RequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +542,7 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	if !isFirst {
 		return nil, constants.ErrPlatformEnrollmentInvalidDecision
 	}
-	existing, err := s.loadByID(ctx,req.RequestID)
+	existing, err := s.loadByID(ctx, req.RequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +578,7 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	}); err != nil {
 		return nil, fmt.Errorf("platform enrollment: revoke envelope: %w", err)
 	}
-	updated, err := s.loadByID(ctx,existing.ID)
+	updated, err := s.loadByID(ctx, existing.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -679,7 +672,7 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 	// Verify token freshness: the token hash matched, so the caller
 	// possesses the correct token. Now check state and expiry.
 	if time.Now().UTC().After(req.ExpiresAt) && !req.State.IsTerminal() {
-		s.expireRequest(ctx,req)
+		s.expireRequest(ctx, req)
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
 	}
 
@@ -787,7 +780,7 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 
 	// Reload to get the issued material and generated IDs written by
 	// the ISSUE handler.
-	completed, err := s.loadByID(ctx,req.ID)
+	completed, err := s.loadByID(ctx, req.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,7 +1067,7 @@ func (s *PlatformEnrollmentService) loadByToken(ctx context.Context, token strin
 	var data []byte
 	err := s.db.db.QueryRowWithRetry(ctx, `SELECT json_set(data, '$.id', id, '$.created_at', created_at)
 		FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ? LIMIT 1`,
-		platformEnrollmentCollectionName(), platformEnrollmentTokenHash(token)).Scan(&data)
+		platformEnrollmentCollectionName(), models.PlatformEnrollmentTokenHash(token)).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, constants.ErrPlatformEnrollmentRequestNotFound
 	}

@@ -77,6 +77,7 @@ type burstScenario struct {
 
 type burstWorker struct {
 	create      models.PlatformEnrollmentCreateRequest
+	token       string
 	operatorKey *ecdsa.PrivateKey
 	cliKey      *ecdsa.PrivateKey
 	created     *models.PlatformEnrollmentCreateResponse
@@ -107,8 +108,11 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 	workers := make([]*burstWorker, n)
 	for i := range workers {
 		operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
+		token, tokenHash := newPlatformEnrollmentTestToken(t)
 		workers[i] = &burstWorker{
+			token: token,
 			create: models.PlatformEnrollmentCreateRequest{
+				TokenHash:         tokenHash,
 				ComponentKind:     models.PlatformComponentOperator,
 				InstanceID:        fmt.Sprintf("burst-%04d", i),
 				Hostname:          "burst.local",
@@ -163,7 +167,7 @@ func runPlatformEnrollmentBurst(t *testing.T, n int, scenario burstScenario) {
 	// outcome buckets separate completion failures from login (session
 	// validation) failures.
 	complete := runBurstPhase(t, "complete", workers, deadline, func(ctx context.Context, w *burstWorker) error {
-		resp, err := svc.Complete(ctx, w.created.Token, w.proofs)
+		resp, err := svc.Complete(ctx, w.token, w.proofs)
 		if err != nil {
 			return fmt.Errorf("complete: %w", err)
 		}

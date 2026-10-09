@@ -38,13 +38,13 @@ func TestPlatformEnrollmentStatusWait_DecisionAndCancellation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := setupPlatformEnrollmentRouterEnv(t)
 			csr, _ := generateAppCSRAndKey(t)
-			created, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+			created, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 				ComponentKind: models.PlatformComponentDashboard, InstanceID: "status-wait", Hostname: "status-wait.local",
 				App: &models.PlatformAppCSRPayload{CSRPEM: csr},
 			}, "https://gateway.local/console")
 			require.NoError(t, err)
 			ctx, cancel := context.WithCancel(context.Background())
-			req := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentStatus+"?wait=true&token="+url.QueryEscape(created.Token), nil).WithContext(ctx)
+			req := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentStatus+"?wait=true&token="+url.QueryEscape(platformEnrollmentTestToken(t, created.RequestID)), nil).WithContext(ctx)
 			rr := httptest.NewRecorder()
 			done := make(chan struct{})
 			defer func() {

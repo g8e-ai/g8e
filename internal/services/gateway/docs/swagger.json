@@ -587,6 +587,67 @@
                 }
             }
         },
+        "/api/v1/auth/platform-enrollments/request": {
+            "post": {
+                "description": "The requester supplies its SHA-256 token hash. Resubmitting the same hash and CSRs recovers the same live request; token conflicts return 409.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform enrollment"
+                ],
+                "summary": "Create or recover a platform enrollment request",
+                "parameters": [
+                    {
+                        "description": "Enrollment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PlatformEnrollmentCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.PlatformEnrollmentCreateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/sessions/me": {
             "get": {
                 "description": "Returns the authenticated user's ID and web session ID from the session cookie.",
@@ -3957,6 +4018,109 @@
                     "type": "string"
                 },
                 "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PlatformAppCSRPayload": {
+            "type": "object",
+            "properties": {
+                "csr_pem": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PlatformComponentKind": {
+            "type": "string",
+            "enum": [
+                "dashboard",
+                "ensemble",
+                "operator",
+                "application"
+            ],
+            "x-enum-varnames": [
+                "PlatformComponentDashboard",
+                "PlatformComponentEnsemble",
+                "PlatformComponentOperator",
+                "PlatformComponentApplication"
+            ]
+        },
+        "models.PlatformEnrollmentCSRFingerprints": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "type": "string"
+                },
+                "cli": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PlatformEnrollmentCreateRequest": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "$ref": "#/definitions/models.PlatformAppCSRPayload"
+                },
+                "app_name": {
+                    "type": "string"
+                },
+                "component_kind": {
+                    "$ref": "#/definitions/models.PlatformComponentKind"
+                },
+                "deployment_id": {
+                    "type": "string"
+                },
+                "hostname": {
+                    "type": "string"
+                },
+                "instance_id": {
+                    "type": "string"
+                },
+                "operator": {
+                    "$ref": "#/definitions/models.PlatformOperatorCSRPayload"
+                },
+                "system_fingerprint": {
+                    "type": "string"
+                },
+                "token_hash": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PlatformEnrollmentCreateResponse": {
+            "type": "object",
+            "properties": {
+                "approval_url": {
+                    "type": "string"
+                },
+                "component_kind": {
+                    "$ref": "#/definitions/models.PlatformComponentKind"
+                },
+                "component_name": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "fingerprints": {
+                    "$ref": "#/definitions/models.PlatformEnrollmentCSRFingerprints"
+                },
+                "request_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PlatformOperatorCSRPayload": {
+            "type": "object",
+            "properties": {
+                "cli_csr_pem": {
+                    "type": "string"
+                },
+                "operator_csr_pem": {
                     "type": "string"
                 }
             }

@@ -15,7 +15,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -74,6 +73,9 @@ type operatorPendingState struct {
 	ExpiresAt           time.Time `json:"expires_at"`
 	InstanceID          string    `json:"instance_id"`
 	Hostname            string    `json:"hostname"`
+	OperatorCSRPEM      string    `json:"operator_csr_pem"`
+	CLICSRPEM           string    `json:"cli_csr_pem"`
+	SystemFingerprint   string    `json:"system_fingerprint"`
 }
 
 // OperatorPlatformEnrollmentClient drives the owner-approved platform
@@ -160,7 +162,7 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		pending = nil
 	}
 
-	if pending != nil && pending.Token != "" && pending.RequestID != "" {
+	if pending != nil && pending.Token != "" {
 		// Resume the existing pending attempt. Do not generate new keys.
 		token = pending.Token
 		requestID = pending.RequestID
@@ -176,7 +178,20 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		if err != nil {
 			return nil, fmt.Errorf("operator enrollment: resume cli key: %w", err)
 		}
-		c.logger.Info("operator enrollment: resuming pending attempt", "request_id", requestID)
+		if requestID != "" {
+			c.logger.Info("operator enrollment: resuming pending attempt", "request_id", requestID)
+		} else {
+			createResp, submitErr := c.submitRequest(ctx, pending.OperatorCSRPEM, pending.CLICSRPEM, pending.SystemFingerprint, token)
+			if submitErr != nil {
+				return nil, submitErr
+			}
+			requestID = createResp.RequestID
+			pending.RequestID = requestID
+			pending.ExpiresAt = createResp.ExpiresAt
+			if err := c.persistPendingState(pendingPath, pending); err != nil {
+				return nil, err
+			}
+		}
 	} else {
 		// Step 3: Generate keys and submit a new request.
 		operatorCSR, opKey, err := GenerateCSR(fmt.Sprintf("g8e-operator-%s", c.hostname))
@@ -213,14 +228,9 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 			return nil, fmt.Errorf("operator enrollment: system fingerprint: %w", err)
 		}
 
-		createResp, err := c.submitRequest(ctx, operatorCSR, cliCSR, systemFp.Fingerprint)
+		token, err = models.NewPlatformEnrollmentToken()
 		if err != nil {
-			return nil, err
-		}
-		requestID = createResp.RequestID
-		token = createResp.Token
-		if token == "" {
-			return nil, fmt.Errorf("operator enrollment: gateway returned a deduplicated response with no token; a pending state file is required to resume. Request ID: %s", requestID)
+			return nil, fmt.Errorf("operator enrollment: generate request token: %w", err)
 		}
 
 		// Persist pending state atomically with 0600 permissions.
@@ -231,10 +241,22 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 			CLIFingerprint:      cliFP,
 			OperatorKeyPEM:      operatorKeyPEM,
 			CLIKeyPEM:           cliKeyPEM,
-			ExpiresAt:           createResp.ExpiresAt,
 			InstanceID:          c.instanceID,
 			Hostname:            c.hostname,
+			OperatorCSRPEM:      operatorCSR,
+			CLICSRPEM:           cliCSR,
+			SystemFingerprint:   systemFp.Fingerprint,
 		}
+		if err := c.persistPendingState(pendingPath, pending); err != nil {
+			return nil, err
+		}
+		createResp, err := c.submitRequest(ctx, operatorCSR, cliCSR, systemFp.Fingerprint, token)
+		if err != nil {
+			return nil, err
+		}
+		requestID = createResp.RequestID
+		pending.RequestID = requestID
+		pending.ExpiresAt = createResp.ExpiresAt
 		if err := c.persistPendingState(pendingPath, pending); err != nil {
 			return nil, err
 		}
@@ -262,8 +284,8 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 	}
 
 	// Step 6: Sign the completion transcript with both private keys.
-	tokenHash := tokenHash(token)
-	transcript, err := buildOperatorCompletionTranscript(requestID, tokenHash, c.instanceID, operatorFP, cliFP)
+	tokenHashValue := models.PlatformEnrollmentTokenHash(token)
+	transcript, err := buildOperatorCompletionTranscript(requestID, tokenHashValue, c.instanceID, operatorFP, cliFP)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +373,7 @@ func (c *OperatorPlatformEnrollmentClient) trustBundlePath() string {
 
 // --- HTTP ---
 
-func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, operatorCSR, cliCSR, systemFingerprint string) (*models.PlatformEnrollmentCreateResponse, error) {
+func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, operatorCSR, cliCSR, systemFingerprint, token string) (*models.PlatformEnrollmentCreateResponse, error) {
 	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentRequest
 	payload := models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
@@ -359,6 +381,7 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 		Hostname:          c.hostname,
 		SystemFingerprint: systemFingerprint,
 		DeploymentID:      c.deployment.LaunchID(),
+		TokenHash:         models.PlatformEnrollmentTokenHash(token),
 		Operator: &models.PlatformOperatorCSRPayload{
 			OperatorCSRPEM: operatorCSR,
 			CLICSRPEM:      cliCSR,
@@ -384,6 +407,10 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 		return nil, fmt.Errorf("operator enrollment: read response: %w", err)
 	}
 	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode == http.StatusConflict {
+			_ = c.removePendingState(c.pendingStatePath())
+			return nil, fmt.Errorf("operator enrollment: pending request conflicts with gateway state (HTTP 409); pending state cleared, start enrollment again to create a fresh request")
+		}
 		return nil, fmt.Errorf("operator enrollment: request rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 	var createResp models.PlatformEnrollmentCreateResponse
@@ -640,11 +667,6 @@ func csrFingerprint(csrPEM string) (string, error) {
 }
 
 // --- Helpers ---
-
-func tokenHash(token string) string {
-	digest := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(digest[:])
-}
 
 func parseECPrivateKeyPEM(keyPEM string) (*ecdsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(keyPEM))

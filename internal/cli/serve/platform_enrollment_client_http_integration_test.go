@@ -65,17 +65,17 @@ func TestSubmitRequest_SendsTypedOperatorRequestAndReturnsGatewayResponse(t *tes
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
 
-	resp, err := client.submitRequest(t.Context(), "operator-csr", "cli-csr", "sys-fp")
+	resp, err := client.submitRequest(t.Context(), "operator-csr", "cli-csr", "sys-fp", "tok-42")
 
 	require.NoError(t, err)
 	assert.Equal(t, "req-42", resp.RequestID)
-	assert.Equal(t, "token-42", resp.Token)
 	assert.Equal(t, http.MethodPost, gotMethod)
 	assert.Equal(t, "application/json", gotContentType)
 	assert.Equal(t, models.PlatformComponentOperator, gotBody.ComponentKind)
 	assert.Equal(t, "inst-1", gotBody.InstanceID)
 	assert.Equal(t, "host-1", gotBody.Hostname)
 	assert.Equal(t, "sys-fp", gotBody.SystemFingerprint)
+	assert.Equal(t, models.PlatformEnrollmentTokenHash("tok-42"), gotBody.TokenHash)
 	require.NotNil(t, gotBody.Operator)
 	assert.Equal(t, "operator-csr", gotBody.Operator.OperatorCSRPEM)
 	assert.Equal(t, "cli-csr", gotBody.Operator.CLICSRPEM)
@@ -99,7 +99,7 @@ func TestSubmitRequest_RejectionsAreTerminalAndNotRetried(t *testing.T) {
 			}})
 			client, _ := newEnrollClient(t, stub.server.URL)
 
-			resp, err := client.submitRequest(shortContext(t, 5*time.Second), "op", "cli", "fp")
+			resp, err := client.submitRequest(shortContext(t, 5*time.Second), "op", "cli", "fp", "tok")
 
 			require.Error(t, err)
 			assert.Nil(t, resp)
@@ -116,12 +116,12 @@ func TestSubmitRequest_BootstrapAndNetworkFailuresAreReturnedWithoutRetry(t *tes
 		_, _ = io.WriteString(w, constants.ErrPlatformEnrollmentRequiresBootstrap.Error())
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
-	_, err := client.submitRequest(t.Context(), "op", "cli", "fp")
+	_, err := client.submitRequest(t.Context(), "op", "cli", "fp", "tok")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "request rejected: HTTP 403")
 	assert.EqualValues(t, 1, stub.requestHits.Load())
 	stub.server.Close()
-	_, err = client.submitRequest(t.Context(), "op", "cli", "fp")
+	_, err = client.submitRequest(t.Context(), "op", "cli", "fp", "tok")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "submit request")
 }
@@ -132,7 +132,7 @@ func TestSubmitRequest_ReturnsContextErrorWithoutContactingGatewayWhenAlreadyCan
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := client.submitRequest(ctx, "op", "cli", "fp")
+	_, err := client.submitRequest(ctx, "op", "cli", "fp", "tok")
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Zero(t, stub.requestHits.Load())
@@ -145,7 +145,7 @@ func TestSubmitRequest_RejectsUnparseableCreatedResponse(t *testing.T) {
 	}})
 	client, _ := newEnrollClient(t, stub.server.URL)
 
-	_, err := client.submitRequest(t.Context(), "op", "cli", "fp")
+	_, err := client.submitRequest(t.Context(), "op", "cli", "fp", "tok")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parse response")
@@ -441,7 +441,7 @@ func TestEnroll_ResumeRejectsCorruptPersistedKeys(t *testing.T) {
 	}
 }
 
-func TestEnroll_RequestRejectionLeavesNoPendingState(t *testing.T) {
+func TestEnroll_RequestRejectionPreservesPreSubmittedState(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{request: func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = io.WriteString(w, "invalid csr")
@@ -454,22 +454,65 @@ func TestEnroll_RequestRejectionLeavesNoPendingState(t *testing.T) {
 	assert.Contains(t, err.Error(), "request rejected")
 	exists, err := fileSvc.FileExists(t.Context(), client.pendingStatePath())
 	require.NoError(t, err)
-	assert.False(t, exists, "a rejected request must not leave resumable state behind")
+	assert.True(t, exists, "the token and request material must survive an uncertain submission")
 }
 
-func TestEnroll_RefusesDeduplicatedResponseThatCarriesNoToken(t *testing.T) {
-	stub := newEnrollStub(t, enrollRoutes{request: createdReply("dup-req", "")})
+func TestEnroll_ConflictClearsPendingStateForFreshStart(t *testing.T) {
+	stub := newEnrollStub(t, enrollRoutes{request: func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+	}})
 	client, fileSvc := newEnrollClient(t, stub.server.URL)
 
 	_, err := client.Enroll(shortContext(t, 5*time.Second))
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no token")
-	assert.Contains(t, err.Error(), "dup-req", "the error names the request so the owner can find it")
+	assert.Contains(t, err.Error(), "start enrollment again")
 	exists, err := fileSvc.FileExists(t.Context(), client.pendingStatePath())
 	require.NoError(t, err)
-	assert.False(t, exists, "without a token there is nothing resumable to persist")
-	assert.Zero(t, stub.statusHits.Load())
+	assert.False(t, exists, "a conflicting pending state must be cleared")
+}
+
+func TestEnroll_LostCreateResponseResumesSamePersistedRequest(t *testing.T) {
+	var hits atomic.Int32
+	var submitted []models.PlatformEnrollmentCreateRequest
+	stub := newEnrollStub(t, enrollRoutes{
+		request: func(w http.ResponseWriter, r *http.Request) {
+			var req models.PlatformEnrollmentCreateRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			submitted = append(submitted, req)
+			if hits.Add(1) == 1 {
+				hijacker := w.(http.Hijacker)
+				conn, _, err := hijacker.Hijack()
+				require.NoError(t, err)
+				_ = conn.Close()
+				return
+			}
+			createdReply("req-after-loss", "ignored-token")(w, r)
+		},
+		status: statusReply(models.PlatformEnrollmentStatePending),
+	})
+	client, fileSvc := newEnrollClient(t, stub.server.URL)
+	recorder, err := NewOperatorDeploymentRecorder(fileSvc, "lost-response-launch")
+	require.NoError(t, err)
+	client.SetDeploymentRecorder(recorder)
+
+	_, firstErr := client.Enroll(shortContext(t, 5*time.Second))
+	require.Error(t, firstErr)
+	pending, err := client.loadPendingState(client.pendingStatePath())
+	require.NoError(t, err)
+	require.NotNil(t, pending)
+	assert.Empty(t, pending.RequestID, "the state is persisted before the first POST returns")
+	assert.NotEmpty(t, pending.Token)
+	assert.NotEmpty(t, pending.OperatorCSRPEM)
+	assert.NotEmpty(t, pending.CLICSRPEM)
+	assert.NotEmpty(t, pending.SystemFingerprint)
+
+	_, _ = client.Enroll(shortContext(t, 100*time.Millisecond))
+	require.Len(t, submitted, 2)
+	assert.Equal(t, submitted[0].TokenHash, submitted[1].TokenHash)
+	assert.Equal(t, submitted[0].Operator.OperatorCSRPEM, submitted[1].Operator.OperatorCSRPEM)
+	assert.Equal(t, submitted[0].Operator.CLICSRPEM, submitted[1].Operator.CLICSRPEM)
+	assert.Equal(t, models.PlatformEnrollmentTokenHash(pending.Token), submitted[0].TokenHash)
 }
 
 func TestEnroll_RejectsIncompleteCompletionResponses(t *testing.T) {
@@ -531,7 +574,7 @@ func TestEnroll_ProofsVerifyAgainstTheKeysSubmittedInTheRequest(t *testing.T) {
 	stub := newEnrollStub(t, enrollRoutes{
 		request: func(w http.ResponseWriter, r *http.Request) {
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&submitted))
-			createdReply("req-1", "tok-1")(w, r)
+			createdReply("req-1", "ignored-token")(w, r)
 		},
 		status: statusReply(models.PlatformEnrollmentStateApproved),
 		complete: func(w http.ResponseWriter, r *http.Request) {
@@ -563,7 +606,7 @@ func TestEnroll_ProofsVerifyAgainstTheKeysSubmittedInTheRequest(t *testing.T) {
 
 	// The gateway verifies each proof against the key committed to in the
 	// matching CSR, over the canonical transcript for this request.
-	transcript, err := buildOperatorCompletionTranscript("req-1", tokenHash("tok-1"), "inst-1", operatorFP, cliFP)
+	transcript, err := buildOperatorCompletionTranscript("req-1", submitted.TokenHash, "inst-1", operatorFP, cliFP)
 	require.NoError(t, err)
 	digest := sha256.Sum256(transcript)
 	verify := func(proof string, pub *ecdsa.PublicKey) bool {

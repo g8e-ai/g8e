@@ -76,7 +76,7 @@ func generateGatewayOperatorCSRsAndKeys(t *testing.T) (operatorCSR string, opera
 // response. The caller provides the operator and CLI CSR material.
 func submitGatewayOriginEnrollment(t *testing.T, env *platformEnrollmentTestEnv, operatorCSR, cliCSR string) *models.PlatformEnrollmentCreateResponse {
 	t.Helper()
-	resp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	resp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
 		InstanceID:        "operator-" + gatewayHostname,
 		Hostname:          gatewayHostname,
@@ -108,7 +108,8 @@ func TestPlatformEnrollment_CreateRequest_AcceptsGatewayOriginCSR(t *testing.T) 
 	resp := submitGatewayOriginEnrollment(t, env, operatorCSR, cliCSR)
 
 	assert.NotEmpty(t, resp.RequestID, "gateway-origin enrollment must return a non-empty request ID")
-	assert.NotEmpty(t, resp.Token, "gateway-origin enrollment must return a non-empty token")
+	_, err := env.enrollSvc.GetStatus(context.Background(), platformEnrollmentTestToken(t, resp.RequestID))
+	assert.NoError(t, err, "requester-held token must resolve the created enrollment")
 	assert.Equal(t, models.PlatformOperatorName, resp.ComponentName,
 		"gateway-origin enrollment component name must be %s", models.PlatformOperatorName)
 
@@ -149,7 +150,7 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 		Operator: signCompletionTranscript(t, approved, operatorKey),
 		CLI:      signCompletionTranscript(t, approved, cliKey),
 	}
-	completionResp, err := env.enrollSvc.Complete(context.Background(), createResp.Token, proof)
+	completionResp, err := env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), proof)
 	require.NoError(t, err)
 	require.NotNil(t, completionResp.Operator)
 	assert.Contains(t, completionResp.Operator.OperatorCert, "BEGIN CERTIFICATE",

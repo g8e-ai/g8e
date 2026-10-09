@@ -36,9 +36,9 @@ const operatorLeaseIdentityQuery = `SELECT id, data, created_at, updated_at FROM
 // must replace. Both active and stale leases are replaced, so this lookup needs
 // no heartbeat reconciliation. Literal JSON paths use the identity index and
 // only matching rows are decoded. Liveness reads keep their existing owner.
-func (s *DocumentStoreService) FindOperatorLeases(ownerID, systemFingerprint string) ([]*models.Document, error) {
+func (s *DocumentStoreService) FindOperatorLeases(ctx context.Context, ownerID, systemFingerprint string) ([]*models.Document, error) {
 	collection := marshaler.CollectionName(constants.CollectionOperators)
-	docs, err := sqliteutil.MaterializeRows(context.Background(), s.db, operatorLeaseIdentityQuery,
+	docs, err := sqliteutil.MaterializeRows(ctx, s.db, operatorLeaseIdentityQuery,
 		[]interface{}{collection, ownerID, systemFingerprint, constants.OperatorTypeRemote, constants.OperatorStatusTerminated},
 		func(row *sql.Rows) (*models.Document, error) {
 			var id, data, createdAt, updatedAt string
@@ -85,10 +85,21 @@ func (s *PlatformEnrollmentService) createRequestRecord(ctx context.Context, req
 			if err := json.Unmarshal([]byte(stored), existing); err != nil {
 				return fmt.Errorf("decode existing enrollment: %w", err)
 			}
+			if !constantTimeEqual(existing.TokenHash, req.TokenHash) {
+				return constants.ErrPlatformEnrollmentTokenConflict
+			}
 			return nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("find existing enrollment: %w", err)
+		}
+		var tokenHashExists int
+		if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ?)`,
+			platformEnrollmentCollectionName(), req.TokenHash).Scan(&tokenHashExists); err != nil {
+			return fmt.Errorf("check enrollment token hash: %w", err)
+		}
+		if tokenHashExists != 0 {
+			return constants.ErrPlatformEnrollmentTokenConflict
 		}
 		var live int
 		if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM documents WHERE collection = ?

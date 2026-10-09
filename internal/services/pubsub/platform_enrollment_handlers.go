@@ -462,7 +462,7 @@ func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ctx context.Context,
 	if systemFingerprint == "" {
 		return nil
 	}
-	docs, err := h.deps.DocStore.FindOperatorLeases(ownerID, systemFingerprint)
+	docs, err := h.deps.DocStore.FindOperatorLeases(ctx, ownerID, systemFingerprint)
 	if err != nil {
 		return fmt.Errorf("query operators for fingerprint: %w", err)
 	}

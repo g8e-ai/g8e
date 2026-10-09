@@ -189,7 +189,7 @@ func TestFindOperatorLeases_IdentityScopeAndReadOnly(t *testing.T) {
 	rootSvc := NewStateRootService(store.db, store.logger)
 	before, err := rootSvc.GetCurrentStateRoot(t.Context())
 	require.NoError(t, err)
-	docs, err := store.FindOperatorLeases("owner", "fingerprint")
+	docs, err := store.FindOperatorLeases(t.Context(), "owner", "fingerprint")
 	require.NoError(t, err)
 	var ids []string
 	for _, doc := range docs {
@@ -289,7 +289,7 @@ func TestEnrollmentBatchDecisionGovernedReceipt(t *testing.T) {
 	req := models.PlatformEnrollmentBatchDecisionRequest{Decision: models.PlatformEnrollmentDecisionApprove, Reason: "fixed cohort"}
 	for i := 0; i < 2; i++ {
 		csr, _ := generateAppCSRAndKey(t)
-		created, err := env.enrollSvc.CreateRequest(t.Context(), models.PlatformEnrollmentCreateRequest{
+		created, err := createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), models.PlatformEnrollmentCreateRequest{
 			ComponentKind: models.PlatformComponentDashboard, InstanceID: fmt.Sprintf("batch-%d", i), Hostname: "batch.local",
 			App: &models.PlatformAppCSRPayload{CSRPEM: csr},
 		}, "https://gateway.local")

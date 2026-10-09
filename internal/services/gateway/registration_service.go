@@ -614,7 +614,7 @@ func (s *RegistrationService) BindOperators(ctx context.Context, req models.Bind
 
 		// 1. Update KV binding
 		// sessionBindOperators(operatorSessionId) -> webSessionId
-		if err := s.kvStore.KVSet(ctx,sessionOperatorBindKey(op.OperatorSessionId), req.WebSessionID, 0); err != nil {
+		if err := s.kvStore.KVSet(ctx, sessionOperatorBindKey(op.OperatorSessionId), req.WebSessionID, 0); err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
@@ -623,7 +623,7 @@ func (s *RegistrationService) BindOperators(ctx context.Context, req models.Bind
 		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
 		// We use a JSON array for the SET since our KV store is simple
 		webBindKey := sessionWebBindKey(req.WebSessionID)
-		raw, kvFound := s.kvStore.KVGet(ctx,webBindKey)
+		raw, kvFound := s.kvStore.KVGet(ctx, webBindKey)
 		var sessionIDs []string
 		if kvFound {
 			if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
@@ -645,7 +645,7 @@ func (s *RegistrationService) BindOperators(ctx context.Context, req models.Bind
 				lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToMarshalSessionIDs, err)
 				continue
 			}
-			if err := s.kvStore.KVSet(ctx,webBindKey, string(body), 0); err != nil {
+			if err := s.kvStore.KVSet(ctx, webBindKey, string(body), 0); err != nil {
 				failed = append(failed, opID)
 				lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToSetKVBinding, err)
 				continue
@@ -818,12 +818,12 @@ func (s *RegistrationService) UnbindOperators(ctx context.Context, req models.Un
 
 		// 1. Update KV binding
 		if op.OperatorSessionId != "" {
-			if err := s.kvStore.KVDelete(ctx,sessionOperatorBindKey(op.OperatorSessionId)); err != nil {
+			if err := s.kvStore.KVDelete(ctx, sessionOperatorBindKey(op.OperatorSessionId)); err != nil {
 				s.logger.Warn("[REGISTRATION] Failed to delete operator session binding", "error", err, "operator_session_id", op.OperatorSessionId)
 			}
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
-			raw, kvFound := s.kvStore.KVGet(ctx,webBindKey)
+			raw, kvFound := s.kvStore.KVGet(ctx, webBindKey)
 			if kvFound {
 				var sessionIDs []string
 				if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
@@ -837,7 +837,7 @@ func (s *RegistrationService) UnbindOperators(ctx context.Context, req models.Un
 					}
 				}
 				if len(newSessionIDs) == 0 {
-					if err := s.kvStore.KVDelete(ctx,webBindKey); err != nil {
+					if err := s.kvStore.KVDelete(ctx, webBindKey); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to delete web session binding", "error", err)
 					}
 				} else {
@@ -846,7 +846,7 @@ func (s *RegistrationService) UnbindOperators(ctx context.Context, req models.Un
 						s.logger.Warn("[REGISTRATION] Failed to marshal session IDs", "error", err)
 						continue
 					}
-					if err := s.kvStore.KVSet(ctx,webBindKey, string(body), 0); err != nil {
+					if err := s.kvStore.KVSet(ctx, webBindKey, string(body), 0); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to set session IDs", "error", err)
 					}
 				}

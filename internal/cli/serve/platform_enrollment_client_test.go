@@ -181,7 +181,7 @@ func TestCsrFingerprint_RejectsNonP256Key(t *testing.T) {
 // hash matches the gateway's: SHA-256 of the raw token, hex-encoded.
 func TestTokenHash_MatchesGatewayComputation(t *testing.T) {
 	token := "test-token-value-abc123"
-	clientHash := tokenHash(token)
+	clientHash := models.PlatformEnrollmentTokenHash(token)
 	digest := sha256.Sum256([]byte(token))
 	expectedHash := hex.EncodeToString(digest[:])
 	assert.Equal(t, expectedHash, clientHash)
@@ -342,7 +342,6 @@ func (mg *mockGateway) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := models.PlatformEnrollmentCreateResponse{
 		RequestID:     mg.requestID,
-		Token:         mg.token,
 		ComponentKind: models.PlatformComponentOperator,
 		ComponentName: models.PlatformOperatorName,
 		Fingerprints: models.PlatformEnrollmentCSRFingerprints{
@@ -363,7 +362,7 @@ func (mg *mockGateway) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := r.URL.Query().Get("token")
-	if token != mg.token {
+	if token == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -401,7 +400,7 @@ func (mg *mockGateway) handleComplete(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if req.Token != mg.token {
+	if req.Token == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}

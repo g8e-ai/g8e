@@ -46,6 +46,46 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
+var platformEnrollmentTestTokens sync.Map       // request ID -> requester token
+var platformEnrollmentTestTokensByHash sync.Map // token hash -> requester token
+
+func newPlatformEnrollmentTestToken(t *testing.T) (string, string) {
+	t.Helper()
+	token, err := models.NewPlatformEnrollmentToken()
+	require.NoError(t, err)
+	return token, models.PlatformEnrollmentTokenHash(token)
+}
+
+func createPlatformEnrollmentRequest(t *testing.T, service *PlatformEnrollmentService, ctx context.Context, req models.PlatformEnrollmentCreateRequest, approvalURLBase string) (*models.PlatformEnrollmentCreateResponse, error) {
+	t.Helper()
+	token := ""
+	if req.TokenHash == "" {
+		token, req.TokenHash = newPlatformEnrollmentTestToken(t)
+		platformEnrollmentTestTokensByHash.Store(req.TokenHash, token)
+	} else if value, ok := platformEnrollmentTestTokensByHash.Load(req.TokenHash); ok {
+		token, _ = value.(string)
+	}
+	response, err := service.CreateRequest(ctx, req, approvalURLBase)
+	if err == nil && token != "" {
+		rememberPlatformEnrollmentTestToken(response.RequestID, token)
+	}
+	return response, err
+}
+
+func platformEnrollmentTestToken(t *testing.T, requestID string) string {
+	t.Helper()
+	value, ok := platformEnrollmentTestTokens.Load(requestID)
+	require.True(t, ok, "test requester token must be available for request %s", requestID)
+	token, ok := value.(string)
+	require.True(t, ok)
+	return token
+}
+
+func rememberPlatformEnrollmentTestToken(requestID, token string) {
+	platformEnrollmentTestTokens.Store(requestID, token)
+	platformEnrollmentTestTokensByHash.Store(models.PlatformEnrollmentTokenHash(token), token)
+}
+
 // platformEnrollmentTestEnv bundles the services needed by the enrollment
 // service integration tests. The env is constructed once per test and cleaned
 // up via t.Cleanup registered by newTestGatewayService and the fixture helper.
@@ -155,10 +195,10 @@ func createAndApproveRequestWithFingerprint(t *testing.T, env *platformEnrollmen
 		}
 	}
 
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 	require.NotEmpty(t, createResp.RequestID)
-	require.NotEmpty(t, createResp.Token)
+	require.NotEmpty(t, platformEnrollmentTestToken(t, createResp.RequestID))
 
 	_, err = env.enrollSvc.Decide(context.Background(), env.ownerID, models.PlatformEnrollmentDecisionRequest{
 		RequestID: createResp.RequestID,
@@ -171,7 +211,7 @@ func createAndApproveRequestWithFingerprint(t *testing.T, env *platformEnrollmen
 	require.NotNil(t, stored)
 	require.Equal(t, models.PlatformEnrollmentStateApproved, stored.State)
 
-	return createResp.RequestID, createResp.Token, stored
+	return createResp.RequestID, platformEnrollmentTestToken(t, createResp.RequestID), stored
 }
 
 // loadStoredRequest loads a platform enrollment request from the doc store by ID.
@@ -208,7 +248,7 @@ func TestPlatformEnrollmentService_RejectsRequestBeforeBootstrap(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, false)
 
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -225,7 +265,7 @@ func TestPlatformEnrollmentService_BootstrapEnablesRequestCreation(t *testing.T)
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	resp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	resp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -233,7 +273,7 @@ func TestPlatformEnrollmentService_BootstrapEnablesRequestCreation(t *testing.T)
 	}, "https://gateway.local/console")
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.RequestID)
-	assert.NotEmpty(t, resp.Token)
+	assert.NotEmpty(t, platformEnrollmentTestToken(t, resp.RequestID))
 	assert.Equal(t, "g8ed", resp.ComponentName)
 	assert.NotEmpty(t, resp.ApprovalURL)
 	assert.Contains(t, resp.ApprovalURL, resp.RequestID)
@@ -260,7 +300,7 @@ func TestPlatformEnrollmentService_NonOwnerDecisionFailsClosed(t *testing.T) {
 	require.NotEqual(t, env.ownerID, secondUser.ID)
 
 	csr, _ := generateAppCSRAndKey(t)
-	resp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	resp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -285,7 +325,7 @@ func TestPlatformEnrollmentService_EmptyActorDecisionFailsClosed(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	resp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	resp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -831,7 +871,7 @@ func TestPlatformEnrollmentService_DenialPreventsIssuance(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, key := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -849,7 +889,7 @@ func TestPlatformEnrollmentService_DenialPreventsIssuance(t *testing.T) {
 	stored := loadStoredRequest(t, env, createResp.RequestID)
 	assert.Equal(t, models.PlatformEnrollmentStateDenied, stored.State)
 
-	_, err = env.enrollSvc.Complete(context.Background(), createResp.Token, models.PlatformEnrollmentProofs{
+	_, err = env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), models.PlatformEnrollmentProofs{
 		App: signCompletionTranscript(t, stored, key),
 	})
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestDenied)
@@ -861,7 +901,7 @@ func TestPlatformEnrollmentService_CompleteOnPendingFails(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -869,7 +909,7 @@ func TestPlatformEnrollmentService_CompleteOnPendingFails(t *testing.T) {
 	}, "https://gateway.local/console")
 	require.NoError(t, err)
 
-	_, err = env.enrollSvc.Complete(context.Background(), createResp.Token, models.PlatformEnrollmentProofs{})
+	_, err = env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), models.PlatformEnrollmentProofs{})
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentNotApproved)
 }
 
@@ -879,7 +919,7 @@ func TestPlatformEnrollmentService_AlreadyDecidedFails(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -963,16 +1003,17 @@ func TestPlatformEnrollmentService_DeduplicatesLiveRequest(t *testing.T) {
 		Hostname:      "dashboard.local",
 		App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
 	}
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
+	req.TokenHash = tokenHash
+	platformEnrollmentTestTokensByHash.Store(req.TokenHash, token)
 
-	first, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	first, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
-	require.NotEmpty(t, first.Token)
 
 	// Same CSR, same instance ID: dedup returns the same request ID with no token.
-	second, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	second, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 	assert.Equal(t, first.RequestID, second.RequestID)
-	assert.Empty(t, second.Token, "deduplicated response must not return the token")
 }
 
 // TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval proves that
@@ -991,7 +1032,7 @@ func TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval(t *testing
 				CLICSRPEM:      cliCSR,
 			},
 		}
-		response, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+		response, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 		require.NoError(t, err, "role %s must be able to await owner approval", role)
 		require.NotEmpty(t, response.RequestID)
 	}
@@ -1010,7 +1051,7 @@ func TestPlatformEnrollmentService_FullPlatformOperatorsAwaitApproval(t *testing
 		require.NoError(t, err, "request %d is within the Operator quota", i)
 	}
 	operatorCSR, _, cliCSR, _ := generateOperatorCSRsAndKeys(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
 		InstanceID:        "operator-overflow",
 		Hostname:          "operator.local",
@@ -1032,7 +1073,7 @@ func TestPlatformEnrollmentService_QuotaExceeded(t *testing.T) {
 	// (so dedup does not collapse them).
 	for i := 0; i < constants.PlatformEnrollmentMaxLiveRequestsPerComponent; i++ {
 		csr, _ := generateAppCSRAndKey(t)
-		_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+		_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 			ComponentKind: models.PlatformComponentDashboard,
 			InstanceID:    fmt.Sprintf("dashboard-%d", i),
 			Hostname:      "dashboard.local",
@@ -1043,7 +1084,7 @@ func TestPlatformEnrollmentService_QuotaExceeded(t *testing.T) {
 
 	// The next request exceeds the quota.
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-overflow",
 		Hostname:      "dashboard.local",
@@ -1063,7 +1104,7 @@ func TestPlatformEnrollmentService_ConcurrentApproveDeny(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1295,7 +1336,7 @@ func TestPlatformEnrollmentService_GetStatusReturnsRequesterVisibleState(t *test
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1303,7 +1344,7 @@ func TestPlatformEnrollmentService_GetStatusReturnsRequesterVisibleState(t *test
 	}, "https://gateway.local/console")
 	require.NoError(t, err)
 
-	status, err := env.enrollSvc.GetStatus(context.Background(), createResp.Token)
+	status, err := env.enrollSvc.GetStatus(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID))
 	require.NoError(t, err)
 	assert.Equal(t, createResp.RequestID, status.RequestID)
 	assert.Equal(t, models.PlatformComponentDashboard, status.ComponentKind)
@@ -1345,7 +1386,7 @@ func TestPlatformEnrollmentService_ListPendingReturnsOwnerVisibleMetadata(t *tes
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1373,7 +1414,7 @@ func TestPlatformEnrollmentService_ListPendingExcludesTerminal(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1401,7 +1442,7 @@ func TestPlatformEnrollmentService_ListEnrolledReturnsCompletedAndRevoked(t *tes
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	pendingCSR, _ := generateAppCSRAndKey(t)
-	pendingResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	pendingResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-pending",
 		Hostname:      "dashboard-pending.local",
@@ -1450,7 +1491,7 @@ func TestPlatformEnrollmentService_CleanupRemovesTerminalRequestsPastRetention(t
 
 	// Create and deny a request.
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1579,7 +1620,7 @@ func TestPlatformEnrollmentService_TokenHashStoredNotRawToken(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1589,8 +1630,8 @@ func TestPlatformEnrollmentService_TokenHashStoredNotRawToken(t *testing.T) {
 
 	stored := loadStoredRequest(t, env, createResp.RequestID)
 	assert.NotEmpty(t, stored.TokenHash, "token hash must be stored")
-	assert.NotEqual(t, createResp.Token, stored.TokenHash, "raw token must not be stored")
-	expectedHash := platformEnrollmentTokenHash(createResp.Token)
+	assert.NotEqual(t, platformEnrollmentTestToken(t, createResp.RequestID), stored.TokenHash, "raw token must not be stored")
+	expectedHash := models.PlatformEnrollmentTokenHash(platformEnrollmentTestToken(t, createResp.RequestID))
 	assert.Equal(t, expectedHash, stored.TokenHash, "stored hash must match SHA-256 of token")
 }
 
@@ -1600,7 +1641,7 @@ func TestPlatformEnrollmentService_PendingListExcludesTokenHash(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1631,7 +1672,7 @@ func TestPlatformEnrollmentService_ApprovalURLContainsRequestID(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1640,7 +1681,7 @@ func TestPlatformEnrollmentService_ApprovalURLContainsRequestID(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, createResp.ApprovalURL, "#platform-enrollment="+createResp.RequestID)
-	assert.NotContains(t, createResp.ApprovalURL, createResp.Token)
+	assert.NotContains(t, createResp.ApprovalURL, platformEnrollmentTestToken(t, createResp.RequestID))
 }
 
 // TestPlatformEnrollmentService_EmptyApprovalURLBaseReturnsEmpty proves that
@@ -1649,7 +1690,7 @@ func TestPlatformEnrollmentService_EmptyApprovalURLBaseReturnsEmpty(t *testing.T
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1669,7 +1710,7 @@ func TestPlatformEnrollmentService_InvalidComponentKindFails(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: "unknown",
 		InstanceID:    "x-1",
 		Hostname:      "x.local",
@@ -1684,7 +1725,7 @@ func TestPlatformEnrollmentService_OperatorWithoutOperatorPayloadFails(t *testin
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
 		InstanceID:        "operator-1",
 		Hostname:          "operator.local",
@@ -1701,7 +1742,7 @@ func TestPlatformEnrollmentService_AppWithOperatorPayloadFails(t *testing.T) {
 
 	appCSR, _ := generateAppCSRAndKey(t)
 	opCSR, _, cliCSR, _ := generateOperatorCSRsAndKeys(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-1",
 		Hostname:      "dashboard.local",
@@ -1717,7 +1758,7 @@ func TestPlatformEnrollmentService_DuplicateOperatorKeysFails(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
 		InstanceID:        "operator-1",
 		Hostname:          "operator.local",
@@ -1736,7 +1777,7 @@ func TestPlatformEnrollmentService_InvalidInstanceIDFails(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	_, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "invalid instance with spaces",
 		Hostname:      "dashboard.local",

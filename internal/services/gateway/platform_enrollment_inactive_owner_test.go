@@ -43,7 +43,7 @@ func TestPlatformEnrollmentService_InactiveOwnerDecisionFailsClosed(t *testing.T
 
 	// Create a pending request.
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-inactive-1",
 		Hostname:      "dashboard.local",
@@ -95,7 +95,7 @@ func TestPlatformEnrollmentService_InactiveOwnerDistinctFromNonOwner(t *testing.
 
 	// Create a pending request.
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-inactive-2",
 		Hostname:      "dashboard.local",
@@ -137,7 +137,7 @@ func TestPlatformEnrollmentService_ReenabledOwnerCanDecide(t *testing.T) {
 
 	// Create a pending request.
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-inactive-3",
 		Hostname:      "dashboard.local",

@@ -556,7 +556,9 @@ func TestPlatformEnrollmentRouter_FullApproveFlowThroughHTTPS(t *testing.T) {
 	// Generate a dashboard CSR and create a request via the HTTPS router
 	// (RouteAuthNone — no auth needed).
 	csr, _ := generateAppCSRAndKey(t)
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
 	createBody, err := json.Marshal(models.PlatformEnrollmentCreateRequest{
+		TokenHash:     tokenHash,
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-router-1",
 		Hostname:      "dashboard-router.local",
@@ -574,7 +576,8 @@ func TestPlatformEnrollmentRouter_FullApproveFlowThroughHTTPS(t *testing.T) {
 	var createResp models.PlatformEnrollmentCreateResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &createResp))
 	require.NotEmpty(t, createResp.RequestID)
-	require.NotEmpty(t, createResp.Token)
+	rememberPlatformEnrollmentTestToken(createResp.RequestID, token)
+	assert.NotContains(t, rr.Body.String(), `"token"`, "create response must not return the requester token")
 
 	// List pending as the owner — the request must appear.
 	pendingReq := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentPending, nil)
@@ -589,7 +592,7 @@ func TestPlatformEnrollmentRouter_FullApproveFlowThroughHTTPS(t *testing.T) {
 	assert.Equal(t, createResp.RequestID, pendingResp.Requests[0].RequestID)
 	assert.Equal(t, models.PlatformComponentDashboard, pendingResp.Requests[0].ComponentKind)
 	// The pending list must never expose the requester token.
-	assert.NotContains(t, pendingRR.Body.String(), createResp.Token,
+	assert.NotContains(t, pendingRR.Body.String(), platformEnrollmentTestToken(t, createResp.RequestID),
 		"pending list must never expose the requester token")
 
 	// Approve the request as the owner via the decision endpoint.
@@ -630,7 +633,9 @@ func TestPlatformEnrollmentRouter_StatusNoStoreHeader(t *testing.T) {
 
 	// Create a request so we have a valid token to query status.
 	csr, _ := generateAppCSRAndKey(t)
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
 	createBody, _ := json.Marshal(models.PlatformEnrollmentCreateRequest{
+		TokenHash:     tokenHash,
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-nostore-1",
 		Hostname:      "dashboard-nostore.local",
@@ -643,9 +648,10 @@ func TestPlatformEnrollmentRouter_StatusNoStoreHeader(t *testing.T) {
 	require.Equal(t, http.StatusCreated, rr.Code)
 	var createResp models.PlatformEnrollmentCreateResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &createResp))
+	rememberPlatformEnrollmentTestToken(createResp.RequestID, token)
 
 	// Query status and verify the no-store header.
-	statusReq := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentStatus+"?token="+url.QueryEscape(createResp.Token), nil)
+	statusReq := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentStatus+"?token="+url.QueryEscape(platformEnrollmentTestToken(t, createResp.RequestID)), nil)
 	statusRR := httptest.NewRecorder()
 	env.httpsRouter.ServeHTTP(statusRR, statusReq)
 	require.Equal(t, http.StatusOK, statusRR.Code)
@@ -804,7 +810,7 @@ func TestPlatformEnrollmentRouter_RevokeAuthorizationAndRequestStates(t *testing
 	})
 
 	csr, _ := generateAppCSRAndKey(t)
-	pending, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	pending, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-revoke-pending",
 		Hostname:      "dashboard-revoke-pending.local",
@@ -819,7 +825,7 @@ func TestPlatformEnrollmentRouter_RevokeAuthorizationAndRequestStates(t *testing
 	})
 
 	deniedCSR, _ := generateAppCSRAndKey(t)
-	denied, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	denied, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-revoke-denied",
 		Hostname:      "dashboard-revoke-denied.local",
@@ -859,7 +865,7 @@ func TestPlatformEnrollmentRouter_BatchDecisionAuthorizationAndAtomicResult(t *t
 	batch := models.PlatformEnrollmentBatchDecisionRequest{Decision: models.PlatformEnrollmentDecisionApprove, Reason: "reviewed"}
 	for i := 0; i < 2; i++ {
 		csr, _ := generateAppCSRAndKey(t)
-		response, err := env.enrollSvc.CreateRequest(t.Context(), models.PlatformEnrollmentCreateRequest{
+		response, err := createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), models.PlatformEnrollmentCreateRequest{
 			ComponentKind: models.PlatformComponentDashboard, InstanceID: fmt.Sprintf("batch-%d", i), Hostname: "batch.local",
 			App: &models.PlatformAppCSRPayload{CSRPEM: csr},
 		}, "https://gateway.local")

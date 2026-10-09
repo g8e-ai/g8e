@@ -42,7 +42,7 @@ func TestPlatformEnrollmentExpiry_PendingRequestExpires(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-exp-1",
 		Hostname:      "dashboard.local",
@@ -54,7 +54,7 @@ func TestPlatformEnrollmentExpiry_PendingRequestExpires(t *testing.T) {
 	backdateExpiry(t, env, createResp.RequestID, time.Now().UTC().Add(-time.Hour))
 
 	// Status query must detect the expiry and return the expired error.
-	_, err = env.enrollSvc.GetStatus(context.Background(), createResp.Token)
+	_, err = env.enrollSvc.GetStatus(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID))
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestExpired)
 
 	// The request must be in the expired state.
@@ -62,7 +62,7 @@ func TestPlatformEnrollmentExpiry_PendingRequestExpires(t *testing.T) {
 	assert.Equal(t, models.PlatformEnrollmentStateExpired, stored.State)
 
 	// Completion is rejected.
-	_, err = env.enrollSvc.Complete(context.Background(), createResp.Token, models.PlatformEnrollmentProofs{})
+	_, err = env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), models.PlatformEnrollmentProofs{})
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestExpired)
 }
 
@@ -73,7 +73,7 @@ func TestPlatformEnrollmentExpiry_ApprovedRequestExpires(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, key := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-exp-2",
 		Hostname:      "dashboard.local",
@@ -92,7 +92,7 @@ func TestPlatformEnrollmentExpiry_ApprovedRequestExpires(t *testing.T) {
 	backdateExpiry(t, env, createResp.RequestID, time.Now().UTC().Add(-time.Hour))
 
 	// Completion must detect the expiry and return the expired error.
-	_, err = env.enrollSvc.Complete(context.Background(), createResp.Token, models.PlatformEnrollmentProofs{
+	_, err = env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), models.PlatformEnrollmentProofs{
 		App: signCompletionTranscript(t, loadStoredRequest(t, env, createResp.RequestID), key),
 	})
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestExpired)
@@ -110,7 +110,7 @@ func TestPlatformEnrollmentExpiry_ReplayedCompletionAfterExpiry(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, key := generateAppCSRAndKey(t)
-	createResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	createResp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-exp-3",
 		Hostname:      "dashboard.local",
@@ -133,11 +133,11 @@ func TestPlatformEnrollmentExpiry_ReplayedCompletionAfterExpiry(t *testing.T) {
 	proof := models.PlatformEnrollmentProofs{
 		App: signCompletionTranscript(t, stored, key),
 	}
-	_, err = env.enrollSvc.Complete(context.Background(), createResp.Token, proof)
+	_, err = env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), proof)
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestExpired)
 
 	// A second replay attempt is also rejected.
-	_, err = env.enrollSvc.Complete(context.Background(), createResp.Token, proof)
+	_, err = env.enrollSvc.Complete(context.Background(), platformEnrollmentTestToken(t, createResp.RequestID), proof)
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestExpired)
 }
 
@@ -148,7 +148,7 @@ func TestPlatformEnrollmentExpiry_ReplayedCompletionAfterExpiry(t *testing.T) {
 // TestPlatformEnrollmentSupersession_SecondLiveRequestForSameInstanceDeduped
 // proves that a second live request for the same component kind,
 // instance ID, and fingerprint set is deduplicated rather than creating
-// a supersession. The existing request is returned without a new token.
+// a supersession. Resubmission with the same requester token recovers it.
 func TestPlatformEnrollmentSupersession_SecondLiveRequestForSameInstanceDeduped(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
@@ -159,18 +159,19 @@ func TestPlatformEnrollmentSupersession_SecondLiveRequestForSameInstanceDeduped(
 		Hostname:      "dashboard.local",
 		App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
 	}
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
+	req.TokenHash = tokenHash
+	platformEnrollmentTestTokensByHash.Store(req.TokenHash, token)
 
-	first, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	first, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
-	require.NotEmpty(t, first.Token)
 
 	// A second request with the same component kind, instance ID, and
 	// fingerprint set is deduplicated (returns the same request ID,
-	// no new token).
-	second, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	// same token hash).
+	second, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 	assert.Equal(t, first.RequestID, second.RequestID)
-	assert.Empty(t, second.Token, "deduplicated response must not return a new token")
 }
 
 // TestPlatformEnrollmentSupersession_SecondLiveRequestWithDifferentKeysCreatesNewRequest
@@ -182,19 +183,18 @@ func TestPlatformEnrollmentSupersession_SecondLiveRequestWithDifferentKeysCreate
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr1, _ := generateAppCSRAndKey(t)
-	first, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	first, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-sup-2",
 		Hostname:      "dashboard.local",
 		App:           &models.PlatformAppCSRPayload{CSRPEM: csr1},
 	}, "https://gateway.local/console")
 	require.NoError(t, err)
-	require.NotEmpty(t, first.Token)
 
 	// A second request with a different CSR (different key) creates a
 	// new request rather than deduplicating.
 	csr2, _ := generateAppCSRAndKey(t)
-	second, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+	second, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
 		InstanceID:    "dashboard-sup-2",
 		Hostname:      "dashboard.local",
@@ -203,7 +203,6 @@ func TestPlatformEnrollmentSupersession_SecondLiveRequestWithDifferentKeysCreate
 	require.NoError(t, err)
 	assert.NotEqual(t, first.RequestID, second.RequestID,
 		"different key set must create a new request, not deduplicate")
-	assert.NotEmpty(t, second.Token, "new request must return a new token")
 
 	// Both requests are live and pending.
 	list, err := env.enrollSvc.ListPending(context.Background())
@@ -226,7 +225,7 @@ func TestPlatformEnrollmentSupersession_TerminalRequestAllowsNewRequestForSameIn
 		App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
 	}
 
-	first, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	first, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 
 	// Deny the first request.
@@ -238,11 +237,10 @@ func TestPlatformEnrollmentSupersession_TerminalRequestAllowsNewRequestForSameIn
 
 	// A new request with the same parameters can be created (the
 	// denied request is terminal and does not block).
-	second, err := env.enrollSvc.CreateRequest(context.Background(), req, "https://gateway.local/console")
+	second, err := createPlatformEnrollmentRequest(t, env.enrollSvc, context.Background(), req, "https://gateway.local/console")
 	require.NoError(t, err)
 	assert.NotEqual(t, first.RequestID, second.RequestID,
 		"new request after terminal denial must have a different request ID")
-	assert.NotEmpty(t, second.Token, "new request must return a new token")
 }
 
 // ============================================================================

@@ -19,10 +19,11 @@ implements the resumable nine-step platform enrollment sequence:
 1. Load and validate an installed identity (cert not expired, key matches,
    expected app SPIFFE SAN, trust chain present).
 2. Load a persisted pending enrollment attempt if no usable identity.
-3. If no resumable attempt exists, generate a P-256 key + CSR, submit a
-   platform enrollment request, and atomically persist the private key,
-   requester token, request ID, CSR fingerprint, and expiry with 0600
-   permissions.
+3. If no pending attempt exists, generate a P-256 key + CSR and requester
+   token, then atomically persist the private key, CSR, token, and fingerprint
+   with 0600 permissions before making a network request. Submit the CSR with
+   the token hash; if a prior create response was lost, resubmit the persisted
+   CSR and token hash. Persist the request ID and expiry after the response.
 4. Print the non-secret approval instructions (request ID, approval URL,
    fingerprints).
 5. Poll status with bounded exponential backoff, jitter, an overall deadline
@@ -61,6 +62,7 @@ import json
 import logging
 import os
 import random
+import secrets
 import socket
 import tempfile
 import time
@@ -380,15 +382,18 @@ class AppEnrollmentService:
         return bundle_pem
 
     async def _submit_enrollment_request(
-        self, client: httpx.AsyncClient, base_url: str, csr_pem: str
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        csr_pem: str,
+        token_hash: str,
+        pending_path: str,
     ) -> dict[str, Any]:
         """Submit a platform enrollment request to the gateway.
 
         POSTs the CSR and component metadata to the platform enrollment
-        request endpoint. The gateway returns the request ID, requester token,
-        component name, fingerprints, approval URL, and expiry. The raw token
-        is returned once and never persisted by the gateway; the client must
-        persist it atomically with the private key.
+        request endpoint. The client retains its raw token and sends only its
+        SHA-256 hash so a persisted attempt can safely recover after a lost response.
 
         Retries with bounded backoff until the gateway is bootstrapped. The
         gateway starts with zero users and returns 403 "platform enrollment
@@ -402,6 +407,7 @@ class AppEnrollmentService:
             "instance_id": self._instance_id,
             "hostname": self._hostname,
             "app": {"csr_pem": csr_pem},
+            "token_hash": token_hash,
         }
         logger.info(
             "AppEnrollmentService: submitting platform enrollment request for %s",
@@ -415,6 +421,12 @@ class AppEnrollmentService:
             if resp.is_success:
                 return data
             err_msg = data.get("error", f"HTTP {resp.status_code}")
+            if resp.status_code == 409:
+                self._remove_pending_state(pending_path)
+                raise ConfigurationError(
+                    "AppEnrollmentService: enrollment request is no longer recoverable; "
+                    "the next start will enroll fresh"
+                )
             # 403 "requires a bootstrapped gateway": the gateway is not yet
             # bootstrapped. Back off and retry until bootstrap.
             if resp.status_code == 403 and _REQUIRES_BOOTSTRAP_ERR in err_msg:
@@ -643,16 +655,11 @@ class AppEnrollmentService:
         # Step 2: Load persisted pending attempt if it exists.
         pending = self._load_unexpired_pending_state(pending_path)
 
-        if (
-            pending
-            and pending.get("token")
-            and pending.get("request_id")
-            and pending.get("fingerprint")
-        ):
-            attempt = self._resume_pending_attempt(pending)
-        else:
-            # Steps 3-4: Generate keys, submit a new request, print instructions.
-            attempt = await self._start_enrollment_attempt(base_url, pending_path)
+        if pending is None:
+            pending = self._create_pending_attempt(pending_path)
+        if not pending.get("request_id"):
+            pending = await self._submit_pending_attempt(base_url, pending_path, pending)
+        attempt = self._resume_pending_attempt(pending)
 
         # Step 5: Poll status until approved.
         if pending and pending.get("expires_at"):
@@ -739,17 +746,34 @@ class AppEnrollmentService:
         )
         return attempt
 
-    async def _start_enrollment_attempt(
-        self, base_url: str, pending_path: str
-    ) -> _EnrollmentAttempt:
-        """Generate keys, submit a new enrollment request, and persist pending state."""
-        # Step 3: Generate keys and submit a new request.
-        csr_pem, key_pem, private_key = self._generate_csr()
-        fingerprint = self._csr_fingerprint(csr_pem)
+    def _create_pending_attempt(self, pending_path: str) -> dict[str, Any]:
+        """Persist key, CSR, and recovery token before making a network request."""
+        csr_pem, key_pem, _private_key = self._generate_csr()
+        pending = {
+            "request_id": "",
+            "expires_at": "",
+            "token": secrets.token_urlsafe(32),
+            "csr_pem": csr_pem,
+            "key_pem": key_pem,
+            "fingerprint": self._csr_fingerprint(csr_pem),
+            "instance_id": self._instance_id,
+        }
+        self._persist_pending_state(pending_path, pending)
+        return pending
 
+    async def _submit_pending_attempt(
+        self, base_url: str, pending_path: str, pending: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Submit the persisted CSR and persist returned request metadata."""
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
             try:
-                create_resp = await self._submit_enrollment_request(client, base_url, csr_pem)
+                create_resp = await self._submit_enrollment_request(
+                    client,
+                    base_url,
+                    pending["csr_pem"],
+                    self._token_hash(pending["token"]),
+                    pending_path,
+                )
             except ConfigurationError:
                 raise
             except Exception as exc:
@@ -759,51 +783,19 @@ class AppEnrollmentService:
                 ) from exc
 
         request_id = create_resp["request_id"]
-        token = create_resp.get("token", "")
-        approval_url = create_resp.get("approval_url", "")
-        expires_at = create_resp.get("expires_at", "")
+        pending["request_id"] = request_id
+        pending["expires_at"] = create_resp.get("expires_at", "")
+        self._persist_pending_state(pending_path, pending)
 
-        # If the response has no token, the request was deduplicated
-        # (the requester must resume with the original token). Since
-        # we have no pending state, we cannot resume. This is an error.
-        if not token:
-            raise ConfigurationError(
-                "AppEnrollmentService: gateway returned a deduplicated response with no token; "
-                f"a pending state file is required to resume. Request ID: {request_id}"
-            )
-
-        # Persist the pending state atomically with 0600 permissions.
-        self._persist_pending_state(
-            pending_path,
-            {
-                "request_id": request_id,
-                "token": token,
-                "fingerprint": fingerprint,
-                "key_pem": key_pem,
-                "expires_at": expires_at,
-                "instance_id": self._instance_id,
-            },
-        )
-
-        # Step 4: Print the non-secret approval instructions.
         logger.info(
-            "AppEnrollmentService: enrollment request submitted. Request ID: %s",
-            request_id,
+            "AppEnrollmentService: enrollment request submitted. Request ID: %s", request_id
         )
-        logger.info("AppEnrollmentService: CSR fingerprint: %s", fingerprint)
+        logger.info("AppEnrollmentService: CSR fingerprint: %s", pending["fingerprint"])
+        approval_url = create_resp.get("approval_url", "")
         if approval_url:
             logger.info("AppEnrollmentService: Approval URL: %s", approval_url)
-        logger.info(
-            "AppEnrollmentService: Approve with: g8e auth enroll approve %s",
-            request_id,
-        )
-        return _EnrollmentAttempt(
-            token=token,
-            request_id=request_id,
-            fingerprint=fingerprint,
-            key_pem=key_pem,
-            private_key=private_key,
-        )
+        logger.info("AppEnrollmentService: Approve with: g8e auth enroll approve %s", request_id)
+        return pending
 
     async def _complete_enrollment_attempt(
         self, base_url: str, attempt: _EnrollmentAttempt, deadline: datetime

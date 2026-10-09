@@ -10,7 +10,6 @@ package gateway
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/x509"
@@ -98,19 +97,6 @@ func parsePlatformEnrollmentCSR(csrPEM string) (string, *ecdsa.PublicKey, error)
 	}
 	digest := sha256.Sum256(publicDER)
 	return hex.EncodeToString(digest[:]), publicKey, nil
-}
-
-func newPlatformEnrollmentToken() (string, error) {
-	value := make([]byte, constants.PlatformEnrollmentTokenBytes)
-	if _, err := rand.Read(value); err != nil {
-		return "", fmt.Errorf("platform enrollment: generate token: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(value), nil
-}
-
-func platformEnrollmentTokenHash(token string) string {
-	digest := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(digest[:])
 }
 
 func platformEnrollmentCompletionTranscript(request *models.PlatformEnrollmentRequest) ([]byte, error) {

@@ -27,7 +27,7 @@ type PlatformEnrollmentDocStore interface {
 	DecidePlatformEnrollments(context.Context, string, models.PlatformEnrollmentBatchDecisionRequest, string) error
 	DocSet(ctx context.Context, collection, id string, data json.RawMessage) error
 	DocGet(ctx context.Context, collection, id string) (*models.Document, error)
-	FindOperatorLeases(ownerID, systemFingerprint string) ([]*models.Document, error)
+	FindOperatorLeases(ctx context.Context, ownerID, systemFingerprint string) ([]*models.Document, error)
 	DocConditionalUpdate(ctx context.Context, collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error)
 	DocUpdate(ctx context.Context, collection, id string, data json.RawMessage) (*models.Document, error)
 	DocDelete(ctx context.Context, collection, id string) error

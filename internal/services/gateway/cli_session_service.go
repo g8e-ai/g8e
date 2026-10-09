@@ -60,7 +60,7 @@ func (s *CLISessionService) PersistCLISession(ctx context.Context, cliSessionID,
 		return fmt.Errorf("failed to marshal CLI session: %w", err)
 	}
 
-	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),cliSessionID, cliSessionBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
 		s.logger.Error("Failed to persist CLI session", string(constants.ConnectionStateError), err)
 		return fmt.Errorf("failed to persist CLI session: %w", err)
 	}
@@ -108,7 +108,7 @@ func (s *CLISessionService) DeactivateCLISession(ctx context.Context, sessionID 
 	}
 
 	// Read first to distinguish not-found from already-deactivated.
-	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),sessionID)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
 	if err != nil {
 		return fmt.Errorf("deactivate CLI session: load: %w", err)
 	}
@@ -170,7 +170,7 @@ func (s *CLISessionService) ListUserCLISessions(ctx context.Context, userID stri
 	if userID == "" {
 		return nil, fmt.Errorf("list user CLI sessions: %w", constants.ErrRegistrationUserIDRequired)
 	}
-	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionCLISessions),[]models.DocFilter{
+	docs, err := s.db.DocQuery(ctx, marshaler.CollectionName(constants.CollectionCLISessions), []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}, "", 0)
 	if err != nil {
@@ -257,7 +257,7 @@ func (s *CLISessionService) ReplaceCLISession(ctx context.Context, oldSessionID,
 	}
 
 	// 1. Verify the old session exists and is still active.
-	oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),oldSessionID)
+	oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("replace CLI session: load old: %w", err)
 	}
@@ -295,7 +295,7 @@ func (s *CLISessionService) ReplaceCLISession(ctx context.Context, oldSessionID,
 	if err != nil {
 		return nil, fmt.Errorf("replace CLI session: marshal new: %w", err)
 	}
-	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID, createdBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
 		return nil, fmt.Errorf("replace CLI session: persist new: %w", err)
 	}
 
@@ -316,7 +316,7 @@ func (s *CLISessionService) ReplaceCLISession(ctx context.Context, oldSessionID,
 		// The new session was persisted but we could not deactivate the old
 		// one due to a store error. Clean up the orphaned new session so we
 		// do not leave an active session with no matching deactivated old one.
-		if delErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID); delErr != nil {
+		if delErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after deactivate error",
 				"error", delErr,
 				"new_session_id_prefix", safeTruncateID(newSessionID),
@@ -328,7 +328,7 @@ func (s *CLISessionService) ReplaceCLISession(ctx context.Context, oldSessionID,
 		// A concurrent caller already deactivated the old session. Delete the
 		// orphaned new session we just wrote so an active session document is
 		// not left in the collection with no corresponding deactivated old one.
-		if delErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID); delErr != nil {
+		if delErr := s.db.DocDelete(ctx, marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after race loss",
 				"error", delErr,
 				"new_session_id_prefix", safeTruncateID(newSessionID),
@@ -351,7 +351,7 @@ func (s *CLISessionService) ReplaceCLISession(ctx context.Context, oldSessionID,
 
 // loadCLISession fetches a CLI session by ID and returns typed errors.
 func (s *CLISessionService) loadCLISession(ctx context.Context, sessionID string) (*models.CLISession, error) {
-	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),sessionID)
+	doc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("load CLI session: %w", err)
 	}
@@ -396,7 +396,7 @@ func (s *CLISessionService) RefreshCLISession(ctx context.Context, oldSessionID,
 		return nil, err
 	}
 	if oldSessionID != "" {
-		oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),oldSessionID)
+		oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("refresh CLI session: load old: %w", err)
 		}
@@ -448,7 +448,7 @@ func (s *CLISessionService) RefreshCLISession(ctx context.Context, oldSessionID,
 	if err != nil {
 		return nil, fmt.Errorf("refresh CLI session: marshal new: %w", err)
 	}
-	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID, createdBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
 		return nil, fmt.Errorf("refresh CLI session: persist new: %w", err)
 	}
 
@@ -477,7 +477,7 @@ func (s *CLISessionService) UnbindCLISession(ctx context.Context, oldSessionID, 
 	}
 
 	if oldSessionID != "" {
-		oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),oldSessionID)
+		oldDoc, err := s.db.DocGet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("unbind CLI session: load old: %w", err)
 		}
@@ -525,7 +525,7 @@ func (s *CLISessionService) UnbindCLISession(ctx context.Context, oldSessionID, 
 	if err != nil {
 		return nil, fmt.Errorf("unbind CLI session: marshal new: %w", err)
 	}
-	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions),newSessionID, createdBytes); err != nil {
+	if err := s.db.DocSet(ctx, marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
 		return nil, fmt.Errorf("unbind CLI session: persist new: %w", err)
 	}
 

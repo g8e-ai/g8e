@@ -562,6 +562,7 @@ var (
 	ErrPlatformEnrollmentRequestIDRequired    = errors.New("platform enrollment request_id is required")
 	ErrPlatformEnrollmentTokenRequired        = errors.New("platform enrollment token is required")
 	ErrPlatformEnrollmentInvalidToken         = errors.New("invalid platform enrollment token")
+	ErrPlatformEnrollmentTokenConflict        = errors.New("platform enrollment token does not match the existing request")
 	ErrPlatformEnrollmentRequestNotFound      = errors.New("platform enrollment request not found")
 	ErrPlatformEnrollmentRequestExpired       = errors.New("platform enrollment request has expired")
 	ErrPlatformEnrollmentRequestDenied        = errors.New("platform enrollment request was denied")

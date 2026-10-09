@@ -107,7 +107,7 @@ Applications initiate enrollment by discovering the Gateway's root CA and verify
 The ensemble, applications, and remote Operator use owner-approved enrollment after the Gateway has an owner:
 
 1. **CSR Generation**: The application generates an ECDSA P-256 private key locally and creates a certificate signing request (CSR) containing the public key.
-2. **Request Submission**: The application submits the CSR and public-key fingerprint to `POST /api/v1/auth/platform-enrollments/request` over the plain HTTP discovery surface (no client certificate required). The Gateway returns an opaque token-scoped requester token that expires after 30 minutes.
+2. **Request Submission**: Before the request leaves the host, the application generates and persists an opaque requester token with its private key and CSR. It submits the CSR, public-key fingerprint, and lowercase SHA-256 `token_hash` to `POST /api/v1/auth/platform-enrollments/request` over the plain HTTP discovery surface (no client certificate required). The Gateway stores the hash and returns no token. Resubmitting the same CSR and hash recovers the same live request after a lost response; a different token for the same CSR set or a reused hash returns HTTP `409`. The token scopes status and completion and expires with the request after 30 minutes.
 3. **Request Review**: An enrolled owner views pending requests via `g8e auth enroll pending` or the console Approvals page.
 4. **Approval or Denial**: The owner approves with `g8e auth enroll approve <request-id> --yes` or denies with `g8e auth enroll deny <request-id> --yes`. Approval initiates a Gateway-side policy record and sends a 202 response indicating readiness for proof-of-possession.
 5. **Proof of Possession**: After approval, the application proves possession of the private key by submitting it in a request to `POST /api/v1/auth/platform-enrollments/complete` over mTLS, including a signed proof. A retry after successful completion returns the same issued identity (idempotent).
@@ -140,7 +140,7 @@ CLI certificates and sessions have 7-day validity. Refresh (`g8e auth refresh`) 
 - **Skipping trust verification on first contact**: Fetching and installing the CA bundle without fingerprint validation allows MITM substitution; always verify out-of-band on untrusted networks.
 - **Enrolling without resumable state**: Applications MUST persist enrollment requests to disk; in-memory-only state cannot survive restart and causes re-submission attempts.
 - **Trusting caller-supplied identity in enrollment reviews**: Gateway ownership and policy decisions MUST derive from persistent enrollment records, not from request headers or caller identity fields.
-- **Treating enrollment tokens as persistent**: Enrollment tokens expire after 30 minutes and MUST NOT be cached across sessions or assumed to survive request retries without re-fetching.
+- **Sending enrollment tokens during creation**: The create request carries only the lowercase SHA-256 token hash. The requester MUST persist the raw token locally before submission and reuse it to recover the same request after a lost response.
 - **Bypassing validation of issued certificates**: Applications MUST validate SPIFFE SANs, key correspondence, issuer chain, and component kind before installing enrolled credentials.
 
 ## Links out

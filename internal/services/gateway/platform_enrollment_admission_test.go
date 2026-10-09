@@ -80,7 +80,7 @@ func TestPlatformEnrollmentService_CanceledCreateReleasesOnlyPendingReservation(
 				ComponentKind: models.PlatformComponentDashboard, InstanceID: "dashboard-canceled-create", Hostname: "dashboard.local",
 				App: &models.PlatformAppCSRPayload{CSRPEM: csr},
 			}
-			resp, err := env.enrollSvc.CreateRequest(ctx, req, "https://localhost")
+			resp, err := createPlatformEnrollmentRequest(t, env.enrollSvc, ctx, req, "https://localhost")
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, resp)
 			var count int
@@ -90,12 +90,94 @@ func TestPlatformEnrollmentService_CanceledCreateReleasesOnlyPendingReservation(
 			} else {
 				require.Zero(t, count, "undelivered pending request must not consume quota")
 				env.enrollSvc.envProc = original
-				resp, err = env.enrollSvc.CreateRequest(t.Context(), req, "https://localhost")
+				resp, err = createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
 				require.NoError(t, err)
-				require.NotEmpty(t, resp.Token, "retry must receive a usable token")
+				_, err = env.enrollSvc.GetStatus(t.Context(), platformEnrollmentTestToken(t, resp.RequestID))
+				require.NoError(t, err, "requester-held token must remain usable after resubmission")
 			}
 		})
 	}
+}
+
+func TestPlatformEnrollmentService_CreateResubmissionRecoversSameRequest(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	csr, key := generateAppCSRAndKey(t)
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
+	platformEnrollmentTestTokensByHash.Store(tokenHash, token)
+	req := models.PlatformEnrollmentCreateRequest{
+		TokenHash: tokenHash, ComponentKind: models.PlatformComponentDashboard,
+		InstanceID: "dashboard-create-recovery", Hostname: "dashboard.local",
+		App: &models.PlatformAppCSRPayload{CSRPEM: csr},
+	}
+	first, err := createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
+	require.NoError(t, err)
+	second, err := createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
+	require.NoError(t, err)
+	assert.Equal(t, first.RequestID, second.RequestID)
+	var count int
+	require.NoError(t, env.enrollSvc.db.db.QueryRowContext(t.Context(), `SELECT count(*) FROM documents WHERE collection = ?`, platformEnrollmentCollectionName()).Scan(&count))
+	assert.Equal(t, 1, count)
+	_, err = env.enrollSvc.GetStatus(t.Context(), token)
+	require.NoError(t, err)
+	_, err = env.enrollSvc.Decide(t.Context(), env.ownerID, models.PlatformEnrollmentDecisionRequest{
+		RequestID: first.RequestID, Decision: models.PlatformEnrollmentDecisionApprove,
+	})
+	require.NoError(t, err)
+	stored := loadStoredRequest(t, env, first.RequestID)
+	completed, err := env.enrollSvc.Complete(t.Context(), token, models.PlatformEnrollmentProofs{
+		App: signCompletionTranscript(t, stored, key),
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, completed.App.AppCert)
+}
+
+func TestPlatformEnrollmentService_CreateRejectsReplayedCSRsWithDifferentToken(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	csr, _ := generateAppCSRAndKey(t)
+	firstToken, firstHash := newPlatformEnrollmentTestToken(t)
+	platformEnrollmentTestTokensByHash.Store(firstHash, firstToken)
+	secondToken, secondHash := newPlatformEnrollmentTestToken(t)
+	platformEnrollmentTestTokensByHash.Store(secondHash, secondToken)
+	req := models.PlatformEnrollmentCreateRequest{
+		TokenHash: firstHash, ComponentKind: models.PlatformComponentDashboard,
+		InstanceID: "dashboard-token-conflict", Hostname: "dashboard.local",
+		App: &models.PlatformAppCSRPayload{CSRPEM: csr},
+	}
+	_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
+	require.NoError(t, err)
+	req.TokenHash = secondHash
+	_, err = createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
+	require.ErrorIs(t, err, constants.ErrPlatformEnrollmentTokenConflict)
+	var count int
+	require.NoError(t, env.enrollSvc.db.db.QueryRowContext(t.Context(), `SELECT count(*) FROM documents WHERE collection = ?`, platformEnrollmentCollectionName()).Scan(&count))
+	assert.Equal(t, 1, count)
+}
+
+func TestPlatformEnrollmentService_CreateRejectsReusedTokenHash(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	token, tokenHash := newPlatformEnrollmentTestToken(t)
+	platformEnrollmentTestTokensByHash.Store(tokenHash, token)
+	csr, _ := generateAppCSRAndKey(t)
+	req := models.PlatformEnrollmentCreateRequest{
+		TokenHash: tokenHash, ComponentKind: models.PlatformComponentDashboard,
+		InstanceID: "dashboard-token-reuse", Hostname: "dashboard.local",
+		App: &models.PlatformAppCSRPayload{CSRPEM: csr},
+	}
+	created, err := createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
+	require.NoError(t, err)
+	differentCSR, _ := generateAppCSRAndKey(t)
+	reused := req
+	reused.InstanceID = "dashboard-token-reuse-other"
+	reused.App = &models.PlatformAppCSRPayload{CSRPEM: differentCSR}
+	_, err = createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), reused, "https://localhost")
+	require.ErrorIs(t, err, constants.ErrPlatformEnrollmentTokenConflict)
+	_, err = env.enrollSvc.Decide(t.Context(), env.ownerID, models.PlatformEnrollmentDecisionRequest{
+		RequestID: created.RequestID, Decision: models.PlatformEnrollmentDecisionDeny,
+	})
+	require.NoError(t, err)
+	_, err = createPlatformEnrollmentRequest(t, env.enrollSvc, t.Context(), req, "https://localhost")
+	require.ErrorIs(t, err, constants.ErrPlatformEnrollmentTokenConflict,
+		"denied request token hash must not be reassigned")
 }
 
 func TestPlatformEnrollmentService_DisconnectDuringIssuanceStillCompletes(t *testing.T) {
@@ -130,7 +212,7 @@ func TestPlatformEnrollmentService_CreateCancellationInterruptsBootstrapRead(t *
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := env.enrollSvc.CreateRequest(ctx, models.PlatformEnrollmentCreateRequest{
+		_, err := createPlatformEnrollmentRequest(t, env.enrollSvc, ctx, models.PlatformEnrollmentCreateRequest{
 			ComponentKind: models.PlatformComponentDashboard,
 			InstanceID:    "dashboard-blocked-bootstrap",
 			Hostname:      "dashboard.local",
