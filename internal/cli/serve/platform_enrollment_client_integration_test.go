@@ -45,6 +45,7 @@ func newMockGateway(t *testing.T) *mockGateway {
 	mg.trustBundlePEM = generateSelfSignedCertPEM(t, "g8e-ca-test")
 
 	mux := http.NewServeMux()
+	registerBootstrappedStatus(mux)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, mg.handleRequest)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, mg.handleStatus)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, mg.handleComplete)
@@ -232,6 +233,7 @@ func TestOperatorEnroll_DenialFailsClosed(t *testing.T) {
 	close(mg.approveCh) // prevent approval
 	mg.t = t
 	mux := http.NewServeMux()
+	registerBootstrappedStatus(mux)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, mg.handleRequest)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, func(w http.ResponseWriter, r *http.Request) {
 		resp := models.PlatformEnrollmentStatusResponse{
@@ -268,4 +270,13 @@ func TestOperatorEnroll_DenialFailsClosed(t *testing.T) {
 	exists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirPendingEnroll, constants.PendingEnrollmentFileOperator))
 	require.NoError(t, err)
 	assert.True(t, exists, "pending state should remain after denial so restart doesn't silently generate new keys")
+}
+
+// registerBootstrappedStatus serves a gateway that already has an owner, so
+// enrollment proceeds straight to request submission.
+func registerBootstrappedStatus(mux *http.ServeMux) {
+	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(models.BootstrapStatusResponse{Bootstrapped: true})
+	})
 }

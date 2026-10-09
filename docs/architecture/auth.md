@@ -283,7 +283,7 @@ L1, L4, and L5 apply universally. L2 Consensus and L3 Notary are enforced or aud
 | --- | --- | --- | --- |
 | `/api/v1/health` | GET | Gateway health check | `RouteAuthNone` |
 | `/api/v1/auth/bootstrap` | POST | First-user bootstrap and owner CLI enrollment | `RouteAuthNone` |
-| `/api/v1/auth/bootstrap/status` | GET | Check if gateway has been bootstrapped | `RouteAuthNone` |
+| `/api/v1/auth/bootstrap/status` | GET | Check if gateway has been bootstrapped; `?wait=true` holds the response until the first user is created (workloads wait on this event before submitting platform enrollment) | `RouteAuthNone` |
 | `/api/v1/auth/logout` | POST | Clear browser session and cookie | `RouteAuthNone` |
 | `/api/v1/auth/enrollment/validate` | POST | Validate passkey enrollment token | `RouteAuthNone` |
 | `/api/v1/auth/cli/recovery/request` | POST | Initiate CLI recovery request with CSR | `RouteAuthNone` (token-scoped) |

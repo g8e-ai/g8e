@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -228,6 +229,22 @@ func (c *BootstrapController) handleBootstrapStatus(w http.ResponseWriter, r *ht
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
+	}
+
+	// With wait=true the response is held until the owner bootstraps the
+	// gateway, so workloads enroll on the user-created event, not by polling.
+	if r.URL.Query().Get("wait") == "true" {
+		if deadlineErr := http.NewResponseController(w).SetWriteDeadline(time.Time{}); deadlineErr != nil && !errors.Is(deadlineErr, http.ErrNotSupported) {
+			c.logger.Warn("bootstrap status: clear write deadline", "error", deadlineErr)
+		}
+		if err := c.userSvc.WaitForAnyUser(r.Context()); err != nil {
+			if r.Context().Err() != nil {
+				return
+			}
+			c.logger.Error("Failed to wait for bootstrap", "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, "status check failed")
+			return
+		}
 	}
 
 	hasUsers, err := c.userSvc.HasAnyUsers(r.Context())

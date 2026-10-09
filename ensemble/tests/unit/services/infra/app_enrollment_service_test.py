@@ -162,6 +162,15 @@ def _patch_httpx_with_mock_transport(
     )
 
 
+def _bootstrapped_discovery_route(path: str) -> httpx.Response | None:
+    """Serve the CA bundle and bootstrap status of an already-bootstrapped gateway."""
+    if path == "/.well-known/g8e/pki/ca-bundle":
+        return httpx.Response(200, text="CA-BUNDLE-PEM")
+    if path == "/api/v1/auth/bootstrap/status":
+        return httpx.Response(200, json={"bootstrapped": True})
+    return None
+
+
 def _mock_platform_enrollment_handler(
     *,
     request_id: str = "test-req-123",
@@ -199,6 +208,8 @@ def _mock_platform_enrollment_handler(
         if path == "/.well-known/g8e/pki/ca-bundle":
             return httpx.Response(200, text="CA-BUNDLE-PEM")
 
+        if path == "/api/v1/auth/bootstrap/status":
+            return httpx.Response(200, json={"bootstrapped": True})
         if path == "/api/v1/auth/platform-enrollments/request":
             captured["request_submitted"] = True
             return httpx.Response(
@@ -399,6 +410,8 @@ class TestEnrollPlatformEnrollment:
             nonlocal first
             if request.url.path == "/.well-known/g8e/pki/ca-bundle":
                 return httpx.Response(200, text="CA-BUNDLE")
+            if request.url.path == "/api/v1/auth/bootstrap/status":
+                return httpx.Response(200, json={"bootstrapped": True})
             if request.url.path == "/api/v1/auth/platform-enrollments/request":
                 body = json.loads(request.content)
                 creates.append(body)
@@ -459,6 +472,8 @@ class TestEnrollPlatformEnrollment:
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/.well-known/g8e/pki/ca-bundle":
                 return httpx.Response(200, text="CA-BUNDLE")
+            if request.url.path == "/api/v1/auth/bootstrap/status":
+                return httpx.Response(200, json={"bootstrapped": True})
             if request.url.path == "/api/v1/auth/platform-enrollments/request":
                 return httpx.Response(409, json={"error": "token conflict"})
             return httpx.Response(404)
@@ -586,8 +601,8 @@ class TestEnrollPlatformEnrollment:
 
         def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
-            if path == "/.well-known/g8e/pki/ca-bundle":
-                return httpx.Response(200, text="CA-BUNDLE-PEM")
+            if (discovery := _bootstrapped_discovery_route(path)) is not None:
+                return discovery
             if path == "/api/v1/auth/platform-enrollments/request":
                 return httpx.Response(
                     201,
@@ -710,6 +725,8 @@ class TestEnrollPlatformEnrollment:
             path = request.url.path
             if path == "/.well-known/g8e/pki/ca-bundle":
                 return httpx.Response(200, text="CA-BUNDLE")
+            if path == "/api/v1/auth/bootstrap/status":
+                return httpx.Response(200, json={"bootstrapped": True})
             if path == "/api/v1/auth/platform-enrollments/request":
                 request_submitted = True
                 return httpx.Response(201, json={})
@@ -838,6 +855,8 @@ class TestEnrollPlatformEnrollment:
             path = request.url.path
             if path == "/.well-known/g8e/pki/ca-bundle":
                 return httpx.Response(200, text="CA-BUNDLE-PEM")
+            if path == "/api/v1/auth/bootstrap/status":
+                return httpx.Response(200, json={"bootstrapped": True})
             if path == "/api/v1/auth/platform-enrollments/request":
                 return httpx.Response(403, json={"error": "request rejected"})
             return httpx.Response(404)
@@ -847,6 +866,33 @@ class TestEnrollPlatformEnrollment:
         service = AppEnrollmentService(instance_id="ensemble-reject-test", hostname="test.local")
         with pytest.raises(ConfigurationError, match="enrollment request rejected"):
             await service.enroll()
+
+    async def test_unbootstrapped_gateway_holds_on_bootstrap_wait_before_submitting(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+        _set_gateway_http_url("http://g8e.local:8080")
+        hits: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            if path == "/.well-known/g8e/pki/ca-bundle":
+                return httpx.Response(200, text="CA-BUNDLE-PEM")
+            if path == "/api/v1/auth/bootstrap/status":
+                waited = request.url.params.get("wait") == "true"
+                hits.append("wait" if waited else "status")
+                return httpx.Response(200, json={"bootstrapped": waited})
+            if path == "/api/v1/auth/platform-enrollments/request":
+                hits.append("submit")
+                return httpx.Response(403, json={"error": "request rejected"})
+            return httpx.Response(404)
+
+        _patch_httpx_with_mock_transport(monkeypatch, handler)
+
+        service = AppEnrollmentService(instance_id="ensemble-wait-test", hostname="test.local")
+        with pytest.raises(ConfigurationError, match="enrollment request rejected"):
+            await service.enroll()
+        assert hits == ["status", "wait", "submit"]
 
     async def test_completion_transcript_is_byte_identical_to_shared_parity_vector(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

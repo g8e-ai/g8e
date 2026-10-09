@@ -65,7 +65,6 @@ import random
 import secrets
 import socket
 import tempfile
-import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -95,16 +94,6 @@ _HTTP_TIMEOUT_SECONDS = 10.0
 _POLL_INITIAL_DELAY_SECONDS = 2.0
 _POLL_MAX_DELAY_SECONDS = 30.0
 _POLL_JITTER_SECONDS = 0.5
-# Request submission retry. The gateway starts with zero users and returns
-# 403 "platform enrollment requires a bootstrapped gateway" until the owner
-# bootstraps the first user. Workloads start immediately after the gateway
-# becomes healthy, so the first submit attempt may race with bootstrap.
-_SUBMIT_INITIAL_DELAY_SECONDS = 3.0
-_SUBMIT_MAX_DELAY_SECONDS = 30.0
-_SUBMIT_JITTER_SECONDS = 1.0
-_SUBMIT_DEADLINE_SECONDS = 30 * 60.0
-# Error string the gateway returns when not yet bootstrapped.
-_REQUIRES_BOOTSTRAP_ERR = "platform enrollment requires a bootstrapped gateway"
 # Protocol version for the completion transcript.
 _PROTOCOL_VERSION = "1"
 # PlatformComponentKind enum values (match common.proto).
@@ -117,6 +106,7 @@ _CA_BUNDLE_PATH = "/.well-known/g8e/pki/ca-bundle"
 _ENROLLMENT_REQUEST_PATH = "/api/v1/auth/platform-enrollments/request"
 _ENROLLMENT_STATUS_PATH = "/api/v1/auth/platform-enrollments/status"
 _ENROLLMENT_COMPLETE_PATH = "/api/v1/auth/platform-enrollments/complete"
+_BOOTSTRAP_STATUS_PATH = "/api/v1/auth/bootstrap/status"
 
 
 @dataclass(frozen=True)
@@ -395,12 +385,11 @@ class AppEnrollmentService:
         request endpoint. The client retains its raw token and sends only its
         SHA-256 hash so a persisted attempt can safely recover after a lost response.
 
-        Retries with bounded backoff until the gateway is bootstrapped. The
-        gateway starts with zero users and returns 403 "platform enrollment
-        requires a bootstrapped gateway" until the owner bootstraps the first
-        user. Workloads start immediately after the gateway becomes healthy,
-        so the first submit attempt may race with bootstrap.
+        Request creation is rejected until the owner bootstraps the gateway,
+        so this first holds on the gateway's bootstrap status, which the
+        gateway releases on the user-created event.
         """
+        await self._await_bootstrap(client, base_url)
         url = base_url + _ENROLLMENT_REQUEST_PATH
         payload = {
             "component_kind": _COMPONENT_KIND,
@@ -413,39 +402,44 @@ class AppEnrollmentService:
             "AppEnrollmentService: submitting platform enrollment request for %s",
             self._instance_id,
         )
-        delay = _SUBMIT_INITIAL_DELAY_SECONDS
-        deadline = time.monotonic() + _SUBMIT_DEADLINE_SECONDS
-        for _ in range(1000):
-            resp = await client.post(url, json=payload)
-            data = resp.json()
-            if resp.is_success:
-                return data
-            err_msg = data.get("error", f"HTTP {resp.status_code}")
-            if resp.status_code == 409:
-                self._remove_pending_state(pending_path)
-                raise ConfigurationError(
-                    "AppEnrollmentService: enrollment request is no longer recoverable; "
-                    "the next start will enroll fresh"
-                )
-            # 403 "requires a bootstrapped gateway": the gateway is not yet
-            # bootstrapped. Back off and retry until bootstrap.
-            if resp.status_code == 403 and _REQUIRES_BOOTSTRAP_ERR in err_msg:
-                if time.monotonic() > deadline:
-                    raise ConfigurationError(
-                        f"AppEnrollmentService: gateway not bootstrapped within "
-                        f"{_SUBMIT_DEADLINE_SECONDS}s: {err_msg}"
-                    )
-                logger.info(
-                    "AppEnrollmentService: gateway not yet bootstrapped, retrying in %.1fs",
-                    delay,
-                )
-                await self._sleep(delay)
-                delay = min(delay * 2, _SUBMIT_MAX_DELAY_SECONDS)
-                continue
+        resp = await client.post(url, json=payload)
+        data = resp.json()
+        if resp.is_success:
+            return data
+        err_msg = data.get("error", f"HTTP {resp.status_code}")
+        if resp.status_code == 409:
+            self._remove_pending_state(pending_path)
             raise ConfigurationError(
-                f"AppEnrollmentService: enrollment request rejected by gateway: {err_msg}"
+                "AppEnrollmentService: enrollment request is no longer recoverable; "
+                "the next start will enroll fresh"
             )
-        raise ConfigurationError("AppEnrollmentService: exhausted request submission retries")
+        raise ConfigurationError(
+            f"AppEnrollmentService: enrollment request rejected by gateway: {err_msg}"
+        )
+
+    async def _await_bootstrap(self, client: httpx.AsyncClient, base_url: str) -> None:
+        """Hold until the gateway has an owner.
+
+        A plain status read answers immediately; when the gateway is not yet
+        bootstrapped, a ``wait=true`` read is held by the gateway until the
+        first user is created, so no read timeout applies to it.
+        """
+        url = base_url + _BOOTSTRAP_STATUS_PATH
+        headers = {"Cache-Control": "no-store"}
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        if resp.json().get("bootstrapped"):
+            return
+        logger.info(
+            "AppEnrollmentService: gateway not yet bootstrapped; waiting for owner enrollment"
+        )
+        resp = await client.get(
+            url,
+            params={"wait": "true"},
+            headers=headers,
+            timeout=httpx.Timeout(_HTTP_TIMEOUT_SECONDS, read=None),
+        )
+        resp.raise_for_status()
 
     async def _poll_until_approved(
         self,

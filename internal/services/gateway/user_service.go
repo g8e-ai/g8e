@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -31,6 +32,9 @@ type UserService struct {
 	db      *DocumentStoreService
 	logger  *slog.Logger
 	authSvc authCacheInvalidator // Optional: for cache invalidation on user changes
+
+	createdMu sync.Mutex
+	created   chan struct{} // closed and replaced on every user creation
 }
 
 // NewUserService creates a new UserService.
@@ -168,6 +172,7 @@ func (s *UserService) persistNewUser(ctx context.Context, user *models.User) err
 		}
 		return fmt.Errorf("store user: %w", err)
 	}
+	s.announceUserCreated()
 	return nil
 }
 
@@ -396,6 +401,43 @@ func (s *UserService) DeleteUser(ctx context.Context, userID string) error {
 
 	s.logger.Info("[USER-SERVICE] User deleted", "user_id", userID)
 	return nil
+}
+
+// userCreatedSignal returns a channel closed by the next user creation.
+func (s *UserService) userCreatedSignal() <-chan struct{} {
+	s.createdMu.Lock()
+	defer s.createdMu.Unlock()
+	if s.created == nil {
+		s.created = make(chan struct{})
+	}
+	return s.created
+}
+
+func (s *UserService) announceUserCreated() {
+	s.createdMu.Lock()
+	defer s.createdMu.Unlock()
+	if s.created != nil {
+		close(s.created)
+	}
+	s.created = make(chan struct{})
+}
+
+// WaitForAnyUser blocks until at least one user exists (the gateway is
+// bootstrapped) or ctx ends. It subscribes before reading so a creation
+// between the read and the wait cannot be missed.
+func (s *UserService) WaitForAnyUser(ctx context.Context) error {
+	for {
+		created := s.userCreatedSignal()
+		hasUsers, err := s.HasAnyUsers(ctx)
+		if err != nil || hasUsers {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-created:
+		}
+	}
 }
 
 // docToUser converts a Document to a User model.

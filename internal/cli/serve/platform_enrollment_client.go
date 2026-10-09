@@ -374,6 +374,9 @@ func (c *OperatorPlatformEnrollmentClient) trustBundlePath() string {
 // --- HTTP ---
 
 func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, operatorCSR, cliCSR, systemFingerprint, token string) (*models.PlatformEnrollmentCreateResponse, error) {
+	if err := c.awaitBootstrap(ctx); err != nil {
+		return nil, err
+	}
 	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentRequest
 	payload := models.PlatformEnrollmentCreateRequest{
 		ComponentKind:     models.PlatformComponentOperator,
@@ -418,6 +421,48 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 		return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
 	}
 	return &createResp, nil
+}
+
+// awaitBootstrap holds until the gateway has an owner, since request creation
+// is rejected before bootstrap. The gateway releases the held status response
+// on the user-created event.
+func (c *OperatorPlatformEnrollmentClient) awaitBootstrap(ctx context.Context) error {
+	status, err := c.bootstrapStatus(ctx, false)
+	if err != nil || status.Bootstrapped {
+		return err
+	}
+	c.logger.Info("operator enrollment: gateway not yet bootstrapped; waiting for owner enrollment")
+	_, err = c.bootstrapStatus(ctx, true)
+	return err
+}
+
+func (c *OperatorPlatformEnrollmentClient) bootstrapStatus(ctx context.Context, wait bool) (*models.BootstrapStatusResponse, error) {
+	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthBootstrapStatus
+	if wait {
+		endpoint += "?wait=true"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: create bootstrap status request: %w", err)
+	}
+	req.Header.Set("Cache-Control", "no-store")
+	resp, err := doHTTPRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: bootstrap status: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: read bootstrap status: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("operator enrollment: bootstrap status failed: HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+	var status models.BootstrapStatusResponse
+	if err := json.Unmarshal(respBody, &status); err != nil {
+		return nil, fmt.Errorf("operator enrollment: parse bootstrap status: %w", err)
+	}
+	return &status, nil
 }
 
 func (c *OperatorPlatformEnrollmentClient) awaitApproval(ctx context.Context, token string, deadline time.Duration) error {

@@ -46,6 +46,7 @@ func newEnrollStub(t *testing.T, routes enrollRoutes) *enrollStub {
 			h(w, r)
 		}
 	}
+	registerBootstrappedStatus(mux)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, wrap(&stub.requestHits, routes.request))
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, wrap(&stub.statusHits, routes.status))
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, wrap(&stub.completeHit, routes.complete))
@@ -123,7 +124,7 @@ func TestSubmitRequest_BootstrapAndNetworkFailuresAreReturnedWithoutRetry(t *tes
 	stub.server.Close()
 	_, err = client.submitRequest(t.Context(), "op", "cli", "fp", "tok")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "submit request")
+	assert.Contains(t, err.Error(), "bootstrap status")
 }
 
 func TestSubmitRequest_ReturnsContextErrorWithoutContactingGatewayWhenAlreadyCancelled(t *testing.T) {
