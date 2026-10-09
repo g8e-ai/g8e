@@ -47,13 +47,16 @@ func TestEnrollmentAdmissionConcurrentCapacityAndDedup(t *testing.T) {
 					defer wg.Done()
 					<-start
 					instance := fmt.Sprintf("instance-%d", i)
+					tokenSeed := fmt.Sprintf("request-token-%d", i)
 					if duplicate {
 						instance = "same-instance"
+						tokenSeed = "shared-request-token"
 					}
 					_, err := svc.createRequestRecord(ctx, &models.PlatformEnrollmentRequest{
 						ID: fmt.Sprintf("request-%d", i), ComponentKind: models.PlatformComponentDashboard,
 						InstanceID: instance, State: models.PlatformEnrollmentStatePending,
 						CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+						TokenHash:    models.PlatformEnrollmentTokenHash(tokenSeed),
 						Fingerprints: models.PlatformEnrollmentCSRFingerprints{App: "same-key"},
 					})
 					results <- err
@@ -96,6 +99,7 @@ func TestEnrollmentAdmissionHistoryAndResume(t *testing.T) {
 	} {
 		data, err := json.Marshal(models.PlatformEnrollmentRequest{
 			ComponentKind: models.PlatformComponentDashboard, State: state, ExpiresAt: now.Add(-time.Minute),
+			TokenHash: models.PlatformEnrollmentTokenHash(fmt.Sprintf("history-token-%d", i)),
 		})
 		require.NoError(t, err)
 		require.NoError(t, store.DocSet(t.Context(), platformEnrollmentCollectionName(), fmt.Sprintf("history-%d", i), data))
@@ -104,6 +108,7 @@ func TestEnrollmentAdmissionHistoryAndResume(t *testing.T) {
 		req := &models.PlatformEnrollmentRequest{
 			ID: fmt.Sprintf("live-%d", i), InstanceID: fmt.Sprintf("instance-%d", i),
 			ComponentKind: models.PlatformComponentDashboard, State: models.PlatformEnrollmentStatePending,
+			TokenHash: models.PlatformEnrollmentTokenHash(fmt.Sprintf("live-token-%d", i)),
 			CreatedAt: now, ExpiresAt: now.Add(time.Hour),
 		}
 		existing, err := svc.createRequestRecord(context.Background(), req)

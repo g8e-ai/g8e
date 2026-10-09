@@ -119,6 +119,7 @@ func testIntegrationCmd() *cobra.Command {
 func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
 	var pkg string
+	var verbose bool
 
 	cmd := &cobra.Command{
 		Use:   "integration",
@@ -128,6 +129,9 @@ func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 			fmt.Println("Running Tier 2 (In-Process Integration) tests...")
 
 			testArgs := []string{"test", "-tags=integration", "-count=1", "-timeout", "360s"}
+			if verbose {
+				testArgs = append(testArgs, "-v")
+			}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
@@ -151,6 +155,7 @@ func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 
 	cmd.Flags().StringVar(&pkg, "pkg", "./...", "Package pattern selecting which integration test package to compile and run")
 	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which integration tests to run (passed to go test -run)")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show each integration test as it runs (passed to go test -v)")
 
 	return cmd
 }

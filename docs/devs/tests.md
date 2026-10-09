@@ -115,6 +115,9 @@ make test-integration
 # Narrow Tier 2 by package pattern or test name
 ./g8e test integration --pkg ./internal/cli/cmd/gw --run TestGatewayConnect
 
+# Show individual test names and durations while diagnosing a slow package
+./g8e test integration -v --pkg ./internal/services/gateway
+
 # Tier 3: Live platform E2E (against an already-running stack)
 ./g8e test e2e
 make test-docker
@@ -214,6 +217,9 @@ Browser approval tests inject their browser opener. Windows background Operator 
 Port-availability checks share `netutil.CheckTCPPortAvailable`. On Windows, the probe binds an exclusive wildcard TCP socket and closes it without calling `listen`, avoiding Windows Defender Firewall prompts for temporary test binaries. A dual-stack probe checks both IPv4 and IPv6; IPv4-only hosts use an IPv4 probe. This does not reserve the port for a later Gateway start. A real Gateway listening on network interfaces can still require firewall approval.
 
 ### Diagnose Slow Tests
+
+Use `-v` with `./g8e test integration` to stream individual test names and
+durations from `go test` while a package runs.
 
 The enrollment burst deadline contract (`TestPlatformEnrollmentBurst`) runs only on a normal build; use `GOFLAGS='-run=^TestPlatformEnrollmentBurst$ -v' make test-integration TEST_RACE= TEST_PKGS=./internal/services/gateway` to measure it.
 

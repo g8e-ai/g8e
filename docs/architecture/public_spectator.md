@@ -116,6 +116,8 @@ The private listener accepts authenticated `POST /ingest`, `POST /keys/register`
 
 The runtime is enabled by `--public-spectator`, which is enabled by default in the root Compose service. Its listener flags are `--public-spectator-private-listen`, `--public-spectator-public-listen`, `--eval-explorer-listen`, `--eval-explorer-root`, and `--public-spectator-trusted-proxy-cidr`. In Compose, the Gateway container binds `0.0.0.0:8081`, `0.0.0.0:8082`, and `0.0.0.0:5173`; Docker publishes those listeners to host loopback ports `8081`, `8082`, and `5173`. Outside Compose, listener validation permits loopback addresses only.
 
+`PublicSpectatorRuntime.Start` binds every listener (private ingest, public read, and the dedicated explorer when configured) before it returns, then serves each in its own goroutine. A bind failure on any listener closes the ones already bound and makes `Start` return an error, so the Gateway fails startup rather than running without a spectator surface. Once `Start` returns, connections to a bound address queue on the socket until the server accepts them, so callers need no readiness polling.
+
 The Gateway-owned mirror stores its state at `public-mirror/state.json`; the Gateway publisher stores export configuration, the signing key, ingest token, snapshot, outbox, rotation state, and proof package under the Gateway runtime tree's `public-feed/` and `public-proofs/` paths. These are component-local runtime files in the Gateway volume, not Docker-host files. The remote publisher uses the same relative state paths in the runtime of the process that owns it.
 
 ## Closed Allowlist

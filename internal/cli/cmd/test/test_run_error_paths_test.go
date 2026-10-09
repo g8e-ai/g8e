@@ -351,6 +351,9 @@ func TestTestIntegrationCmd_StructureAndFlags(t *testing.T) {
 	runFlag := cmd.Flags().Lookup("run")
 	require.NotNil(t, runFlag)
 	assert.Equal(t, "", runFlag.DefValue)
+	verboseFlag := cmd.Flags().ShorthandLookup("v")
+	require.NotNil(t, verboseFlag)
+	assert.Equal(t, "false", verboseFlag.DefValue)
 	pkgFlag := cmd.Flags().Lookup("pkg")
 	require.NotNil(t, pkgFlag)
 	assert.Equal(t, "./...", pkgFlag.DefValue)
@@ -381,6 +384,18 @@ func TestTestIntegrationCmd_RunFlagAppendsRegexp(t *testing.T) {
 	require.GreaterOrEqual(t, idx, 0)
 	require.True(t, len(captured) > idx+1)
 	assert.Equal(t, "TestPublicMirror|TestPublicPublisher", captured[idx+1])
+}
+
+func TestTestIntegrationCmd_VerboseFlagAppendsGoTestVerbose(t *testing.T) {
+	var captured []string
+	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+	require.NoError(t, cmd.Flags().Set("verbose", "true"))
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/gateway"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Contains(t, captured, "-v")
+	assert.Contains(t, captured, "./internal/services/gateway")
 }
 
 func TestTestIntegrationCmd_DefaultOmitsRunFlag(t *testing.T) {
