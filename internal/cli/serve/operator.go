@@ -300,7 +300,10 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	operatorEndpoint := resolveOperatorEndpoint(opts.Endpoint)
+	operatorEndpoint := config.GatewayDialHost(resolveOperatorEndpoint(opts.Endpoint))
+	if opts.Endpoint != "" {
+		opts.Endpoint = operatorEndpoint
+	}
 
 	logger.Info("g8e", "version", vi.Version, "build", vi.BuildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)

@@ -14,7 +14,14 @@ explicit command arguments parsed by ``app.serve``, which calls
 :func:`configure_bootstrap` once before the application is imported.
 """
 
-from dataclasses import dataclass
+import socket
+from dataclasses import dataclass, replace
+from urllib.parse import urlsplit, urlunsplit
+
+from g8e.constants import NETWORK
+
+GATEWAY_INTERNAL_HOSTNAME: str = NETWORK["network"]["GatewayInternalHostname"]["value"]
+LOOPBACK_IP = "127.0.0.1"
 
 
 @dataclass(frozen=True)
@@ -39,6 +46,37 @@ class _BootstrapState:
 def get_bootstrap() -> BootstrapSettings:
     """Return the bootstrap settings for this process."""
     return _BootstrapState.current
+
+
+def gateway_dial_url(url: str | None) -> str | None:
+    """Return ``url`` with an unresolvable internal Gateway hostname replaced by loopback.
+
+    Mirrors Go ``config.GatewayDialHost``: a local Gateway binds loopback unless
+    started with ``--listen-host``, and its certificate carries a ``127.0.0.1``
+    IP SAN, so TLS verification still succeeds against the loopback address.
+    """
+    if not url:
+        return url
+    parts = urlsplit(url)
+    if parts.hostname != GATEWAY_INTERNAL_HOSTNAME:
+        return url
+    try:
+        socket.getaddrinfo(GATEWAY_INTERNAL_HOSTNAME, None)
+        return url
+    except socket.gaierror:
+        netloc = LOOPBACK_IP if parts.port is None else f"{LOOPBACK_IP}:{parts.port}"
+        return urlunsplit(parts._replace(netloc=netloc))
+
+
+def resolve_gateway_dial_urls(settings: BootstrapSettings) -> BootstrapSettings:
+    """Apply :func:`gateway_dial_url` to every Gateway URL in ``settings``."""
+    return replace(
+        settings,
+        gateway_http_url=gateway_dial_url(settings.gateway_http_url),
+        gateway_url=gateway_dial_url(settings.gateway_url),
+        gateway_https_url=gateway_dial_url(settings.gateway_https_url),
+        gateway_pubsub_url=gateway_dial_url(settings.gateway_pubsub_url),
+    )
 
 
 def configure_bootstrap(settings: BootstrapSettings) -> None:

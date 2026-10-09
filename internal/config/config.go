@@ -844,6 +844,20 @@ func TLSServerName(endpoint string) string {
 	return ""
 }
 
+// GatewayDialHost returns the host to dial for a Gateway endpoint. The
+// internal Gateway hostname (g8e.local) falls back to loopback when it does
+// not resolve, since a local Gateway binds loopback unless started with
+// --listen-host. TLS still verifies g8e.local via TLSServerName on the IP.
+func GatewayDialHost(endpoint string) string {
+	if endpoint != constants.GatewayInternalHostname {
+		return endpoint
+	}
+	if _, err := net.LookupHost(endpoint); err == nil {
+		return endpoint
+	}
+	return constants.LocalhostIP
+}
+
 // EffectiveOperatorRoles resolves all configured capabilities in stable order.
 func (cfg *Config) EffectiveOperatorRoles() constants.OperatorRoles {
 	roles := append(constants.OperatorRoles{}, cfg.OperatorRoles...)

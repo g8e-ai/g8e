@@ -382,6 +382,14 @@ func TestTLSServerName(t *testing.T) {
 	}
 }
 
+// Only non-internal endpoints are covered here: g8e.local triggers a DNS
+// lookup, which Tier 1 tests must not perform.
+func TestGatewayDialHost_PassesThroughOtherEndpoints(t *testing.T) {
+	for _, endpoint := range []string{"example.com", "10.0.0.1", "::1", ""} {
+		assert.Equal(t, endpoint, GatewayDialHost(endpoint))
+	}
+}
+
 func TestBuildPubSubURL(t *testing.T) {
 	tests := []struct {
 		name     string

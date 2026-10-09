@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -384,14 +383,12 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 		return session, nil
 	}
 
-	_, err = net.LookupHost(constants.GatewayInternalHostname)
-	if err == nil {
+	if g8econfig.GatewayDialHost(constants.GatewayInternalHostname) == constants.GatewayInternalHostname {
 		return session, nil
 	}
 
-	// The default URL targets the local Gateway, whose listeners bind loopback
-	// unless started with --listen-host. tlsCfg pins ServerName to g8e.local,
-	// so dialing the loopback IP still verifies the Gateway certificate.
+	// tlsCfg pins ServerName to g8e.local, so dialing the loopback IP still
+	// verifies the Gateway certificate.
 	gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.LocalhostIP, constants.Ports.OperatorHttps)
 	session.gatewayURL = gatewayURL
 	slog.Info("g8e.local DNS resolution failed, falling back to loopback", "ip", constants.LocalhostIP)

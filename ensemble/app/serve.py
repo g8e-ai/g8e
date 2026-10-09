@@ -20,7 +20,11 @@ from dataclasses import dataclass
 
 import uvicorn
 
-from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
+from app.constants.bootstrap import (
+    BootstrapSettings,
+    configure_bootstrap,
+    resolve_gateway_dial_urls,
+)
 
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
@@ -81,7 +85,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     """Install bootstrap settings, then start the API server."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
     # Bootstrap must be installed before uvicorn imports the application.
-    configure_bootstrap(args.bootstrap)
+    configure_bootstrap(resolve_gateway_dial_urls(args.bootstrap))
     uvicorn.run(APP_IMPORT_STRING, host=args.host, port=args.port)
 
 

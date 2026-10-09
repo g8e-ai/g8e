@@ -7,10 +7,20 @@
 
 """The ensemble launcher turns explicit arguments into typed bootstrap settings."""
 
+import socket
+
 import pytest
 
 from app import serve
-from app.constants.bootstrap import BootstrapSettings, get_bootstrap
+from app.constants import bootstrap as bootstrap_module
+from app.constants.bootstrap import BootstrapSettings, get_bootstrap, reset_bootstrap
+
+
+@pytest.fixture(autouse=True)
+def _isolated_bootstrap():
+    reset_bootstrap()
+    yield
+    reset_bootstrap()
 
 
 def test_no_arguments_leave_bootstrap_defaults():
@@ -63,7 +73,47 @@ def test_main_installs_bootstrap_before_starting_the_server(monkeypatch: pytest.
         started.append((app, host, port))
 
     monkeypatch.setattr(serve.uvicorn, "run", fake_run)
+    monkeypatch.setattr(bootstrap_module.socket, "getaddrinfo", lambda *_args: [])
 
     serve.main(["--gateway-http-url", "http://g8e.local:8080"])
 
     assert started == [("app.main:app", "0.0.0.0", 8000)]
+
+
+def test_main_falls_back_to_loopback_when_internal_hostname_is_unresolvable(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def unresolvable(*_args):
+        raise socket.gaierror("no such host")
+
+    monkeypatch.setattr(serve.uvicorn, "run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap_module.socket, "getaddrinfo", unresolvable)
+
+    serve.main(
+        [
+            "--gateway-http-url",
+            "http://g8e.local:8080",
+            "--gateway-https-url",
+            "https://g8e.local:8443",
+            "--gateway-pubsub-url",
+            "wss://g8e.local:8443",
+        ]
+    )
+
+    settings = get_bootstrap()
+    assert settings.gateway_http_url == "http://127.0.0.1:8080"
+    assert settings.gateway_https_url == "https://127.0.0.1:8443"
+    assert settings.gateway_pubsub_url == "wss://127.0.0.1:8443"
+    assert settings.gateway_url is None
+
+
+def test_gateway_dial_url_leaves_other_hosts_untouched(monkeypatch: pytest.MonkeyPatch):
+    def fail(*_args):
+        raise AssertionError("non-internal hosts must not be resolved")
+
+    monkeypatch.setattr(bootstrap_module.socket, "getaddrinfo", fail)
+
+    assert bootstrap_module.gateway_dial_url("https://gateway.example:8443") == (
+        "https://gateway.example:8443"
+    )
+    assert bootstrap_module.gateway_dial_url(None) is None
