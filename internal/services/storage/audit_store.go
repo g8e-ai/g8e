@@ -843,6 +843,7 @@ func (ass *SQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models
 		signature = excluded.signature,
 		receipt_json = excluded.receipt_json,
 		timestamp = excluded.timestamp
+	WHERE CAST(excluded.status AS INTEGER) NOT IN (?, ?) OR CAST(receipts.status AS INTEGER) IN (?, ?)
 	`
 
 	_, err := conn.ExecContext(context.Background(), query,
@@ -865,6 +866,13 @@ func (ass *SQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models
 		record.Signature,
 		receiptJSON,
 		timesvc.FormatTimestamp(timestamp),
+		// The projection only moves forward: a replayed or late non-terminal
+		// stage never overwrites a terminal receipt. Its audit fact is still
+		// appended by the caller.
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED,
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED,
+		operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 	)
 	if err != nil {
 		return fmt.Errorf("audit store: upsert receipt projection: %w", err)
@@ -890,6 +898,34 @@ func (ass *SQLAuditStore) GetAuditChainHead(ctx context.Context) (int64, string,
 		return 0, "", fmt.Errorf("audit store: chain head: %w", err)
 	}
 	return headSeq, headHash, nil
+}
+
+// receiptSelectColumns is the receipts projection read by every receipt query.
+// Columns added by migrateReceiptsColumns, and nullable projection columns, are
+// NULL on rows written before they existed, so they are coalesced to the empty
+// string the record's string fields expect.
+const receiptSelectColumns = `transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
+		COALESCE(requestor_user_id, ''), COALESCE(acting_app_id, ''), COALESCE(event_type, ''),
+		action_type, COALESCE(target_resource, ''), status, COALESCE(result_summary, ''),
+		COALESCE(state_root_before, ''), COALESCE(state_root_after, ''), executed_at_ms,
+		signer_key_id, signature, receipt_json, timestamp`
+
+// hydrateReceiptRecord fills the derived fields of a scanned receipt row. L2/L3
+// validity is not a projection column; it is restored from the canonical
+// receipt exactly as governance.BuildReceiptRecord derives it at write time.
+func hydrateReceiptRecord(r *models.ActionReceiptRecord, executedAtMs int64, timestampStr string, receiptJSON sql.NullString) error {
+	r.ExecutedAt = time.UnixMilli(executedAtMs)
+	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
+	receipt, err := parseStoredActionReceipt(receiptJSON)
+	if err != nil {
+		return err
+	}
+	r.ActionReceipt = receipt
+	if receipt != nil {
+		r.L2Valid = receipt.GetL2Status() == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID
+		r.L3Valid = receipt.GetL3Status() == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID
+	}
+	return nil
 }
 
 func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionReceipt, error) {
@@ -934,11 +970,7 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	}
 
 	query := `
-	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id, event_type,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
+	SELECT ` + receiptSelectColumns + `
 	FROM receipts
 	WHERE transaction_id = ?
 	`
@@ -958,17 +990,14 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	)
 	r.InvestigationID = investigationID.String
 	r.OperatorSessionID = sessionID.String
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreGetReceiptFailed, err)
 	}
 
-	r.ExecutedAt = time.UnixMilli(executedAtMs)
-	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
-	r.ActionReceipt, err = parseStoredActionReceipt(receiptJSON)
-	if err != nil {
+	if err := hydrateReceiptRecord(&r, executedAtMs, timestampStr, receiptJSON); err != nil {
 		return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreGetReceiptFailed, err)
 	}
 
@@ -1019,11 +1048,7 @@ func (ass *SQLAuditStore) ListActionReceipts(scope models.AuditScope, limit, off
 
 	var query strings.Builder
 	query.WriteString(`
-	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id, event_type,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
+	SELECT ` + receiptSelectColumns + `
 	FROM receipts
 	`)
 
@@ -1072,10 +1097,7 @@ func (ass *SQLAuditStore) ListActionReceipts(scope models.AuditScope, limit, off
 
 	var results []*models.ActionReceiptRecord
 	for _, row := range rows {
-		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
-		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
-		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
-		if err != nil {
+		if err := hydrateReceiptRecord(&row.record, row.executedAtMs, row.timestampStr, row.receiptJSON); err != nil {
 			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsFailed, err)
 		}
 		results = append(results, &row.record)
@@ -1095,11 +1117,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 	}
 
 	query := `
-	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id, event_type,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
+	SELECT ` + receiptSelectColumns + `
 	FROM receipts
 	WHERE timestamp > ?
 	ORDER BY timestamp ASC
@@ -1134,10 +1152,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 
 	var results []*models.ActionReceiptRecord
 	for _, row := range rows {
-		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
-		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
-		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
-		if err != nil {
+		if err := hydrateReceiptRecord(&row.record, row.executedAtMs, row.timestampStr, row.receiptJSON); err != nil {
 			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsSinceFailed, err)
 		}
 		results = append(results, &row.record)

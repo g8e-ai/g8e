@@ -60,17 +60,38 @@ function Item({ item, onRespond }: { item: TimelineItem; onRespond: Props['onRes
           </div>
         </div>
       );
-    case 'tool':
-      return (
-        <div className="tool">
-          <div className="tool-head">
-            <StatusPill status={item.status} />
-            <span className="muted">{item.tool}</span>
-            <code title={item.detail}>{item.detail}</code>
-          </div>
-          {item.error ? <pre className="tool-out error">{item.error}</pre> : item.output ? <pre className="tool-out">{item.output}</pre> : null}
-        </div>
+    case 'tool': {
+      const head = (
+        <>
+          <StatusPill status={item.status} />
+          <span className="muted">{item.tool}</span>
+          <code title={item.detail}>{item.detail}</code>
+        </>
       );
+      const body = item.error ? (
+        <pre className="tool-out error">{item.error}</pre>
+      ) : item.output ? (
+        <pre className="tool-out">{item.output}</pre>
+      ) : null;
+      if (!body) {
+        return (
+          <div className="tool">
+            <div className="tool-head">{head}</div>
+          </div>
+        );
+      }
+      // Output sits behind a native disclosure: collapsed once an action succeeds,
+      // open on failure so the reason stays visible without a click.
+      return (
+        <details className="tool" open={item.status === 'failed' || undefined}>
+          <summary className="tool-head">
+            {head}
+            <span className="tool-toggle muted">Details</span>
+          </summary>
+          {body}
+        </details>
+      );
+    }
     case 'approval': {
       const resolved = item.state === 'approved' || item.state === 'denied';
       return (

@@ -118,17 +118,18 @@ export function fromHistory(history: ConversationMessage[] | undefined): Timelin
       items.push({ kind: 'notice', key, level: 'info', text: m.content, at: m.timestamp });
     }
   });
-  return mergeApprovalRecords(items);
+  return mergeLifecycleRecords(items);
 }
 
-// Approval lifecycle is recorded as several history rows sharing an approval
-// ID (requested, then granted/rejected). Keep the first row's subject and the
-// last row's state.
-function mergeApprovalRecords(items: TimelineItem[]): TimelineItem[] {
+// Approval and command lifecycles are recorded as several history rows sharing
+// an ID (approval requested, then granted/rejected; command started, then
+// finished). Fold each into one item: keep the first row's position and
+// subject, take the latest state.
+function mergeLifecycleRecords(items: TimelineItem[]): TimelineItem[] {
   const out: TimelineItem[] = [];
   const index = new Map<string, number>();
   for (const item of items) {
-    if (item.kind !== 'approval') {
+    if (item.kind !== 'approval' && item.kind !== 'tool') {
       out.push(item);
       continue;
     }
@@ -136,12 +137,22 @@ function mergeApprovalRecords(items: TimelineItem[]): TimelineItem[] {
     if (at === undefined) {
       index.set(item.key, out.length);
       out.push(item);
-    } else {
+    } else if (item.kind === 'approval') {
       const prev = out[at] as Extract<TimelineItem, { kind: 'approval' }>;
       out[at] = { ...prev, state: item.state === 'pending' ? prev.state : item.state };
+    } else {
+      const prev = out[at] as Extract<TimelineItem, { kind: 'tool' }>;
+      out[at] = { ...item, at: prev.at, status: forwardStatus(prev.status, item.status) };
     }
   }
   return out;
+}
+
+const TOOL_STATUS_RANK: Record<ToolStatus, number> = { requested: 0, running: 1, completed: 2, failed: 2 };
+
+/** Lifecycle only moves forward: a replayed earlier stage never regresses a terminal item. */
+function forwardStatus(prev: ToolStatus | undefined, next: ToolStatus): ToolStatus {
+  return prev && TOOL_STATUS_RANK[prev] >= TOOL_STATUS_RANK[next] ? prev : next;
 }
 
 function upsert(items: TimelineItem[], key: string, make: (prev: TimelineItem | undefined) => TimelineItem): TimelineItem[] {
@@ -259,7 +270,7 @@ export function applyEvent(state: TimelineState, ev: StreamEvent): TimelineState
           key: `t:${execId}`,
           tool: str(d.tool_name) || base?.tool || 'command',
           detail: str(d.display_detail) || base?.detail || '',
-          status,
+          status: forwardStatus(base?.status, status),
           output: str(d.content) || base?.output,
           error: str(d.error) || base?.error,
           at: base?.at ?? at,

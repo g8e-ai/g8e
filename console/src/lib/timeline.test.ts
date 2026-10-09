@@ -38,6 +38,14 @@ describe('fromHistory', () => {
     expect(approval.kind === 'approval' && approval.state).toBe('approved');
     expect(approval.kind === 'approval' && approval.subject).toBe('df -h');
   });
+
+  it('folds repeated command rows for one execution into a single item', () => {
+    const items = fromHistory([
+      { sender: Sender.System, content: '', timestamp: 't1', metadata: { execution_id: 'ex-1', command: 'df -h', status: 'running' } },
+      { sender: Sender.System, content: '/dev/sda1 98%', timestamp: 't2', metadata: { execution_id: 'ex-1', command: 'df -h', status: 'completed' } },
+    ]);
+    expect(items).toEqual([expect.objectContaining({ kind: 'tool', status: 'completed', output: '/dev/sda1 98%', at: 't1' })]);
+  });
 });
 
 describe('applyEvent', () => {
@@ -88,6 +96,13 @@ describe('applyEvent', () => {
     expect(t.items).toEqual([
       expect.objectContaining({ kind: 'tool', status: 'completed', detail: 'uptime', output: 'up 3 days', tool: 'run' }),
     ]);
+  });
+
+  it('never regresses a terminal command when an earlier stage is replayed', () => {
+    let t = applyEvent(emptyTimeline, ev(Ev.CommandStarted, { execution_id: 'x', display_detail: 'uptime' }));
+    t = applyEvent(t, ev(Ev.CommandFailed, { execution_id: 'x', error: 'exit 1' }));
+    t = applyEvent(t, ev(Ev.CommandStarted, { execution_id: 'x' }));
+    expect(t.items).toEqual([expect.objectContaining({ kind: 'tool', status: 'failed', error: 'exit 1' })]);
   });
 
   it('adds approval requests once and resolves them locally', () => {

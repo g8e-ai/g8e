@@ -178,3 +178,67 @@ func TestL5ActuatorExecuteCommitmentFailureStopsBeforeHandler(t *testing.T) {
 	require.NoError(t, listErr)
 	assert.Empty(t, commitments)
 }
+
+func receiptFactCount(t *testing.T, store *storage.SQLAuditStore, sessionID string) int {
+	t.Helper()
+	events, err := store.ListEvents(sessionID, 100, 0)
+	require.NoError(t, err)
+	count := 0
+	for _, ev := range events {
+		if ev.Type == constants.EventOperatorReceiptRecorded {
+			count++
+		}
+	}
+	return count
+}
+
+func executeSampleTransaction(t *testing.T, actuator *L5Actuator) *govtypes.GovernanceEnvelope {
+	t.Helper()
+	envelope := &govtypes.GovernanceEnvelope{
+		Id:                mustUUID(t),
+		TransactionHash:   "test-hash-single-write",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.Event.Operator.Command.Requested),
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+	}
+	_, err := actuator.Execute(context.Background(), &VerifiedTransaction{Envelope: envelope, ActionType: constants.ActionTypeExecuteBash}, nil)
+	require.NoError(t, err)
+	return envelope
+}
+
+// Outbound Operator wiring passes the same SQLAuditStore as the document store
+// and the direct store. Each stage (EXECUTING, then COMPLETED) must produce
+// exactly one audit fact, not one per write path.
+func TestL5ActuatorOutboundSharedStoreRecordsEachStageOnce(t *testing.T) {
+	actuator, auditStore := newCommitmentTestActuator(t)
+	actuator.ConsoleAuditStore = auditStore
+
+	envelope := executeSampleTransaction(t, actuator)
+
+	require.Equal(t, 2, receiptFactCount(t, auditStore, envelope.OperatorSessionId),
+		"one receipt fact per stage; the shared store must not be written twice")
+
+	persisted, err := auditStore.GetActionReceipt(envelope.Id)
+	require.NoError(t, err)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persisted.Status)
+	require.NotNil(t, persisted.ActionReceipt.FinalPersistenceAttestation)
+
+	commitments, err := auditStore.CommitmentLedger().ListCommitments()
+	require.NoError(t, err)
+	require.Len(t, commitments, 1)
+}
+
+// A distinct document store (Gateway in-process mode) must still receive every
+// stage; the shared-store skip must not suppress it.
+func TestL5ActuatorDistinctDocumentStoreStillReceivesStages(t *testing.T) {
+	actuator, auditStore := newCommitmentTestActuator(t)
+	docStore := testutil.NewConfigurableMockAuditStore(nil)
+	actuator.ConsoleAuditStore = docStore
+
+	envelope := executeSampleTransaction(t, actuator)
+
+	require.Len(t, docStore.DocSetCalls, 2)
+	require.Equal(t, 2, receiptFactCount(t, auditStore, envelope.OperatorSessionId))
+}

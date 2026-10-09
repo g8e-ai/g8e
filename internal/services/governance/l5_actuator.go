@@ -821,6 +821,12 @@ func (w *L5Actuator) logReceiptDocument(ctx context.Context, env *govtypes.Gover
 	if w.ConsoleAuditStore == nil || env == nil {
 		return nil
 	}
+	// In outbound mode the document store is the actuator's own SQLAuditStore,
+	// whose DocSet records the receipt again. The direct SQLAuditStore write
+	// already covers it, so skip the duplicate stage write and audit fact.
+	if docStore, ok := w.ConsoleAuditStore.(*storage.SQLAuditStore); ok && docStore == w.SQLAuditStore {
+		return nil
+	}
 
 	record := BuildReceiptRecord(env, r)
 

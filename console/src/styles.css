@@ -814,9 +814,27 @@ h4 {
 }
 .tool-head code {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+summary.tool-head {
+  cursor: pointer;
+  list-style: none;
+}
+summary.tool-head::-webkit-details-marker {
+  display: none;
+}
+.tool-toggle {
+  flex: none;
+  font-size: 12px;
+}
+.tool-toggle::after {
+  content: ' ▸';
+}
+details.tool[open] .tool-toggle::after {
+  content: ' ▾';
 }
 .tool-out {
   max-height: 280px;
