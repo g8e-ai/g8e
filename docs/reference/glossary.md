@@ -287,7 +287,7 @@ The human-authorization layer for mutations under `ratify` and `notary` postures
 The fail-closed pre-dispatch verifier on the Operator substrate (`internal/services/governance/l4_warden.go`). It executes a strict five-step verification sequence:
 1. Reserves the in-flight lock and durably reserves the nonce in the SQLite replay store (`ReserveNonce`), verifying expiry.
 2. Performs stateless validation: verifies envelope structure, decodes payload, ensures action type and payload match, recomputes the transaction hash, and re-runs L1 Doctrine.
-3. Performs stateful validation: checks that `envelope.state_merkle_root` matches the current authoritative Bound State Root.
+3. Performs state binding: requires a nonempty `envelope.state_merkle_root` and verifies the admission snapshot already bound into a Gateway-dispatched envelope by its canonical hash and required proofs. Direct submissions without dispatch context must match the current local Bound State Root. Outbound verification performs no Gateway state lookup.
 4. Performs posture validation: reads `envelope.posture` and verifies L2 Consensus votes and L3 Notary proofs according to posture rules.
 5. Emits linked `DeterministicStageEvidence` and returns a `VerifiedTransaction` to L5 Actuator.
 
@@ -449,7 +449,7 @@ The Gateway real-time event delivery mechanism for browser and CLI sessions. App
 
 ## State Root
 
-A deterministic SHA-256 digest representing authoritative platform state. Carried in `envelope.state_merkle_root`, it ensures that a transaction is evaluated against the exact platform state under which it was authorized. The L4 Warden rejects envelopes whose state root diverges from the current authoritative root. See **Bound State Root** and **Observed-State Root**.
+A deterministic SHA-256 digest representing authoritative state. `envelope.state_merkle_root` binds the admission snapshot under which the Gateway constructed a transaction; outbound Operators verify that envelope locally without re-fetching the Gateway root or substituting their own root. Direct submissions without Gateway-dispatch context must match the executing runtime's current authoritative root. L5 receipt roots describe the executing runtime's local state before and after execution. See **Bound State Root** and **Observed-State Root**.
 
 ---
 

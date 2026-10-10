@@ -233,6 +233,8 @@ Browser approval tests inject their browser opener. Windows background Operator 
 
 Port-availability checks share `netutil.CheckTCPPortAvailable`. On Windows, the probe binds an exclusive wildcard TCP socket and closes it without calling `listen`, avoiding Windows Defender Firewall prompts for temporary test binaries. A dual-stack probe checks both IPv4 and IPv6; IPv4-only hosts use an IPv4 probe. This does not reserve the port for a later Gateway start. A real Gateway listening on network interfaces can still require firewall approval.
 
+`TestG8eoService_Start_ReceiptStateRootsUseLocalStore` starts the outbound runtime with a bootstrap fixture that provides no state endpoint, then verifies that receipt roots follow changes in the Operator's local store. The pub/sub regressions `TestGatewayDispatchedVerificationContext_AcceptsPDPBoundRootDespiteLiveDrift` and `TestOperatorPubSubService_handleGovernanceEnvelope_AcceptsPDPBoundRootDespiteLiveDrift` separately pin the envelope's Gateway admission snapshot; local receipt roots must not replace that binding or introduce a remote lookup.
+
 ### Diagnose Slow Tests
 
 Use `-v` with `./g8e test integration` to stream individual test names and
