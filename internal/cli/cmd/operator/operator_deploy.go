@@ -653,7 +653,7 @@ func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, star
 			_ = worker.Wait()
 			return err
 		}
-		go func() { _ = worker.Wait() }()
+		_ = worker.Process.Release()
 		return nil
 	}
 	script := fmt.Sprintf(

@@ -5,12 +5,12 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-//go:build !linux
+//go:build !linux && !windows
 
 package testcmd
 
-// readScaleProcStats has no portable process accounting outside Linux; the
-// scale run records Gateway database sizes only on these platforms.
+// readScaleProcStats has no portable process accounting outside Linux and Windows;
+// the scale run records Gateway database sizes only on these platforms.
 func readScaleProcStats(int) (scaleProcStats, bool) {
 	return scaleProcStats{}, false
 }
