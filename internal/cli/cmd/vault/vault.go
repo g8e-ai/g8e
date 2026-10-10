@@ -59,7 +59,7 @@ func openKeystore(fileSvc fs.RuntimeFileService, opts keystore.Options, create b
 }
 
 func addMasterKeyFlag(cmd *cobra.Command, path *string) {
-	cmd.Flags().StringVar(path, "master-key-file", "", "Absolute path to the master key file the runtime was started with (default: OS key store)")
+	cmd.Flags().StringVar(path, "master-key-file", "", "Absolute path to a provisioned base64 32-byte master key outside the runtime root; Linux mode 0400 or 0600. Nonblank flag overrides G8E_MASTER_KEY_FILE; blank uses environment, then OS key store. No fallback on failure.")
 }
 
 func vaultInitCmd() *cobra.Command {

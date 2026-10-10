@@ -66,7 +66,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-ENC-STORE-01 | Platform secrets are encrypted at rest with a dedicated 32-byte master key stored in an OS-native keyring (`libsecret` on Linux, Keychain on macOS, DPAPI on Windows) or external file via `--master-key-file`. No plaintext fallback. |
+| INV-ENC-STORE-01 | Platform secrets are encrypted at rest with a dedicated 32-byte master key stored in an OS-native keyring (`libsecret` on Linux, Keychain on macOS, DPAPI on Windows) or an explicitly provisioned external file selected by `--master-key-file` or `G8E_MASTER_KEY_FILE`. No generated plaintext fallback. |
 | INV-ENC-STORE-02 | Secrets stored under `.g8e/secrets/` use AES-256-GCM authenticated encryption and JSON metadata specifying format version `1`, nonce, and ciphertext. |
 | INV-ENC-STORE-03 | Keystore initialization enforces strict private filesystem permissions (`0700` for `.g8e/secrets/` and `0600` for secret files). Startup fails if master key generation or permissions enforcement fails. |
 
@@ -125,7 +125,7 @@ Vault encryption protects selected high-sensitivity fields across platform servi
 
 ### Gateway Startup and Vault Lifecycle
 
-Gateway startup reads `--vault-dir` (default: `.g8e/vault`), falling back to `G8E_VAULT_DIR`. When no OS key store exists (e.g. in containers or headless Linux environments without a Secret Service), operators must provide `--master-key-file <path>` with the absolute path to a read-only (`0600`) file containing 32 random bytes encoded as base64, located outside the runtime directory.
+Gateway startup reads `--vault-dir` (default: `.g8e/vault`), falling back to `G8E_VAULT_DIR`. For headless or container deployments without a usable OS keyring, configure the external master key as described below. Mode `0600` grants owner read/write; g8e treats the supplied key file as read-only input.
 
 If no vault header exists on startup, Gateway automatically initializes a new vault header and generates the sealed vault key in the platform keystore. If an existing key cannot be read, decrypted, or matched to the header fingerprint, Gateway startup fails closed. When locked, audit, execution-vault, and UEI writes fail closed; reads return unencrypted metadata or log decryption failures. Existing installs migrating from earlier unsealed or legacy layouts must run `g8e gw clean` to recreate platform secrets and vault state.
 
@@ -140,9 +140,19 @@ The master key is stored using OS-native keyrings, failing closed if no protecte
 - **Linux**: Uses `libsecret` (`newLibsecretKeyring()`) communicating over D-Bus to the Secret Service API (e.g. `gnome-keyring-daemon`).
 - **macOS**: Uses macOS Keychain (`newKeychainKeyring()`) via the OS `security` utility.
 - **Windows**: Uses Windows DPAPI (`newWindowsKeyring()`) via PowerShell `System.Security.Cryptography.ProtectedData`.
-- **External File (`--master-key-file`)**: Required in containerized or headless environments where no OS keyring exists. Accepts an absolute path to a file containing 32 base64-encoded random bytes. The file must reside outside the runtime directory (`.g8e/`) and is treated as read-only external input.
+- **External File**: Select with a nonblank `--master-key-file`, otherwise `G8E_MASTER_KEY_FILE`. Both values are trimmed; an empty or whitespace-only flag behaves as unset. If both are blank, g8e selects the OS keyring. A selected source that fails never falls back to another source. No home-directory filename is discovered.
 
-There is no plaintext or unencrypted file fallback anywhere.
+The external file must contain base64 encoding of exactly 32 random bytes, be regular and at most 4096 bytes, and use an absolute path outside the actual configured runtime root. Both lexical and resolved symlink paths are checked, including symlinks in the runtime root itself. Safe external secret-mount symlinks are supported. Linux requires mode `0400` or `0600`, ownership by the service user or root, and readability by the service. Configure container secret mounts accordingly; world-readable defaults such as `0444` are rejected. Every retrieval checks the opened descriptor's metadata and validates the payload again. g8e never creates, chmods, overwrites, or deletes this external file.
+
+Keep the containing directory and mount under trusted administration: symlink checks do not guarantee separation against path-swap races, hard links, mount aliases, or backups that include both key and ciphertext. Base64 is not encryption; protect the provisioned key and its backups separately from all ciphertext locations. Service-account or root compromise remains outside this file backend's protection.
+
+Gateway background startup saves only the effective key **path** in its launch profile and passes it explicitly to the child. Restart reuses that path even if the invoking environment changes or disappears; a missing file fails closed. Outbound Operators use their own host's explicit path or service environment, not an implicitly forwarded developer-machine path. Vault, report, compliance, and public commands use the same selection rule; read-only keystore construction does not create keys.
+
+OS key creation occurs only during initialization when lookup reports a missing key. It stores the new key and verifies it by reading it back and comparing in constant time; store, retrieval, and verification failures abort startup without switching backends or deleting a stored key. Backend construction performs no write probe.
+
+Changing to a different valid key is not migration or rotation: existing ciphertext will not decrypt. Restore the original key and configuration to recover. Never overwrite an existing key to repair startup; loss of the master key loses access to its encrypted data.
+
+g8e never generates an unencrypted file fallback key. The explicitly provisioned external key remains sensitive unencrypted input.
 
 ### Secret Storage Format
 

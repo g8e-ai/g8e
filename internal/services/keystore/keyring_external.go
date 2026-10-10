@@ -8,24 +8,25 @@
 package keystore
 
 import (
+	"bytes"
 	"encoding/base64"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
+	"io"
 	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	runtimefs "github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 )
 
 // externalFileKeyring reads an operator-provisioned master key, such as a
 // Docker or Kubernetes secret mount. The file is external input, not runtime
-// state: it must sit outside the runtime directory so a copy of the data volume
-// never carries the key that decrypts it, and g8e never writes or deletes it.
+// state: it must sit outside the runtime directory to separate key material
+// from runtime backups, and g8e never writes or deletes it.
 type externalFileKeyring struct {
 	path string
+	root string
 }
 
 func newExternalFileKeyring(fileSvc runtimefs.RuntimeFileService, path string) (Keyring, error) {
@@ -34,32 +35,71 @@ func newExternalFileKeyring(fileSvc runtimefs.RuntimeFileService, path string) (
 		return nil, fmt.Errorf("%w: %q is not absolute", constants.ErrKeyStoreExternalKeyPath, path)
 	}
 	path = filepath.Clean(path)
-	if _, err := fileSvc.Rel(path); err == nil {
+	if pathWithin(fileSvc.Resolve(""), path) {
 		return nil, fmt.Errorf("%w: %s is inside the runtime directory", constants.ErrKeyStoreExternalKeyPath, path)
 	}
-	return &externalFileKeyring{path: path}, nil
+	return &externalFileKeyring{path: path, root: fileSvc.Resolve("")}, nil
 }
 
 func (e *externalFileKeyring) Name() string {
 	return "external-file"
 }
 
+// pathWithin compares path components, including children whose names start with "..".
+func pathWithin(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 func (e *externalFileKeyring) RetrieveMasterKey() ([]byte, error) {
-	data, err := os.ReadFile(e.path)
+	// Recheck every read: secret mounts may rotate symlinks or permissions.
+	root, err := filepath.EvalSymlinks(e.root)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, constants.ErrKeyStoreKeyNotFound
-		}
-		return nil, fmt.Errorf("external master key: read %s: %w", e.path, err)
+		return nil, fmt.Errorf("%w: resolve runtime root: %w", constants.ErrKeyStoreExternalKeyPath, err)
 	}
-	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+	path, err := filepath.EvalSymlinks(e.path)
 	if err != nil {
-		return nil, fmt.Errorf("%w: external master key %s: %w", constants.ErrKeyStoreDecodeFailed, e.path, err)
+		return nil, fmt.Errorf("external master key: resolve provisioned file: %w (%s)", err, masterKeyProvisioning)
 	}
-	if len(key) == 0 {
-		return nil, constants.ErrKeyStoreKeyNotFound
+	if pathWithin(root, path) {
+		return nil, fmt.Errorf("%w: resolved file is inside runtime directory", constants.ErrKeyStoreExternalKeyPath)
 	}
-	return key, nil
+	f, err := openExternalKey(path)
+	if err != nil {
+		return nil, fmt.Errorf("external master key: open: %w (%s)", err, masterKeyProvisioning)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("external master key: stat: %w", err)
+	}
+	const maxKeyFileSize = 4096
+	if !info.Mode().IsRegular() || info.Size() > maxKeyFileSize {
+		return nil, constants.ErrKeyStoreExternalFileInvalid
+	}
+	if err := validateExternalKeyMetadata(info); err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxKeyFileSize+1))
+	defer vault.SecureZero(data)
+	if err != nil {
+		return nil, fmt.Errorf("external master key: read: %w", err)
+	}
+	if len(data) > maxKeyFileSize {
+		return nil, constants.ErrKeyStoreExternalFileInvalid
+	}
+	encoded := bytes.TrimSpace(data)
+	key := make([]byte, base64.StdEncoding.DecodedLen(len(encoded)))
+	n, err := base64.StdEncoding.Decode(key, encoded)
+	if err != nil {
+		vault.SecureZero(key)
+		return nil, fmt.Errorf("%w: external master key: %w", constants.ErrKeyStoreDecodeFailed, err)
+	}
+	if n != vault.KeySize {
+		vault.SecureZero(key)
+		return nil, fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreInvalidKeyLength, n, vault.KeySize)
+	}
+	return key[:n], nil
 }
 
 func (e *externalFileKeyring) StoreMasterKey([]byte) error {

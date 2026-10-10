@@ -56,7 +56,7 @@ func (f *reportFlags) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.dataDir, "data-dir", "", "Data directory (default: "+paths.Infra.DataDir+")")
 	cmd.Flags().StringVar(&f.runtimeDir, "runtime-dir", "", "Runtime directory (default: "+paths.Infra.RuntimeDir+")")
 	cmd.Flags().StringVar(&f.ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/data/ledger)")
-	cmd.Flags().StringVar(&f.masterKeyFile, "master-key-file", "", "Absolute path to the master key file the runtime was started with (default: OS key store)")
+	cmd.Flags().StringVar(&f.masterKeyFile, "master-key-file", "", "Absolute path to a provisioned base64 32-byte master key outside the runtime root; Linux mode 0400 or 0600. Nonblank flag overrides G8E_MASTER_KEY_FILE; blank uses environment, then OS key store. No fallback on failure.")
 }
 
 func (f *reportFlags) resolveOptions() (reporting.Options, error) {

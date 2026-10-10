@@ -38,14 +38,15 @@ type EncryptedSecret struct {
 	Ciphertext []byte `json:"ciphertext"`
 }
 
-// Options selects where the master key lives. The zero value uses the
-// platform's OS-protected store: the macOS Keychain, the Linux Secret Service
-// (libsecret), or Windows DPAPI. There is no plaintext fallback.
+// Options selects where the master key lives. A blank value uses
+// G8E_MASTER_KEY_FILE, then the platform's OS-protected store: the macOS
+// Keychain, Linux Secret Service (libsecret), or Windows DPAPI. No unprotected
+// fallback key is generated.
 type Options struct {
 	// MasterKeyFile is an absolute path to an operator-provisioned master key
 	// (base64 of 32 random bytes), such as a Docker or Kubernetes secret mount.
 	// It must live outside the runtime directory and is never written by g8e.
-	// Use it where no OS key store exists, such as containers.
+	// A nonblank trimmed value overrides G8E_MASTER_KEY_FILE. Blank means unset.
 	MasterKeyFile string
 }
 
@@ -66,16 +67,25 @@ func NewWithKeyringAndFS(logger *slog.Logger, keyring Keyring, fileSvc fs.Runtim
 	}, nil
 }
 
+const masterKeyProvisioning = "provision an external master key with --master-key-file or G8E_MASTER_KEY_FILE"
+
+// ResolveMasterKeyFile selects a nonblank explicit path, then the registered
+// secret-path environment variable. Blank inputs select the OS keyring.
+// Resolution only reads configuration; it never discovers or writes files.
+func ResolveMasterKeyFile(explicit string) string {
+	if path := strings.TrimSpace(explicit); path != "" {
+		return path
+	}
+	return strings.TrimSpace(os.Getenv(string(constants.EnvVar.MasterKeyFile)))
+}
+
 // NewWithFS creates a Keystore backed by the master key store that opts
 // selects. It fails closed when no OS-protected store is available.
 func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger, opts Options) (*Keystore, error) {
 	if fileSvc == nil {
 		return nil, fmt.Errorf("keystore: %w: runtime file service", constants.ErrMissingRequiredField)
 	}
-	masterKeyFile := strings.TrimSpace(opts.MasterKeyFile)
-	if masterKeyFile == "" {
-		masterKeyFile = strings.TrimSpace(os.Getenv(string(constants.EnvVar.MasterKeyFile)))
-	}
+	masterKeyFile := ResolveMasterKeyFile(opts.MasterKeyFile)
 	var keyring Keyring
 	var err error
 	if masterKeyFile != "" {
@@ -86,18 +96,7 @@ func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger, opts Options)
 	} else {
 		keyring, err = platformKeyring(fileSvc)
 		if err != nil {
-			if home, homeErr := os.UserHomeDir(); homeErr == nil {
-				defaultKeyPath := filepath.Join(home, ".g8e_master_key")
-				if info, statErr := os.Stat(defaultKeyPath); statErr == nil && !info.IsDir() {
-					if fileKeyring, fileErr := newExternalFileKeyring(fileSvc, defaultKeyPath); fileErr == nil {
-						keyring = fileKeyring
-						err = nil
-					}
-				}
-			}
-			if err != nil {
-				return nil, fmt.Errorf("keystore: %w: %w (provision a master key with --master-key-file)", constants.ErrKeyStoreOSKeyringRequired, err)
-			}
+			return nil, fmt.Errorf("keystore: %w: %w (%s)", constants.ErrKeyStoreOSKeyringRequired, err, masterKeyProvisioning)
 		}
 	}
 	return &Keystore{
@@ -131,7 +130,7 @@ func (k *Keystore) Initialize() error {
 			k.logger.Info("[Keystore] Master key not found, generating new key", "keyring", k.keyring.Name())
 			return k.generateAndStoreMasterKey()
 		}
-		return fmt.Errorf("%w: %w", constants.ErrKeyStoreRetrieveFailed, err)
+		return fmt.Errorf("%w: %w (%s)", constants.ErrKeyStoreRetrieveFailed, err, masterKeyProvisioning)
 	}
 	defer vault.SecureZero(key)
 
@@ -154,7 +153,7 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 	}
 
 	if err := k.keyring.StoreMasterKey(key); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyStoreStoreFailed, err)
+		return fmt.Errorf("%w: %w (%s)", constants.ErrKeyStoreStoreFailed, err, masterKeyProvisioning)
 	}
 
 	stored, err := k.keyring.RetrieveMasterKey()

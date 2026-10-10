@@ -287,7 +287,7 @@ func rejectTrailingPublicJSON(decoder *json.Decoder) error {
 
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "public", Short: "Manage the public spectator feed"}
-	cmd.PersistentFlags().String("master-key-file", "", "Absolute path to the master key file the Gateway was started with (default: OS key store)")
+	cmd.PersistentFlags().String("master-key-file", "", "Absolute path to a provisioned base64 32-byte master key outside the runtime root; Linux mode 0400 or 0600. Nonblank flag overrides G8E_MASTER_KEY_FILE; blank uses environment, then OS key store. No fallback on failure.")
 	configCmd := &cobra.Command{Use: "config", Short: "Manage public-feed configuration"}
 	configCmd.AddCommand(publicConfigSetCmdWithConfig(shared.LoadConfig, shared.NewFileSvc))
 	sourceCmd := &cobra.Command{Use: "source", Short: "Manage the active public-feed source"}

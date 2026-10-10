@@ -500,3 +500,18 @@ func TestOperatorDeployParallelEnrollmentApprovesOnlyOwnRequests(t *testing.T) {
 		assert.Contains(t, out, fmt.Sprintf("session-%d", i))
 	}
 }
+
+func TestOperatorDeployMasterKey_OnlyExplicitTargetPathIsForwarded(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.MasterKeyFile), "/developer/private/key")
+	cmd := operatorDeployCmd()
+	args, err := operatorDeployStartArgs(cmd)
+	require.NoError(t, err)
+	for _, arg := range args {
+		assert.NotContains(t, arg, "master-key-file")
+	}
+	require.NoError(t, cmd.Flags().Set("master-key-file", "/target/private/key"))
+	args, err = operatorDeployStartArgs(cmd)
+	require.NoError(t, err)
+	assert.Contains(t, args, "--master-key-file=/target/private/key")
+	assert.NotContains(t, args, "--master-key-file=/developer/private/key")
+}

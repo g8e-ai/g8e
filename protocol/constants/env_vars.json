@@ -245,7 +245,7 @@
       "_go_const": "EnvVar.MasterKeyFile",
       "value": "G8E_MASTER_KEY_FILE",
       "category": "secret",
-      "description": "Path to external master key file for Docker Compose secret provisioning and e2e-docker tests"
+      "description": "Absolute path to a provisioned base64 32-byte master key outside the runtime root; used by Gateway, Operator, and keystore CLI consumers when --master-key-file is blank, and by Compose/e2e-docker provisioning"
     }
   }
 }

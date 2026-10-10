@@ -216,6 +216,8 @@ The canonical runtime file service creates the tree at startup. The canonical da
 
 The `g8e vault` commands provide explicit administration:
 
+The Operator selects a nonblank `--master-key-file`, then `G8E_MASTER_KEY_FILE` in its own service environment, then its OS keyring. Empty or whitespace-only flags are unset. For remote deployment, explicitly supplied paths refer to the target host; the deployer's local environment path is not forwarded. Provision a separate key for each separately administered runtime. Linux secret mounts require service-readable `0400` or `0600` mode and service-user or root ownership. See [encryption](../architecture/encryption.md) for external-file validation and key continuity requirements.
+
 - `g8e vault init [--master-key-file <path>]`
 - `g8e vault unlock [--master-key-file <path>]`
 - `g8e vault status`

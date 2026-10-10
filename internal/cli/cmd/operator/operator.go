@@ -436,7 +436,7 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", true, "Enable execution vault (data stays in working directory)")
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
-	cmd.Flags().StringVar(&masterKeyFile, "master-key-file", "", "Absolute path to an operator-provisioned master key (base64 of 32 random bytes) outside the runtime directory. Required where no OS key store exists (containers, headless Linux without a Secret Service)")
+	cmd.Flags().StringVar(&masterKeyFile, "master-key-file", "", "Absolute path to a provisioned base64 32-byte master key outside the runtime root; Linux mode 0400 or 0600. Nonblank flag overrides G8E_MASTER_KEY_FILE; blank uses environment, then OS key store. No fallback on failure.")
 	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat send interval in seconds (0-300; 0 selects 30; declared to the Gateway at session start, which marks the Operator stale after twice this interval, minimum 60 seconds)")
 	cmd.Flags().IntVar(&gatewayHTTPPort, "gateway-http-port", 0, "Gateway HTTP discovery port to dial (default: platform default)")
 	cmd.Flags().IntVar(&gatewayHTTPSPort, "gateway-https-port", 0, "Gateway HTTPS/mTLS port to dial (default: platform default)")

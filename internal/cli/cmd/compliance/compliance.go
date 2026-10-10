@@ -145,7 +145,7 @@ prove no result was produced from evidence outside the assessment context.`,
 	cmd.Flags().StringSliceVar(&actionIDs, "action-id", nil, "Allowed evidence action or transaction ID (repeatable)")
 	cmd.Flags().Int64Var(&evidenceWindowStartUnixMs, "evidence-window-start-unix-ms", 0, "Inclusive start of the evidence collection interval in Unix milliseconds (required)")
 	cmd.Flags().Int64Var(&evidenceWindowEndUnixMs, "evidence-window-end-unix-ms", 0, "Inclusive end of the evidence collection interval in Unix milliseconds (required)")
-	cmd.Flags().StringVar(&masterKeyFile, "master-key-file", "", "Absolute path to the master key file the runtime was started with (default: OS key store)")
+	cmd.Flags().StringVar(&masterKeyFile, "master-key-file", "", "Absolute path to a provisioned base64 32-byte master key outside the runtime root; Linux mode 0400 or 0600. Nonblank flag overrides G8E_MASTER_KEY_FILE; blank uses environment, then OS key store. No fallback on failure.")
 	_ = cmd.MarkFlagRequired("scope-id")
 	_ = cmd.MarkFlagRequired("run-id")
 	_ = cmd.MarkFlagRequired("assertion-assessment-id")

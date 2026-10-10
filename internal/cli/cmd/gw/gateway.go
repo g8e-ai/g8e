@@ -15,7 +15,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -39,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 )
 
@@ -115,7 +115,7 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.PKIDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
 	cmd.Flags().StringVar(&f.SecretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
 	cmd.Flags().StringVar(&f.VaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
-	cmd.Flags().StringVar(&f.MasterKeyFile, "master-key-file", "", "Absolute path to an operator-provisioned master key (base64 of 32 random bytes) outside the runtime directory, such as a Docker or Kubernetes secret. Required where no OS key store exists (containers, headless Linux without a Secret Service)")
+	cmd.Flags().StringVar(&f.MasterKeyFile, "master-key-file", "", "Absolute path to a provisioned base64 32-byte master key outside the runtime root; Linux mode 0400 or 0600. Nonblank flag overrides G8E_MASTER_KEY_FILE; blank uses environment, then OS key store. No fallback on failure.")
 	cmd.Flags().StringVar(&f.PasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&f.PasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	cmd.Flags().StringArrayVar(&f.PasskeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
@@ -149,17 +149,7 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.VaultDir == "" {
 		f.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
 	}
-	if f.MasterKeyFile == "" {
-		f.MasterKeyFile = os.Getenv(string(constants.EnvVar.MasterKeyFile))
-	}
-	if f.MasterKeyFile == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			defaultKeyPath := filepath.Join(home, ".g8e_master_key")
-			if info, err := os.Stat(defaultKeyPath); err == nil && !info.IsDir() {
-				f.MasterKeyFile = defaultKeyPath
-			}
-		}
-	}
+	f.MasterKeyFile = keystore.ResolveMasterKeyFile(f.MasterKeyFile)
 	if f.ConsensusID == "" {
 		f.ConsensusID = os.Getenv(string(constants.EnvVar.ConsensusID))
 	}

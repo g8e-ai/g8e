@@ -107,6 +107,8 @@ var (
 	ErrKeyStoreSecretServiceDown  = errors.New("libsecret: secret service unavailable")
 	ErrKeyStoreDPAPIFailed        = errors.New("dpapi: protect or unprotect master key failed")
 
+	ErrKeyStoreExternalFileInvalid = errors.New("external master key requires a small regular file with safe ownership and permissions")
+
 	// Ledger errors
 	ErrLedgerDisabled       = errors.New("ledger is disabled")
 	ErrLedgerConfigRequired = errors.New("ledger config is required")

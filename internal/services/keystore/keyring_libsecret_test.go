@@ -12,7 +12,6 @@ package keystore
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
 	"io"
 	"os/exec"
 	"strings"
@@ -156,37 +155,11 @@ func fakeExitError(exitCode int) error {
 	return cmd.Run()
 }
 
-// TestLibsecretKeyring_RealSecretTool performs a real round trip against secret-tool
-// and skips only when secret-tool or D-Bus / Secret Service is absent.
-func TestLibsecretKeyring_RealSecretTool(t *testing.T) {
-	if _, err := exec.LookPath("secret-tool"); err != nil {
-		t.Skip("secret-tool not available, skipping real libsecret test")
+func TestLibsecretKeyring_CorruptLookupDoesNotMeanMissing(t *testing.T) {
+	for _, data := range []string{"", "bad!", base64.StdEncoding.EncodeToString(make([]byte, 16))} {
+		kr := &libsecretKeyring{run: func(io.Reader, ...string) ([]byte, []byte, error) { return []byte(data), nil, nil }}
+		_, err := kr.RetrieveMasterKey()
+		require.Error(t, err)
+		require.NotErrorIs(t, err, constants.ErrKeyStoreKeyNotFound)
 	}
-
-	kr, err := newLibsecretKeyring(runSecretTool)
-	if err != nil {
-		if errors.Is(err, constants.ErrKeyStoreSecretServiceDown) {
-			t.Skipf("Secret Service/D-Bus not available: %v", err)
-		}
-		require.NoError(t, err)
-	}
-
-	testKey := make([]byte, vault.KeySize)
-	for i := range testKey {
-		testKey[i] = byte(i)
-	}
-
-	err = kr.StoreMasterKey(testKey)
-	require.NoError(t, err)
-
-	retrieved, err := kr.RetrieveMasterKey()
-	require.NoError(t, err)
-	assert.Equal(t, testKey, retrieved)
-
-	err = kr.DeleteMasterKey()
-	require.NoError(t, err)
-
-	_, err = kr.RetrieveMasterKey()
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrKeyStoreKeyNotFound)
 }

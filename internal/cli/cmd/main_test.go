@@ -356,3 +356,15 @@ func TestRootCommand_RuntimeErrorsAreRenderedOnceWithoutUsage(t *testing.T) {
 	assert.True(t, rootCmd.SilenceErrors, "ExecuteWithVersionInfo owns error rendering")
 	assert.True(t, rootCmd.SilenceUsage, "runtime failures must not print command usage")
 }
+
+func TestExecuteRootCmd_RendersFailureOnceOnConfiguredStderr(t *testing.T) {
+	root := NewRootCmd("dev", serve.VersionInfo{})
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"invalid-command"})
+	require.Error(t, executeRootCmd(root))
+	assert.Equal(t, 1, strings.Count(stderr.String(), "Error:"))
+	assert.NotContains(t, stderr.String(), "Usage:")
+	assert.Empty(t, stdout.String())
+}
