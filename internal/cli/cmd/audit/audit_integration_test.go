@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -70,6 +71,11 @@ func TestAuditAppQueries_DocumentCreateMergeThroughRealGateway(t *testing.T) {
 	cfg.Gateway.Posture = config.PostureDoctrine
 	cfg.Gateway.SecretsDir = gatewayFiles.Resolve(constants.SecretsDirname)
 	cfg.Gateway.VaultDir = gatewayFiles.Resolve(constants.VaultDirname)
+	masterKey := make([]byte, 32)
+	_, err = io.ReadFull(rand.Reader, masterKey)
+	require.NoError(t, err)
+	cfg.Gateway.MasterKeyFile = filepath.Join(testutil.TempDir(t), "master-key")
+	require.NoError(t, os.WriteFile(cfg.Gateway.MasterKeyFile, []byte(base64.StdEncoding.EncodeToString(masterKey)), 0o600))
 	svc, err := gateway.NewGatewayModeService(cfg, gatewayFiles, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { svc.Stop(ctx) })

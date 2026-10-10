@@ -33,7 +33,9 @@ func TestGatewayConstructsAndRegistersAllEmbeddedOperatorRoles(t *testing.T) {
 	cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: "http://127.0.0.1:11434", KeepAlive: "-1"}
 	cfg.ProviderBoundaryObserver = config.ProviderBoundaryObserverConfig{Enabled: true, ObserverID: "embedded-observer"}
 	cfg.ProvenanceOperator = config.ProvenanceOperatorConfig{Enabled: true, OperatorID: "embedded-provenance", ModelStorageRoot: testutil.TempDir(t)}
-	svc, err := NewGatewayModeService(cfg, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
+	require.NoError(t, err)
+	svc, err := NewGatewayModeServiceWithDB(cfg, fileSvc, logger, db, nil, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { svc.Stop(context.Background()) })
 	_, sessionID, err := svc.embeddedOperator.ClaimEmbeddedOperator(t.Context(), "owner")

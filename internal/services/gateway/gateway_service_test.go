@@ -51,7 +51,10 @@ func newTestGatewayService(t *testing.T, opts testGatewayOpts) *GatewayModeServi
 	cfg.Gateway.HTTPPort = opts.httpPort
 	cfg.Gateway.Posture = opts.posture
 
-	ls, err := NewGatewayModeService(cfg, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
+	require.NoError(t, err)
+
+	ls, err := NewGatewayModeServiceWithDB(cfg, fileSvc, logger, db, nil, nil)
 	require.NoError(t, err)
 	// Pub/sub callbacks run without a request context and use serviceCtx.
 	ls.serviceCtx = context.Background()
