@@ -12,9 +12,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"log/slog"
-	"net"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -23,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
@@ -295,26 +292,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
 	}
 
-	// Create governance dependencies for transaction verification.
-	// The gateway owns the state Merkle root; operators are leaves in the
-	// gateway's Merkle tree. When the operator is configured to talk to a
-	// gateway (OperatorEndpoint is set), it fetches the gateway's state root
-	// via the /api/v1/state endpoint and uses it for L4Warden verification
-	// instead of computing its own local root. In standalone mode (no
-	// gateway endpoint), fall back to the local StateRootService.
-	var stateRootProvider governance.StateRootProvider
-	if vs.config.Endpoint != "" {
-		httpClient, err := httpclient.NewWithTLSConfigAndServerName(vs.tlsConfig, vs.config.TLSServerName)
-		if err != nil {
-			return fmt.Errorf("g8eo: failed to create state root HTTP client: %w", err)
-		}
-		baseURL := "https://" + net.JoinHostPort(vs.config.Endpoint, strconv.Itoa(vs.config.HTTPSPort))
-		stateRootProvider = governance.NewRemoteStateRootProvider(httpClient, baseURL, vs.logger)
-		vs.logger.Info("Using remote (gateway) state root provider", "state_url", baseURL+constants.APIPaths.State)
-	} else {
-		stateRootProvider = vs.gatewayDB.GetStateRootSvc()
-		vs.logger.Info("Using local state root provider (standalone mode)")
-	}
+	// Gateway-dispatched verification uses the admission snapshot already
+	// bound into the envelope. The provider captures this runtime's local
+	// state for L5 receipt evidence; execution never queries Gateway state.
+	stateRootProvider := vs.gatewayDB.GetStateRootSvc()
 	transactionAudit := auditStore
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command

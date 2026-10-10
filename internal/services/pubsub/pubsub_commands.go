@@ -813,8 +813,9 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 // envelopes issued by the Gateway DispatchService on the operator cmd channel.
 // The PDP binds state_merkle_root at construction; concurrent ledger
 // advancement must not invalidate that binding before the operator executes
-// the command. External callers that submit through ProcessEnvelope without
-// this context still re-fetch the live root.
+// the command. The root remains subject to canonical hash and required proof
+// verification. External callers that submit through ProcessEnvelope without
+// this context still read the local provider's live root.
 func gatewayDispatchedVerificationContext(parent context.Context, env *govpkg.GovernanceEnvelope) context.Context {
 	if parent == nil {
 		parent = context.Background()

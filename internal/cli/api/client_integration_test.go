@@ -17,6 +17,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -67,6 +69,39 @@ func newLocalhostTLSServer(t *testing.T, handler http.HandlerFunc) *httptest.Ser
 	server.StartTLS()
 
 	return server
+}
+
+func TestNewClient_NegotiatesHTTP2WithClientCertificate(t *testing.T) {
+	cfg, fileSvc := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
+	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	require.NoError(t, err)
+	certPEM, err := fileSvc.ReadFile(t.Context(), certRel)
+	require.NoError(t, err)
+	certBlock, _ := pem.Decode(certPEM)
+	require.NotNil(t, certBlock)
+	clientCert, err := x509.ParseCertificate(certBlock.Bytes)
+	require.NoError(t, err)
+	clientCAs := x509.NewCertPool()
+	clientCAs.AddCert(clientCert)
+
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NotEmpty(t, r.TLS.PeerCertificates)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"protocol_major":%d}`, r.ProtoMajor)
+	}))
+	server.EnableHTTP2 = true
+	server.TLS = &tls.Config{ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: clientCAs, MinVersion: tls.VersionTLS13}
+	server.StartTLS()
+	t.Cleanup(server.Close)
+	client := setupTLSClient(t, fileSvc, cfg, server)
+	t.Cleanup(client.httpClient.CloseIdleConnections)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	body, err := client.DoRequestContext(ctx, http.MethodGet, "/protocol", nil)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"protocol_major":2}`, string(body))
 }
 
 func TestDoRequest_Success(t *testing.T) {

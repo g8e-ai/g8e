@@ -39,7 +39,7 @@ L4 Warden (`internal/services/governance/l4_warden.go`) orchestrates all pre-dis
 2. **Action Type and Payload**: The known action type is validated and its typed protobuf payload is decoded.
 3. **L1 Doctrine**: Stateless validation in `internal/services/governance/l1_doctrine.go`. The executing Operator re-runs L1 locally even when the Gateway already screened the payload.
 4. **Transaction Hash**: The envelope `id` must match the deterministic transaction hash recomputed from envelope content.
-5. **State Root**: Stateful validation comparing `envelope.StateMerkleRoot` against the current root from `StateRootProvider` (`internal/services/gateway/state_root_service.go`). Outbound Operators compare against the Gateway state root, not a substituted local ledger root.
+5. **State Root**: Requires a nonempty `envelope.StateMerkleRoot`. Gateway-dispatched commands use the admission snapshot carried in the envelope, bound by canonical hash and required proof verification, without a remote lookup or a substituted local ledger root. Direct submissions without this context compare against the current local root from `StateRootProvider` (`internal/services/gateway/state_root_service.go`). L5 receipt roots come from the executing runtime's local store.
 6. **L2 Consensus**: Posture-gated Ed25519 signature verification against consensus policy. Verifies quorum of distinct consensus member signatures over the transaction hash.
 7. **L3 Notary**: Posture-gated human-presence verification (`internal/services/governance/l3_notary.go`). Runs only after L2 when both are required.
 

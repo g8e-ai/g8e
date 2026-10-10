@@ -51,7 +51,8 @@ const healthCheckTimeout = 10 * time.Second
 
 // Scenarios whose isolated Gateway listens on non-default ports (g8e test
 // scale) name them here; the suite and the CLI processes it starts then dial
-// those ports on localhost instead of the defaults.
+// those ports on IPv4 loopback instead of the defaults. Use the literal IP
+// because the isolated Gateway does not listen on IPv6 loopback.
 const (
 	e2eGatewayHTTPPortEnv  = "G8E_E2E_GATEWAY_HTTP_PORT"
 	e2eGatewayHTTPSPortEnv = "G8E_E2E_GATEWAY_HTTPS_PORT"
@@ -88,7 +89,7 @@ func e2eGatewayEndpointArgs() ([]string, error) {
 	if err != nil || httpPort == 0 {
 		return nil, err
 	}
-	return []string{"-e", net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpPort)), "-p", strconv.Itoa(httpsPort)}, nil
+	return []string{"-e", net.JoinHostPort(constants.LocalhostIP, strconv.Itoa(httpPort)), "-p", strconv.Itoa(httpsPort)}, nil
 }
 
 // loadE2EConfig resolves the repository root, loads CLI configuration from the
@@ -126,8 +127,8 @@ func loadE2EConfig() (*e2eConfig, error) {
 		return nil, fmt.Errorf("e2e: %w", err)
 	}
 	if httpPort != 0 {
-		config.SetHTTPEndpointOverride(net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpPort)))
-		config.SetHTTPSEndpointOverride(net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpsPort)))
+		config.SetHTTPEndpointOverride(net.JoinHostPort(constants.LocalhostIP, strconv.Itoa(httpPort)))
+		config.SetHTTPSEndpointOverride(net.JoinHostPort(constants.LocalhostIP, strconv.Itoa(httpsPort)))
 	}
 
 	gatewayHTTPURL := cfg.OperatorDiscoveryURL()

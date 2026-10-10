@@ -197,6 +197,8 @@ The HTTPS router is the main application surface; it hosts the console, browser-
 
 Default ports remain `8080` (HTTP) and `8443` (HTTPS) via `internal/constants/ports.go`; the code also reserves loopback-only secondary endpoints for the public spectator and eval explorer defaults (`8081`, `8082`, `5173`, and `11434` for Ollama), but these are auxiliary listeners rather than core Gateway protocol surfaces.
 
+The Gateway serves its configured HTTPS listener through `http.Server.ServeTLS`, which negotiates HTTP/2 through ALPN while retaining HTTP/1.1 for clients such as WebSocket Operators. It advertises `constants.GatewayHTTP2MaxConcurrentStreams` (8192 streams per connection) to accommodate a whole-fleet dispatch and concurrent control-plane requests without reaching the standard library's default stream limit and opening a burst of additional TCP connections. The CLI API client uses the shared IPv4 transport and enables HTTP/2 negotiation with its client certificate and trusted CA bundle. Concurrent governed dispatches share HTTP/2 connections; command concurrency and L1–L5 verification remain unchanged.
+
 ### Enrollment, bootstrap, and recovery routing
 
 The live routing model matches the code in `gateway_http_router.go` and the route registry in `gateway_auth.go`:

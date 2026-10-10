@@ -117,6 +117,32 @@ func TestG8eoService_Start_NoGitLeavesLedgerDisabledButKeepsHistoryHandler(t *te
 	assert.NotNil(t, service.executionVault)
 }
 
+func TestG8eoService_Start_ReceiptStateRootsUseLocalStore(t *testing.T) {
+	service := newStartableG8eoService(t, nil)
+	require.NoError(t, startWithTimeout(t, service))
+
+	// The bootstrap fixture serves no state endpoint. Receipt evidence must
+	// remain available locally once the Operator has its enrolled identity.
+	provider := service.pubSubCommands.Actuator().StateRootProvider
+	require.NotNil(t, provider)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	before, err := provider.GetCurrentStateRoot(ctx)
+	require.NoError(t, err, "receipt state must not require a Gateway HTTP lookup")
+	localBefore, err := service.gatewayDB.GetStateRootSvc().GetCurrentStateRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, localBefore, before)
+	require.NotEmpty(t, before)
+
+	require.NoError(t, service.gatewayDB.GetKVStore().KVSet(ctx, "receipt-local-state", "changed", 0))
+	after, err := provider.GetCurrentStateRoot(ctx)
+	require.NoError(t, err)
+	localAfter, err := service.gatewayDB.GetStateRootSvc().GetCurrentStateRoot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, localAfter, after)
+	require.NotEqual(t, before, after, "receipt roots must reflect changes in this runtime")
+}
+
 func TestG8eoService_StartReportsSubscribedSessionToDeploymentObserver(t *testing.T) {
 	service := newStartableG8eoService(t, nil)
 	subscribed := make(chan string, 1)

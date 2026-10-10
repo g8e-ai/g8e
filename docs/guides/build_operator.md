@@ -139,7 +139,7 @@ On a native Windows host, use `pwsh scripts/windows-setup.ps1` or run the Makefi
 
 #### Start a Gateway
 
-The Operator requires a reachable Gateway for enrollment, bootstrap configuration, state-root verification, pub/sub, and receipt publication. Start the Gateway first:
+The Operator requires a reachable Gateway for enrollment, bootstrap configuration, pub/sub, and receipt publication. Envelope verification and authoritative execution evidence remain local and require no state-root lookup. Start the Gateway first:
 
 ```bash
 ./g8e gw start
@@ -300,7 +300,7 @@ The Operator reserves the nonce before expensive validation so a crash cannot re
 1. Expiry and replay checks against the local replay store.
 2. Envelope structure, known action type, typed payload decoding, and L1 Doctrine validation.
 3. Recalculation of the transaction hash and equality checks against both `transaction_hash` and `id`.
-4. State binding against the current Gateway state root in outbound mode. The Operator fetches this root from the Gateway rather than treating its host-local ledger root as authoritative for the envelope.
+4. State binding to the Gateway admission snapshot already carried in the envelope on the authenticated command channel. The Operator verifies its canonical hash and required proofs without fetching that root or substituting its host-local ledger root. L5 reads local state for receipt evidence.
 5. Parsing of the posture carried by the envelope and verification of L2 and L3 evidence. `consensus` and `notary` require L2. `ratify` and `notary` require L3 for mutation action types. Missing optional evidence is recorded as not required rather than treated as a failed gate.
 
 A verification rejection produces deterministic stage evidence and a signed failed receipt when the Actuator and audit dependencies are available. Universal checks and posture-required checks fail closed.

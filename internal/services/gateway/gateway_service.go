@@ -1024,6 +1024,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		Addr:              net.JoinHostPort(listenHost, strconv.Itoa(cfg.Gateway.HTTPSPort)),
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
+		HTTP2:             &http.HTTP2Config{MaxConcurrentStreams: constants.GatewayHTTP2MaxConcurrentStreams},
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
 		WriteTimeout:      cfg.Gateway.WriteTimeout,
@@ -1321,10 +1322,8 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 			s.Addr = ln.Addr().String()
 		}
 
-		lnToServe := ln
 		tlsMode := "plain"
 		if s.TLSConfig != nil {
-			lnToServe = tls.NewListener(ln, s.TLSConfig)
 			// All servers now use mTLS (RequireAndVerifyClientCert)
 			if s.TLSConfig.ClientAuth == tls.RequireAndVerifyClientCert {
 				tlsMode = "mTLS"
@@ -1339,7 +1338,13 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 			"tls", tlsMode)
 
 		readyChan <- struct{}{}
-		errChan <- s.Serve(lnToServe)
+		if s.TLSConfig != nil {
+			// ServeTLS configures ALPN and HTTP/2 before wrapping the listener.
+			// The certificates and client verification policy are already in TLSConfig.
+			errChan <- s.ServeTLS(ln, "", "")
+		} else {
+			errChan <- s.Serve(ln)
+		}
 	}
 
 	for s, name := range uniqueServers {

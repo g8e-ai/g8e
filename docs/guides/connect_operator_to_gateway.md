@@ -44,7 +44,7 @@ No inbound port is required on the Operator host.
 
 ### Endpoint Requirements
 
-Use a bare hostname with `g8e operator start --endpoint`, without an `http://` or `https://` scheme and without a port suffix. The worker uses Gateway port 8080 for discovery and enrollment bootstrap and port 8443 for mTLS authentication, state queries, receipt publication, and pub/sub channel subscription. The global `--port` flag does not affect `operator start`; non-default Gateway ports are not supported by this command path.
+Use a bare hostname with `g8e operator start --endpoint`, without an `http://` or `https://` scheme and without a port suffix. The worker uses Gateway port 8080 for discovery and enrollment bootstrap and port 8443 for mTLS authentication and the WebSocket pub/sub channels carrying commands, heartbeats, results, and receipts. Command verification uses the admission snapshot already bound into the envelope; receipt state roots come from the Operator's local store. The worker does not query Gateway state during execution. The global `--port` flag does not affect `operator start`; non-default Gateway ports are not supported by this command path.
 
 The hostname must resolve on the Operator host and must match the Gateway certificate identity. A raw IP endpoint remains the network dial target while g8e verifies the Gateway as its built-in `g8e.local` TLS identity. This keeps certificate verification enabled without requiring a hosts-file entry or `InsecureSkipVerify`. You may still map a stable address to `g8e.local` and use that hostname explicitly:
 

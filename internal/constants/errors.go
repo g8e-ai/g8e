@@ -958,7 +958,6 @@ var (
 	// State root service errors
 	ErrStateRootCalculate        = errors.New("state root calculation failed")
 	ErrStateRootPersist          = errors.New("state root persistence failed")
-	ErrStateRootFetch            = errors.New("failed to fetch state root from gateway")
 	ErrStateRootQueryTable       = errors.New("failed to query table")
 	ErrStateRootIterateRows      = errors.New("failed to iterate rows")
 	ErrStateRootUnknownSource    = errors.New("unknown state commitment source")

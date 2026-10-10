@@ -113,6 +113,18 @@ func TestOperatorFleet_HoldsUnderFanOut(t *testing.T) {
 	concurrencies := fleetConcurrencies(t)
 	rounds := fleetIntEnv(t, fleetRoundsEnv, defaultFleetRounds)
 
+	// The scale Gateway binds IPv4 loopback. Both in-process API calls and
+	// child CLI dispatches must use that address without resolving localhost.
+	httpPort, httpsPort, err := e2eGatewayPorts()
+	require.NoError(t, err)
+	if httpPort != 0 {
+		require.Equal(t, fmt.Sprintf("http://%s:%d", constants.LocalhostIP, httpPort), e2eCfg.gatewayHTTPURL)
+		require.Equal(t, fmt.Sprintf("https://%s:%d", constants.LocalhostIP, httpsPort), e2eCfg.gatewayHTTPSURL)
+		endpointArgs, err := e2eGatewayEndpointArgs()
+		require.NoError(t, err)
+		require.Equal(t, []string{"-e", fmt.Sprintf("%s:%d", constants.LocalhostIP, httpPort), "-p", strconv.Itoa(httpsPort)}, endpointArgs)
+	}
+
 	report := fleetReport{Size: size, TargetScope: "all-active including embedded"}
 	if len(sessions) > 0 {
 		report.TargetScope = "explicit remote session cohort; embedded excluded"

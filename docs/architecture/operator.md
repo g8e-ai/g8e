@@ -162,7 +162,7 @@ A command relay does not synthesize missing proofs, so a relay path must carry e
 1. **In-flight nonce tracking**: Tracks the nonce in process memory and reserves it in the durable replay store before expensive validation to prevent race conditions during crashes.
 2. **Expiry and nonce validation**: Checks that nonce and expiry fields are present, the transaction is not expired, and the nonce has not been replayed in the local store.
 3. **Stateless validation**: Validates protocol version, action type, decodes the typed protobuf payload, runs local L1 Doctrine validation against the decoded payload, recomputes the transaction hash, and verifies it matches both `transaction_hash` and the envelope `id`.
-4. **Stateful validation**: Fetches the current state root from the configured provider and verifies it matches the envelope's `StateMerkleRoot`. In outbound mode, the provider obtains the Gateway state root; the Operator never substitutes its local ledger root for the Gateway root.
+4. **State binding**: Requires a nonempty `StateMerkleRoot`. On the authenticated command channel, L4 uses the Gateway admission snapshot carried in the envelope and already bound by the recomputed transaction hash and required proofs. It does not query the Gateway or substitute the Operator's local ledger root. Direct envelope submission without this Gateway-dispatch context compares against the executing runtime's current local state root.
 5. **Posture validation**: Reads the envelope's governance posture from its `Posture` field and verifies posture-required L2 and L3 evidence (signatures and proofs) according to the active posture's enforcement model.
 
 A rejected transaction does not reach the L5 Actuator. The Warden produces deterministic stage evidence for each verification stage and releases the nonce reservation when validation fails. When the Actuator and its audit dependencies are available, rejections are recorded as signed failed receipts with stage evidence.
@@ -177,7 +177,7 @@ A rejected transaction does not reach the L5 Actuator. The Warden produces deter
 4. Mints a transaction-bound, short-lived capability and places it in the execution context.
 5. Dispatches the typed action to the registered execution handler.
 6. Dissolves the capability after the handler returns, including when the handler fails.
-7. Captures the resulting state root, signs and persists a final `COMPLETED` or `FAILED` receipt, and records receipt-persistence evidence.
+7. Captures the executing runtime's local state root, signs and persists a final `COMPLETED` or `FAILED` receipt, and records receipt-persistence evidence. Both receipt state roots come from the Operator's local store; they do not require a Gateway lookup.
 8. Publishes the final signed receipt to the Gateway on a best-effort basis.
 
 The Actuator returns execution errors after final receipt processing. The host-local receipt and commitment record remain the authoritative execution evidence even when publication to the Gateway fails.

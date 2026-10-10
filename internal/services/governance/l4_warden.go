@@ -456,10 +456,10 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 }
 
 // verifyStateful checks the state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-// If the caller has placed a pre-fetched state merkle root in the context (the
-// in-process gateway build path), that root is used so concurrent mutations do
-// not invalidate the envelope between construction and verification. External
-// operator-side verification always re-fetches from the provider.
+// Gateway-built transactions carry their admission snapshot in context, both
+// in-process and on the authenticated outbound command channel. Concurrent
+// mutations must not invalidate that binding before execution. Direct envelope
+// submissions without that context compare against the local provider.
 func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.GovernanceEnvelope) error {
 	if envelope.StateMerkleRoot == "" {
 		return constants.ErrTxStateRootRequired

@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -102,12 +103,14 @@ func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string
 		MinVersion:   tls.VersionTLS13,
 	}
 
+	transport := httpclient.NewIPv4Transport(tlsConfig)
+	// Custom TLS configuration otherwise disables HTTP/2 negotiation. Share
+	// connections across concurrent dispatches instead of bursting TCP dials.
+	transport.ForceAttemptHTTP2 = true
+	transport.MaxIdleConnsPerHost = opts.MaxIdleConnsPerHost
 	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig:     tlsConfig,
-			MaxIdleConnsPerHost: opts.MaxIdleConnsPerHost,
-		},
-		Timeout: timeout,
+		Transport: transport,
+		Timeout:   timeout,
 	}
 
 	return &Client{
