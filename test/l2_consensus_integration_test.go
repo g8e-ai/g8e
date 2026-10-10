@@ -26,13 +26,7 @@ or database. The only fiction is the client identity (generated test CSRs).
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
-	"encoding/pem"
 	"net/http"
 	"testing"
 
@@ -72,23 +66,6 @@ func doToolsCall(t *testing.T, client *http.Client, httpsPort int, sessionID str
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	return resp
-}
-
-// generateTestCSR generates a P-256 CSR and returns the PEM-encoded CSR and
-// the private key bytes (EC PEM format).
-func generateTestCSR(t *testing.T, commonName string) (string, []byte) {
-	t.Helper()
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	csrTmpl := &x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: commonName},
-	}
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
-	require.NoError(t, err)
-	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
-	privBytes, err := x509.MarshalECPrivateKey(priv)
-	require.NoError(t, err)
-	return csrPEM, privBytes
 }
 
 // TestL2Consensus_IdempotentEnrollment verifies that enrolling the same

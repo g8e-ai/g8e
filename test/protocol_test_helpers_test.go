@@ -184,22 +184,6 @@ func newAdapterFixture(t *testing.T, testName, downstreamURL string) adapterFixt
 	}
 }
 
-// postAdapter sends a raw request body to the adapter's endpoint with the
-// enrolled identity's bearer token and returns the response body. Used by the
-// error-case tests that need to send malformed/raw bodies.
-func (af adapterFixture) postAdapter(t *testing.T, adapter protocolAdapter, body []byte) []byte {
-	t.Helper()
-	req, _ := http.NewRequest(http.MethodPost, af.mtlsURL+adapter.endpoint(), bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+af.identity.OperatorSessionID)
-	resp, err := af.client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	out, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return out
-}
-
 // postAdapterWithStatus is postAdapter that also returns the HTTP status code,
 // for tests that assert on the status code.
 func (af adapterFixture) postAdapterWithStatus(t *testing.T, adapter protocolAdapter, body []byte) (int, []byte) {
