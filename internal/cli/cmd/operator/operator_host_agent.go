@@ -98,6 +98,10 @@ func ExecuteDeployHost(ctx context.Context, req models.DeployHostRequest, factor
 		if err := ExecuteDeployHostInstall(ctx, req.Source, target); err != nil {
 			return resp, err
 		}
+		resolvedTarget, _ := resolveHomePath(target)
+		if absTarget, err := filepath.Abs(resolvedTarget); err == nil {
+			resp.ResolvedDirs = []string{absTarget}
+		}
 		return resp, nil
 
 	case models.DeployHostActionLink:
@@ -522,7 +526,7 @@ func ExecuteDeployHostStop(ctx context.Context, destDir, workingDir string) ([]i
 	}
 
 	// 2. Also check recorded PID files under destDir and/or workingDir (for non-Linux or script/fallback workers).
-	fallbackPIDs := stopWorkersFromPIDFiles(ctx, cleanDest, cleanWork, matchesDir)
+	fallbackPIDs := stopWorkersFromPIDFiles(cleanDest, cleanWork, matchesDir)
 	for _, pid := range fallbackPIDs {
 		if !slices.Contains(stoppedPIDs, pid) {
 			stoppedPIDs = append(stoppedPIDs, pid)
@@ -533,7 +537,7 @@ func ExecuteDeployHostStop(ctx context.Context, destDir, workingDir string) ([]i
 	return stoppedPIDs, nil
 }
 
-func stopWorkersFromPIDFiles(ctx context.Context, destDir, workingDir string, matchesDir func(string) bool) []int {
+func stopWorkersFromPIDFiles(destDir, workingDir string, matchesDir func(string) bool) []int {
 	var pidFiles []string
 	if workingDir != "" {
 		p := filepath.Join(workingDir, constants.OperatorPIDFilename)
@@ -599,18 +603,14 @@ func stopWorkersFromPIDFiles(ctx context.Context, destDir, workingDir string, ma
 				return
 			}
 
-			_ = p.Signal(syscall.SIGTERM)
-			deadline := time.Now().Add(2 * time.Second)
-			exited := false
-			for time.Now().Before(deadline) && ctx.Err() == nil {
-				if err := p.Signal(syscall.Signal(0)); err != nil {
-					exited = true
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
+			if err := p.Signal(syscall.SIGTERM); err != nil {
+				_ = os.Remove(file)
+				return
 			}
+			exited, _ := waitPIDTermination(pid, 2*time.Second)
 			if !exited {
 				_ = p.Kill()
+				_, _ = waitPIDTermination(pid, 2*time.Second)
 			}
 			_ = os.Remove(file)
 

@@ -8,6 +8,7 @@
 package testcmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -26,12 +28,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/sftp"
 	"github.com/spf13/cobra"
+	sshlib "golang.org/x/crypto/ssh"
 
+	operatorcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/operator"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/netutil"
+	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -57,7 +64,6 @@ const (
 
 	scaleMaxCount    = 5000                                                // operator deploy --start-index ceiling
 	scaleMaxParallel = constants.PlatformEnrollmentMaxLiveOperatorRequests // operator deploy --parallel ceiling
-	scaleStopGrace   = 5 * time.Second
 
 	// scaleFanOutAll selects one fan-out wave across every target: the fleet
 	// plus the embedded Operator.
@@ -79,6 +85,8 @@ type scaleConfig struct {
 	Binary            string
 	Clean             bool
 	SkipRestart       bool
+	Hosts             string
+	OperatorEndpoint  string
 }
 
 // scaleLayout names the directories of one run under its scratch root.
@@ -125,7 +133,7 @@ type scaleDeps struct {
 	run           scaleRunner
 	reservePorts  func() (scalePorts, error)
 	verifyGateway func(runDir string, ports scalePorts) error
-	stopWorkers   func(ctx context.Context, fleetDir string) (int, error)
+	stopWorkers   func(ctx context.Context, fleetDir, hosts string) (int, error)
 	sample        func(ctx context.Context, layout scaleLayout, interval time.Duration)
 	stdout        io.Writer
 }
@@ -228,8 +236,44 @@ restart-report.json, scale-summary.json) is kept under <root>/out.`,
 	cmd.Flags().StringVar(&cfg.Binary, "binary", "", "g8e binary for the Gateway and Operators (default: this executable)")
 	cmd.Flags().BoolVar(&cfg.Clean, "clean", false, "Remove an existing non-empty --root before the run")
 	cmd.Flags().BoolVar(&cfg.SkipRestart, "skip-restart", false, "Skip the Gateway restart recovery scenario")
+	cmd.Flags().StringVar(&cfg.Hosts, "hosts", "local", "Comma-separated target hosts for operator deployment (local or SSH hosts)")
+	cmd.Flags().StringVar(&cfg.OperatorEndpoint, "operator-endpoint", "", "Worker-facing Gateway address for remote Operators")
 
 	return cmd
+}
+
+func isRemoteScaleHost(host string) bool {
+	h := strings.TrimSpace(host)
+	return h != "" && h != "local" && h != "localhost" && h != "127.0.0.1"
+}
+
+func (c *scaleConfig) hasRemoteHosts() bool {
+	for _, part := range strings.Split(c.Hosts, ",") {
+		if isRemoteScaleHost(part) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLoopbackEndpoint(endpoint string) bool {
+	ep := strings.TrimSpace(endpoint)
+	if idx := strings.Index(ep, "://"); idx != -1 {
+		ep = ep[idx+3:]
+	}
+	host := ep
+	if h, _, err := net.SplitHostPort(ep); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
+		return true
+	}
+	return false
 }
 
 func (c *scaleConfig) validate() error {
@@ -265,6 +309,17 @@ func (c *scaleConfig) validate() error {
 	c.FanOutConcurrency = strings.Join(levels, ",")
 	if c.ScenarioTimeout == 0 {
 		c.ScenarioTimeout = c.Soak + 20*time.Minute
+	}
+	if c.Hosts == "" {
+		c.Hosts = "local"
+	}
+	if c.hasRemoteHosts() {
+		if strings.TrimSpace(c.OperatorEndpoint) == "" {
+			return fmt.Errorf("%w: --operator-endpoint is required when remote hosts are targeted: %w", constants.ErrScaleTestInvalidInput, constants.ErrOperatorEndpointInvalid)
+		}
+		if isLoopbackEndpoint(c.OperatorEndpoint) {
+			return fmt.Errorf("%w: --operator-endpoint cannot be loopback (%s) when remote hosts are targeted: %w", constants.ErrScaleTestInvalidInput, c.OperatorEndpoint, constants.ErrOperatorEndpointInvalid)
+		}
 	}
 	return nil
 }
@@ -316,7 +371,7 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 		stopSampling()
 		sampling.Wait()
 		started := time.Now()
-		stopped, stopErr := deps.stopWorkers(teardownCtx, layout.Fleet)
+		stopped, stopErr := deps.stopWorkers(teardownCtx, layout.Fleet, cfg.Hosts)
 		summary.StoppedPIDs = stopped
 		if gatewayStarted {
 			if _, gwErr := deps.run(teardownCtx, scaleProcess{
@@ -354,7 +409,16 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 	}
 
 	if err := phase("gateway", func() error {
-		if err := child("gateway-start.log", "gw", "start", "--cert-mode", "localhost", "--posture", "doctrine",
+		listenHost := "127.0.0.1"
+		certMode := "localhost"
+		if cfg.hasRemoteHosts() {
+			listenHost = "0.0.0.0"
+			certMode = "full"
+		}
+		if err := child("gateway-start.log", "gw", "start",
+			"--listen-host", listenHost,
+			"--cert-mode", certMode,
+			"--posture", "doctrine",
 			"--http-port", httpPort, "--https-port", httpsPort,
 			"--public-spectator=false", "--rate-limit-rps", "0", "--log", "info"); err != nil {
 			return fmt.Errorf("gw start: %w", err)
@@ -382,9 +446,29 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 	if err := phase("enrollment", func() error {
 		for i, batch := range scaleBatches(cfg.Count, cfg.BatchSize) {
 			started := time.Now()
-			runErr := child(fmt.Sprintf("deploy-%03d.log", i+1), "operator", "deploy", "--local",
-				"--dest-dir", layout.Fleet, "--count", strconv.Itoa(batch.Count), "--start-index", strconv.Itoa(batch.StartIndex),
-				"--roles", "data", "-e", constants.LocalhostIP, "--gateway-http-port", httpPort, "--gateway-https-port", httpsPort, "--background", "--approve", "--parallel", strconv.Itoa(cfg.Parallel), "--log", "info")
+			endpoint := constants.LocalhostIP
+			if cfg.OperatorEndpoint != "" {
+				endpoint = cfg.OperatorEndpoint
+			}
+			deployArgs := []string{
+				"operator", "deploy",
+				"--hosts", cfg.Hosts,
+				"--dest-dir", layout.Fleet,
+				"--count", strconv.Itoa(batch.Count),
+				"--start-index", strconv.Itoa(batch.StartIndex),
+				"--roles", "data",
+				"-e", endpoint,
+				"--gateway-http-port", httpPort,
+				"--gateway-https-port", httpsPort,
+				"--background",
+				"--approve",
+				"--parallel", strconv.Itoa(cfg.Parallel),
+				"--log", "info",
+			}
+			if cfg.OperatorEndpoint != "" {
+				deployArgs = append(deployArgs, "--operator-endpoint", cfg.OperatorEndpoint)
+			}
+			runErr := child(fmt.Sprintf("deploy-%03d.log", i+1), deployArgs...)
 			batch.Seconds = time.Since(started).Seconds()
 			summary.Batches = append(summary.Batches, batch)
 			fmt.Fprintf(deps.stdout, "batch %d: op-%05d..op-%05d in %.1fs\n", i+1, batch.StartIndex, batch.StartIndex+batch.Count-1, batch.Seconds)
@@ -646,40 +730,141 @@ func scaleWorkerPIDs(fleetDir string) ([]int, error) {
 	return pids, nil
 }
 
-// stopScaleWorkers stops all of this run's workers at once: TERM where the
-// platform supports it, then KILL after a grace period. Only PIDs recorded
-// under fleetDir are signalled, so no unrelated Operator is affected.
-func stopScaleWorkers(ctx context.Context, fleetDir string) (int, error) {
-	pids, err := scaleWorkerPIDs(fleetDir)
+// stopScaleWorkers stops this run's workers across all targets concurrently.
+// Local workers are stopped in process via ExecuteDeployHostStop. Remote workers
+// are stopped over SSH via `operator deploy-host` stop action.
+func stopScaleWorkers(ctx context.Context, fleetDir, hosts string) (int, error) {
+	hostList := strings.Split(hosts, ",")
 	var wg sync.WaitGroup
-	for _, pid := range pids {
-		wg.Go(func() { stopScaleWorker(ctx, pid) })
+	var mu sync.Mutex
+	var totalStopped int
+	var errs []error
+
+	for _, h := range hostList {
+		targetHost := strings.TrimSpace(h)
+		if targetHost == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(host string) {
+			defer wg.Done()
+			if !isRemoteScaleHost(host) {
+				pids, err := operatorcmd.ExecuteDeployHostStop(ctx, fleetDir, "")
+				mu.Lock()
+				totalStopped += len(pids)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("local stop: %w", err))
+				}
+				mu.Unlock()
+				return
+			}
+			stopped, err := stopRemoteScaleWorkers(ctx, fleetDir, host)
+			mu.Lock()
+			totalStopped += stopped
+			if err != nil {
+				errs = append(errs, fmt.Errorf("remote stop on %s: %w", host, err))
+			}
+			mu.Unlock()
+		}(targetHost)
 	}
 	wg.Wait()
-	return len(pids), err
+	return totalStopped, errors.Join(errs...)
 }
 
-func stopScaleWorker(ctx context.Context, pid int) {
-	proc, err := os.FindProcess(pid)
+func stopRemoteScaleWorkers(ctx context.Context, fleetDir, host string) (int, error) {
+	r, err := ssh.ResolveHost(host, "", "", "", "")
 	if err != nil {
-		return // already gone (Windows opens a handle here)
+		return 0, fmt.Errorf("resolve host %s: %w", host, err)
 	}
-	defer func() { _ = proc.Release() }()
-	if runtime.GOOS == "windows" {
-		_ = proc.Kill()
-		return
+	if r.Hostname == "" {
+		return 0, fmt.Errorf("failed to resolve hostname for %s", host)
 	}
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		return // already gone
+	authMethods, err := ssh.BuildAuthMethods(r, "", "")
+	if err != nil {
+		return 0, fmt.Errorf("build auth methods for %s: %w", host, err)
 	}
-	deadline := time.Now().Add(scaleStopGrace)
-	for time.Now().Before(deadline) && ctx.Err() == nil {
-		if proc.Signal(syscall.Signal(0)) != nil {
-			return
+	if len(authMethods) == 0 {
+		return 0, fmt.Errorf("no SSH auth methods available for %s", host)
+	}
+	hostKeyCallback, err := ssh.BuildHostKeyCallback("")
+	if err != nil {
+		return 0, fmt.Errorf("host key callback for %s: %w", host, err)
+	}
+	clientConfig := &sshlib.ClientConfig{
+		User:            r.User,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+	addr := net.JoinHostPort(r.Hostname, r.Port)
+	client, err := ssh.DialSSH(ctx, r, clientConfig, addr)
+	if err != nil {
+		return 0, fmt.Errorf("dial ssh %s: %w", host, err)
+	}
+	defer client.Close()
+
+	// Detect WSL vs Linux via SFTP working directory
+	isWSL := false
+	sftpClient, err := sftp.NewClient(client)
+	if err == nil {
+		wd, err := sftpClient.Getwd()
+		_ = sftpClient.Close()
+		if err == nil {
+			if (strings.HasPrefix(wd, "/") && len(wd) >= 3 && wd[2] == ':') ||
+				(len(wd) >= 2 && wd[1] == ':') {
+				isWSL = true
+			}
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
-	_ = proc.Kill()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return 0, fmt.Errorf("new ssh session on %s: %w", host, err)
+	}
+	defer session.Close()
+
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = session.Close()
+		case <-done:
+		}
+	}()
+
+	req := models.DeployHostRequest{
+		Action:  models.DeployHostActionStop,
+		DestDir: fleetDir,
+	}
+	reqData, err := json.Marshal(req)
+	if err != nil {
+		return 0, fmt.Errorf("encode deploy-host stop request: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	session.Stdin = bytes.NewReader(reqData)
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	agentPath := filepath.ToSlash(filepath.Join(fleetDir, constants.DeployBinDirname, "g8e"))
+	cmdStr := fmt.Sprintf("%s operator deploy-host", agentPath)
+	if isWSL {
+		cmdStr = fmt.Sprintf("wsl.exe -e %s operator deploy-host", agentPath)
+	}
+
+	if err := session.Run(cmdStr); err != nil {
+		return 0, fmt.Errorf("exec deploy-host on %s: %w (stderr: %s)", host, err, strings.TrimSpace(stderr.String()))
+	}
+
+	var resp models.DeployHostResponse
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
+		return 0, fmt.Errorf("decode deploy-host response from %s: %w (stdout: %s)", host, err, strings.TrimSpace(stdout.String()))
+	}
+	if !resp.Success {
+		return 0, fmt.Errorf("deploy-host stop on %s failed: %s", host, resp.Error)
+	}
+	return resp.StoppedCount, nil
 }
 
 // sampleScaleResources appends one row per interval to gateway-resources.csv

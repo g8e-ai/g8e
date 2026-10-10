@@ -103,8 +103,9 @@ func TestOperatorDeploymentStateCommandReadsOnlyRequestedRuntime(t *testing.T) {
 		require.Equal(t, dir, base)
 		return fileSvc, nil
 	})
-	var output bytes.Buffer
+	var output, errOutput bytes.Buffer
 	cmd.SetOut(&output)
+	cmd.SetErr(&errOutput)
 	cmd.SetArgs([]string{"--working-dir", dir})
 	require.NoError(t, cmd.Execute())
 	require.JSONEq(t, "null", output.String())

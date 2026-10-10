@@ -22,7 +22,7 @@ func TestTestCmd_RegistersScale(t *testing.T) {
 	cmd, _, err := Cmd().Find([]string{"scale"})
 	require.NoError(t, err)
 	assert.Equal(t, "scale", cmd.Name())
-	for _, flag := range []string{"count", "batch-size", "parallel", "soak", "fan-out-concurrency", "rounds", "timeout", "sample-interval", "root", "binary", "clean", "skip-restart"} {
+	for _, flag := range []string{"count", "batch-size", "parallel", "soak", "fan-out-concurrency", "rounds", "timeout", "sample-interval", "root", "binary", "clean", "skip-restart", "hosts", "operator-endpoint"} {
 		assert.NotNil(t, cmd.Flags().Lookup(flag), "missing --%s", flag)
 	}
 }
@@ -55,6 +55,54 @@ func TestScaleConfigValidate_RejectsOutOfRangeInputs(t *testing.T) {
 			assert.ErrorIs(t, cfg.validate(), constants.ErrScaleTestInvalidInput)
 		})
 	}
+}
+
+func TestScaleConfigValidate_RemoteHostsValidation(t *testing.T) {
+	t.Run("empty hosts defaults to local", func(t *testing.T) {
+		cfg := validScaleConfig()
+		cfg.Hosts = ""
+		require.NoError(t, cfg.validate())
+		assert.Equal(t, "local", cfg.Hosts)
+	})
+
+	t.Run("remote host requires operator-endpoint", func(t *testing.T) {
+		cfg := validScaleConfig()
+		cfg.Hosts = "livingroom"
+		cfg.OperatorEndpoint = ""
+		err := cfg.validate()
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrScaleTestInvalidInput)
+		assert.ErrorIs(t, err, constants.ErrOperatorEndpointInvalid)
+	})
+
+	t.Run("remote host rejects loopback endpoint", func(t *testing.T) {
+		for _, loopback := range []string{"127.0.0.1", "localhost", "127.0.0.1:8080", "http://127.0.0.1:8080", "https://localhost:8443", "[::1]", "0.0.0.0"} {
+			cfg := validScaleConfig()
+			cfg.Hosts = "remote-node"
+			cfg.OperatorEndpoint = loopback
+			err := cfg.validate()
+			require.Error(t, err, "expected error for loopback endpoint %s", loopback)
+			assert.ErrorIs(t, err, constants.ErrScaleTestInvalidInput)
+			assert.ErrorIs(t, err, constants.ErrOperatorEndpointInvalid)
+		}
+	})
+
+	t.Run("mixed local and remote host requires valid endpoint", func(t *testing.T) {
+		cfg := validScaleConfig()
+		cfg.Hosts = "local,livingroom"
+		cfg.OperatorEndpoint = "127.0.0.1"
+		err := cfg.validate()
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrScaleTestInvalidInput)
+		assert.ErrorIs(t, err, constants.ErrOperatorEndpointInvalid)
+	})
+
+	t.Run("remote host with valid endpoint succeeds", func(t *testing.T) {
+		cfg := validScaleConfig()
+		cfg.Hosts = "livingroom"
+		cfg.OperatorEndpoint = "192.168.1.53"
+		require.NoError(t, cfg.validate())
+	})
 }
 
 func TestScaleConfigValidate_DefaultsScenarioTimeoutFromSoak(t *testing.T) {

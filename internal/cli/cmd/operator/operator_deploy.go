@@ -18,15 +18,18 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pkg/sftp"
 	"github.com/spf13/cobra"
+	sshlib "golang.org/x/crypto/ssh"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
@@ -34,6 +37,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	sshpkg "github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
@@ -72,7 +76,327 @@ var (
 	operatorDeployEndpointPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 )
 
-// deploySSH runs commands on, and copies files to, one remote host.
+// remoteDeployClient abstracts binary deployment and host agent execution for remote targets.
+type remoteDeployClient interface {
+	IsWSL() bool
+	UploadBinary(ctx context.Context, sourceBinary, remoteDir string) (string, error)
+	ExecuteAgent(ctx context.Context, req models.DeployHostRequest) (models.DeployHostResponse, error)
+	Close() error
+}
+
+// remoteDeployClientFactory constructs a remoteDeployClient for a remote host.
+type remoteDeployClientFactory func(ctx context.Context, host string, port int, identityFile string) (remoteDeployClient, error)
+
+func isLocalTarget(host string) bool {
+	h := strings.TrimSpace(host)
+	return h == "local" || strings.EqualFold(h, constants.LocalhostHostname) || h == "127.0.0.1"
+}
+
+func isRemoteTarget(host string) bool {
+	return !isLocalTarget(host)
+}
+
+func isLoopbackEndpoint(endpoint string) bool {
+	ep := strings.TrimSpace(endpoint)
+	if ep == "" {
+		return false
+	}
+	if idx := strings.Index(ep, "://"); idx != -1 {
+		ep = ep[idx+3:]
+	}
+	host := ep
+	if h, _, err := net.SplitHostPort(ep); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, constants.LocalhostHostname) || strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && (ip.IsLoopback() || ip.IsUnspecified())
+}
+
+func isWindowsPath(p string) bool {
+	p = strings.TrimSpace(p)
+	if len(p) >= 3 && p[0] == '/' && ((p[1] >= 'a' && p[1] <= 'z') || (p[1] >= 'A' && p[1] <= 'Z')) && p[2] == ':' {
+		return true
+	}
+	if len(p) >= 2 && ((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) && p[1] == ':' {
+		return true
+	}
+	return strings.HasPrefix(p, `\\`) || strings.Contains(p, `\`)
+}
+
+func toWindowsFilePath(p string) string {
+	p = strings.TrimSpace(p)
+	if len(p) >= 3 && p[0] == '/' && ((p[1] >= 'a' && p[1] <= 'z') || (p[1] >= 'A' && p[1] <= 'Z')) && p[2] == ':' {
+		return p[1:]
+	}
+	return p
+}
+
+func resolveSFTPPath(wd, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "~" {
+		return wd
+	}
+	if strings.HasPrefix(p, "~/") {
+		return path.Join(wd, strings.TrimPrefix(p, "~/"))
+	}
+	if strings.HasPrefix(p, `~\`) {
+		return path.Join(wd, strings.TrimPrefix(p, `~\`))
+	}
+	return p
+}
+
+type sshRemoteDeployClient struct {
+	client        *sshlib.Client
+	sftpClient    *sftp.Client
+	host          string
+	isWSL         bool
+	workingDir    string
+	agentPath     string
+	stopKeepalive func()
+}
+
+func defaultRemoteDeployClientFactory(ctx context.Context, host string, port int, identityFile string) (remoteDeployClient, error) {
+	var portStr string
+	if port > 0 {
+		portStr = strconv.Itoa(port)
+	}
+	r, err := sshpkg.ResolveHost(host, "", "", identityFile, "")
+	if err != nil {
+		return nil, fmt.Errorf("resolve host %s: %w", host, err)
+	}
+	if portStr != "" {
+		r.Port = portStr
+	}
+
+	authSock := os.Getenv(string(constants.EnvVar.SSHAuthSock))
+	authMethods, err := sshpkg.BuildAuthMethods(r, authSock, "")
+	if err != nil {
+		return nil, fmt.Errorf("build ssh auth for %s: %w", host, err)
+	}
+	if len(authMethods) == 0 {
+		return nil, fmt.Errorf("no ssh auth methods available for %s", host)
+	}
+
+	hostKeyCB, err := sshpkg.BuildHostKeyCallback("")
+	if err != nil {
+		return nil, fmt.Errorf("ssh host key callback: %w", err)
+	}
+
+	clientConfig := &sshlib.ClientConfig{
+		User:            r.User,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCB,
+		Timeout:         30 * time.Second,
+	}
+
+	addr := net.JoinHostPort(r.Hostname, r.Port)
+	client, err := sshpkg.DialSSH(ctx, r, clientConfig, addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial ssh %s: %w", host, err)
+	}
+
+	stopKeepalive := sshpkg.StartKeepalive(ctx, client, constants.SSHKeepaliveInterval, constants.SSHKeepaliveMaxMissed)
+
+	sftpClient, err := sftp.NewClient(client)
+	if err != nil {
+		stopKeepalive()
+		_ = client.Close()
+		return nil, fmt.Errorf("sftp client %s: %w", host, err)
+	}
+
+	wd, err := sftpClient.Getwd()
+	if err != nil {
+		wd = "."
+	}
+	isWSL := isWindowsPath(wd)
+
+	return &sshRemoteDeployClient{
+		client:        client,
+		sftpClient:    sftpClient,
+		host:          host,
+		isWSL:         isWSL,
+		workingDir:    wd,
+		stopKeepalive: stopKeepalive,
+	}, nil
+}
+
+func (c *sshRemoteDeployClient) IsWSL() bool {
+	return c.isWSL
+}
+
+func (c *sshRemoteDeployClient) Close() error {
+	if c.stopKeepalive != nil {
+		c.stopKeepalive()
+	}
+	var errs []error
+	if c.sftpClient != nil {
+		if err := c.sftpClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if c.client != nil {
+		if err := c.client.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (c *sshRemoteDeployClient) runAgentCommand(ctx context.Context, cmdStr string, req models.DeployHostRequest) (models.DeployHostResponse, error) {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return models.DeployHostResponse{}, fmt.Errorf("new ssh session on %s: %w", c.host, err)
+	}
+	defer session.Close()
+
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = session.Close()
+		case <-done:
+		}
+	}()
+
+	reqData, err := json.Marshal(req)
+	if err != nil {
+		return models.DeployHostResponse{}, fmt.Errorf("encode deploy-host request: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	session.Stdin = bytes.NewReader(reqData)
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	if err := session.Run(cmdStr); err != nil {
+		return models.DeployHostResponse{}, fmt.Errorf("exec deploy-host on %s: %w (stderr: %s)", c.host, err, strings.TrimSpace(stderr.String()))
+	}
+
+	var resp models.DeployHostResponse
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
+		return resp, fmt.Errorf("decode deploy-host response from %s: %w (stdout: %s)", c.host, err, strings.TrimSpace(stdout.String()))
+	}
+	if !resp.Success {
+		return resp, fmt.Errorf("deploy-host on %s: %s", c.host, resp.Error)
+	}
+	return resp, nil
+}
+
+func (c *sshRemoteDeployClient) UploadBinary(ctx context.Context, sourceBinary, remoteDir string) (string, error) {
+	if c.isWSL {
+		// WSL remote host: SFTP writes to the Windows filesystem.
+		windowsStagingDir := path.Join(c.workingDir, constants.DeployBinDirname)
+		if err := c.sftpClient.MkdirAll(windowsStagingDir); err != nil {
+			return "", fmt.Errorf("create windows staging dir on %s: %w", c.host, err)
+		}
+		stagingFile := path.Join(windowsStagingDir, "g8e.staging")
+
+		srcFile, err := os.Open(sourceBinary)
+		if err != nil {
+			return "", fmt.Errorf("open source binary: %w", err)
+		}
+		defer srcFile.Close()
+
+		dstFile, err := c.sftpClient.OpenFile(stagingFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+		if err != nil {
+			return "", fmt.Errorf("create staging binary on %s: %w", c.host, err)
+		}
+		if _, err := io.Copy(dstFile, srcFile); err != nil {
+			_ = dstFile.Close()
+			return "", fmt.Errorf("upload staging binary to %s: %w", c.host, err)
+		}
+		if err := dstFile.Chmod(constants.PermFileExecutable); err != nil {
+			_ = dstFile.Close()
+			return "", fmt.Errorf("chmod staging binary on %s: %w", c.host, err)
+		}
+		if err := dstFile.Close(); err != nil {
+			return "", fmt.Errorf("close staging binary on %s: %w", c.host, err)
+		}
+
+		// Bootstrap once via wsl.exe --cd <windows staging dir> -e ./g8e.staging operator deploy-host
+		bootstrapCmd := fmt.Sprintf("wsl.exe --cd %s -e ./g8e.staging operator deploy-host", toWindowsFilePath(windowsStagingDir))
+		bootstrapReq := models.DeployHostRequest{
+			Action:  models.DeployHostActionInstall,
+			Source:  "./g8e.staging",
+			DestDir: remoteDir,
+		}
+		resp, err := c.runAgentCommand(ctx, bootstrapCmd, bootstrapReq)
+		_ = c.sftpClient.Remove(stagingFile)
+		if err != nil {
+			return "", fmt.Errorf("%w: WSL bootstrap failed on %s: %v", constants.ErrWSLUnavailable, c.host, err)
+		}
+		if !resp.Success {
+			return "", fmt.Errorf("%w: WSL bootstrap on %s: %s", constants.ErrWSLUnavailable, c.host, resp.Error)
+		}
+
+		targetBinDir := path.Join(remoteDir, constants.DeployBinDirname)
+		c.agentPath = path.Join(targetBinDir, "g8e")
+		return targetBinDir, nil
+	}
+
+	// Linux remote host: SFTP upload to <destDir>/.deploy-bin/g8e.new, Chmod, PosixRename
+	resolvedDestDir := resolveSFTPPath(c.workingDir, remoteDir)
+	targetBinDir := path.Join(resolvedDestDir, constants.DeployBinDirname)
+	if err := c.sftpClient.MkdirAll(targetBinDir); err != nil {
+		return "", fmt.Errorf("create %s on %s: %w", targetBinDir, c.host, err)
+	}
+
+	stagingPath := path.Join(targetBinDir, "g8e.new")
+	srcFile, err := os.Open(sourceBinary)
+	if err != nil {
+		return "", fmt.Errorf("open source binary: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := c.sftpClient.OpenFile(stagingPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	if err != nil {
+		return "", fmt.Errorf("create %s on %s: %w", stagingPath, c.host, err)
+	}
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		_ = dstFile.Close()
+		return "", fmt.Errorf("upload binary to %s on %s: %w", stagingPath, c.host, err)
+	}
+	if err := dstFile.Chmod(constants.PermFileExecutable); err != nil {
+		_ = dstFile.Close()
+		return "", fmt.Errorf("chmod %s on %s: %w", stagingPath, c.host, err)
+	}
+	if err := dstFile.Close(); err != nil {
+		return "", fmt.Errorf("close %s on %s: %w", stagingPath, c.host, err)
+	}
+
+	finalPath := path.Join(targetBinDir, "g8e")
+	if err := c.sftpClient.PosixRename(stagingPath, finalPath); err != nil {
+		_ = c.sftpClient.Remove(finalPath)
+		if err := c.sftpClient.Rename(stagingPath, finalPath); err != nil {
+			return "", fmt.Errorf("install binary on %s: %w", c.host, err)
+		}
+	}
+
+	c.agentPath = finalPath
+	return targetBinDir, nil
+}
+
+func (c *sshRemoteDeployClient) ExecuteAgent(ctx context.Context, req models.DeployHostRequest) (models.DeployHostResponse, error) {
+	cmdStr := fmt.Sprintf("%s operator deploy-host", c.agentPath)
+	if c.isWSL {
+		cmdStr = fmt.Sprintf("wsl.exe -e %s operator deploy-host", c.agentPath)
+	}
+	resp, err := c.runAgentCommand(ctx, cmdStr, req)
+	if err != nil {
+		if c.isWSL {
+			return resp, fmt.Errorf("%w: %v", constants.ErrWSLUnavailable, err)
+		}
+		return resp, err
+	}
+	return resp, nil
+}
+
+// deploySSH runs commands on, and copies files to, one local or remote host.
 type deploySSH struct {
 	host         string
 	port         int
@@ -81,6 +405,7 @@ type deploySSH struct {
 	local        bool
 	binaryDir    string
 	launchID     string
+	remoteClient remoteDeployClient
 }
 
 // deployTarget is the lifecycle surface shared by process/SSH and Docker
@@ -162,7 +487,13 @@ func operatorDeployCmdWithConfig(
 	clientFactory authcmd.APIClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	connectEvents deploymentEventsConnector,
+	remoteFactory ...remoteDeployClientFactory,
 ) *cobra.Command {
+	rFactory := defaultRemoteDeployClientFactory
+	if len(remoteFactory) > 0 && remoteFactory[0] != nil {
+		rFactory = remoteFactory[0]
+	}
+
 	var hosts string
 	var port int
 	var identityFile string
@@ -283,13 +614,20 @@ every worker has established its command subscription. Without --approve, worker
 			}
 			var deployed []deployedOperator
 			var failed []string
+			var cleanup func()
+			defer func() {
+				if cleanup != nil {
+					cleanup()
+				}
+			}()
+
 			if dockerContext != "" {
 				deployed, failed, err = executeDeployDocker(ctx, cmd, dockerContext, dockerImage, remoteDir, dockerMounts, dirs, opts, parallel, len(hostList)*len(dirs))
 				if err != nil {
 					return err
 				}
 			} else {
-				deployed, failed, err = executeDeploySSH(ctx, cmd, hostList, port, identityFile, local, remoteDir, sourceBinary, dirs, opts, parallel)
+				deployed, failed, cleanup, err = executeDeploySSH(ctx, cmd, hostList, port, identityFile, remoteDir, sourceBinary, dirs, opts, parallel, rFactory)
 				if err != nil {
 					return err
 				}
@@ -298,6 +636,7 @@ every worker has established its command subscription. Without --approve, worker
 			if len(failed) > 0 {
 				return fmt.Errorf("%w: staging failed for %d of %d operators; no approvals submitted: %s", constants.ErrOperatorDeployFailed, len(failed), len(hostList)*len(dirs), strings.Join(failed, ", "))
 			}
+
 			if approve && len(deployed) > 0 {
 				if err := approveDeployedOperators(opts.client, deployed); err != nil {
 					return err
@@ -446,68 +785,9 @@ func awaitOperatorsOnline(ctx context.Context, ops []deployedOperator) error {
 	return nil
 }
 
-func (s deploySSH) sshOptions(portFlag string) []string {
-	var args []string
-	if s.port != 0 {
-		args = append(args, portFlag, fmt.Sprintf("%d", s.port))
-	}
-	if s.identityFile != "" {
-		args = append(args, "-i", s.identityFile)
-	}
-	return args
-}
-
 func (s deploySSH) name() string { return s.host }
 
 func (s deploySSH) markReady(context.Context, string) error { return nil }
-
-func (s deploySSH) run(ctx context.Context, remoteCommand string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "ssh", append(s.sshOptions("-p"), s.host, remoteCommand)...)
-	if s.local {
-		cmd = exec.CommandContext(ctx, "sh", "-c", remoteCommand)
-	}
-	cmd.Stderr = s.stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("ssh %s: %w", s.host, err)
-	}
-	return out, nil
-}
-
-// prepareDir creates dir on the host and returns its absolute path, which is
-// the value the worker's --working-dir carries.
-func (s deploySSH) prepareDir(ctx context.Context, dir string) (string, error) {
-	if s.local {
-		if dir == "~" || strings.HasPrefix(dir, "~/") {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return "", err
-			}
-			if dir == "~" {
-				dir = home
-			} else {
-				dir = filepath.Join(home, strings.TrimPrefix(dir, "~/"))
-			}
-		}
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return "", err
-		}
-		dir, err := filepath.Abs(dir)
-		if err != nil {
-			return "", err
-		}
-		return filepath.EvalSymlinks(dir)
-	}
-	out, err := s.run(ctx, fmt.Sprintf("mkdir -p %[1]s && cd %[1]s && pwd", dir))
-	if err != nil {
-		return "", fmt.Errorf("create %s: %w", dir, err)
-	}
-	absDir := strings.TrimSpace(string(out))
-	if !operatorDeployRemoteDirPattern.MatchString(absDir) {
-		return "", fmt.Errorf("%w: resolved directory %q must match %s", constants.ErrPathValidation, absDir, operatorDeployRemoteDirPattern)
-	}
-	return absDir, nil
-}
 
 func (s deploySSH) binaryName() string {
 	if s.local && runtime.GOOS == "windows" {
@@ -516,153 +796,82 @@ func (s deploySSH) binaryName() string {
 	return "g8e"
 }
 
+// prepareDir creates dir on the host and returns its absolute path, which is
+// the value the worker's --working-dir carries.
+func (s deploySSH) prepareDir(ctx context.Context, dir string) (string, error) {
+	if s.local {
+		dirs, err := ExecuteDeployHostPrepare(ctx, []string{dir})
+		if err != nil {
+			return "", err
+		}
+		return dirs[0], nil
+	}
+	resp, err := s.remoteClient.ExecuteAgent(ctx, models.DeployHostRequest{
+		Action: models.DeployHostActionPrepare,
+		Dirs:   []string{dir},
+	})
+	if err != nil {
+		return "", fmt.Errorf("create %s: %w", dir, err)
+	}
+	if len(resp.ResolvedDirs) == 0 {
+		return "", fmt.Errorf("prepare %s returned no resolved dirs", dir)
+	}
+	absDir := resp.ResolvedDirs[0]
+	if !operatorDeployRemoteDirPattern.MatchString(absDir) {
+		return "", fmt.Errorf("%w: resolved directory %q must match %s", constants.ErrPathValidation, absDir, operatorDeployRemoteDirPattern)
+	}
+	return absDir, nil
+}
+
 // installBinary uploads beside the target and renames into place: scp cannot
 // open a running (or hard-linked, shared) g8e for writing (ETXTBSY), but a
 // rename replaces the directory entry and leaves the old inode alone.
 func (s deploySSH) installBinary(ctx context.Context, sourceBinary, dir string) error {
 	binName := s.binaryName()
-	if s.binaryDir != "" {
-		if s.local {
-			tmp, err := os.CreateTemp(dir, ".g8e-link-*")
-			if err != nil {
-				return err
-			}
-			staging := tmp.Name()
-			if err := tmp.Close(); err != nil {
-				return err
-			}
-			defer os.Remove(staging)
-			if err := os.Remove(staging); err != nil {
-				return err
-			}
-			if err := os.Link(filepath.Join(s.binaryDir, binName), staging); err != nil {
-				return err
-			}
-			return os.Rename(staging, filepath.Join(dir, binName))
-		}
-		_, err := s.run(ctx, fmt.Sprintf("ln -f %s/g8e %s/g8e.new && mv -f %s/g8e.new %s/g8e", s.binaryDir, dir, dir, dir))
-		return err
-	}
-	staging := dir + "/" + binName + ".new"
 	if s.local {
-		// Copy once, then hard-link into each runtime directory. The source may be rebuilt.
-		tmp, err := os.CreateTemp(dir, ".g8e-copy-*")
-		if err != nil {
-			return err
+		if s.binaryDir != "" {
+			return ExecuteDeployHostLink(ctx, s.binaryDir, dir, binName)
 		}
-		staging = tmp.Name()
-		if err := tmp.Close(); err != nil {
-			return err
-		}
-		defer os.Remove(staging)
-		if err := CopyFile(sourceBinary, staging); err != nil {
-			return err
-		}
-		return os.Rename(staging, filepath.Join(dir, binName))
+		target := filepath.Join(dir, binName)
+		return ExecuteDeployHostInstall(ctx, sourceBinary, target)
 	}
-	scp := exec.CommandContext(ctx, "scp", append(s.sshOptions("-P"), sourceBinary, fmt.Sprintf("%s:%s", s.host, staging))...)
-	scp.Stderr = s.stderr
-	if err := scp.Run(); err != nil {
-		return fmt.Errorf("copy binary to %s: %w", s.host, err)
-	}
-	if _, err := s.run(ctx, fmt.Sprintf("chmod +x %[1]s && mv -f %[1]s %[2]s/g8e", staging, dir)); err != nil {
-		return fmt.Errorf("install binary: %w", err)
-	}
-	return nil
-}
-
-// stopPreviousOperator checks only directories with a recorded deployment.
-// Fresh fleet members must not each scan the entire host's process table.
-// The PID/start log is evidence of a previous launch, not authority to signal a PID:
-// the anchored directory pattern still prevents stale/reused PIDs from targeting
-// unrelated processes.
-func (s deploySSH) stopPreviousOperator(ctx context.Context, dir string) error {
-	if s.local {
-		previous := false
-		for _, name := range []string{operatorDeployPIDFile, operatorDeployStartLog} {
-			_, err := os.Lstat(filepath.Join(dir, name))
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("read previous deployment: %w", err)
-			}
-			previous = previous || err == nil
-		}
-		if !previous {
-			return nil
-		}
-	}
-	running := operatorDeployShellQuote(`^\./g8e operator start .*--working-dir ` + regexp.QuoteMeta(dir) + `$`)
-	stop := fmt.Sprintf(`cd %[1]s && { { [ ! -e %[3]s ] && [ ! -L %[3]s ] && [ ! -e %[4]s ] && [ ! -L %[4]s ]; } || { for i in $(seq 1 50); do pkill -f %[2]s || break; sleep 0.1; done && ! pgrep -f %[2]s >/dev/null; }; }`, operatorDeployShellQuote(dir), running, operatorDeployPIDFile, operatorDeployStartLog)
-	if _, err := s.run(ctx, stop); err != nil {
-		return fmt.Errorf("stop previous operator: %w", err)
-	}
-	return nil
+	_, err := s.remoteClient.ExecuteAgent(ctx, models.DeployHostRequest{
+		Action:    models.DeployHostActionLink,
+		BinaryDir: s.binaryDir,
+		DestDir:   dir,
+		Binary:    "g8e",
+	})
+	return err
 }
 
 // preflightGateway runs the installed binary's gateway-preflight on this host,
 // so a Gateway the workers cannot reach fails the deploy before any starts.
 func (s deploySSH) preflightGateway(ctx context.Context, args []string) error {
 	if s.local {
-		check := exec.CommandContext(ctx, filepath.Join(s.binaryDir, s.binaryName()), append([]string{"operator", "gateway-preflight"}, args...)...)
-		check.Stderr = s.stderr
-		return check.Run()
+		return ExecuteDeployHostPreflight(ctx, args)
 	}
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		quoted[i] = operatorDeployShellQuote(arg)
-	}
-	_, err := s.run(ctx, fmt.Sprintf("%s/g8e operator gateway-preflight %s", operatorDeployShellQuote(s.binaryDir), strings.Join(quoted, " ")))
+	_, err := s.remoteClient.ExecuteAgent(ctx, models.DeployHostRequest{
+		Action:        models.DeployHostActionPreflight,
+		PreflightArgs: args,
+	})
 	return err
 }
 
 // startOperator stops any worker previously deployed from dir, clears its start
 // log, and starts a new worker.
 func (s deploySSH) startOperator(ctx context.Context, dir, endpoint string, startArgs ...string) error {
-	if err := s.stopPreviousOperator(ctx, dir); err != nil {
+	args := append([]string{"--endpoint", endpoint}, startArgs...)
+	if s.local {
+		_, err := ExecuteDeployHostStart(ctx, dir, s.binaryName(), args)
 		return err
 	}
-	quotedArgs := make([]string, len(startArgs))
-	for i, arg := range startArgs {
-		quotedArgs[i] = operatorDeployShellQuote(arg)
-	}
-	if s.local {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		log, err := os.OpenFile(filepath.Join(dir, operatorDeployStartLog), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-		if err != nil {
-			return err
-		}
-		defer log.Close()
-		args := append([]string{"operator", "start", "--endpoint", endpoint}, startArgs...)
-		args = append(args, "--working-dir", dir)
-		worker := exec.Command(filepath.Join(dir, s.binaryName()), args...)
-		// Preserve the exact argv prefix used by directory-scoped replacement.
-		if runtime.GOOS == "windows" {
-			worker.Args[0] = `.\` + s.binaryName()
-		} else {
-			worker.Args[0] = "./g8e"
-		}
-		worker.Dir = dir
-		worker.Stdout, worker.Stderr = log, log
-		detachDeployedOperator(worker)
-		if err := worker.Start(); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(dir, operatorDeployPIDFile), []byte(fmt.Sprintf("%d\n", worker.Process.Pid)), 0o600); err != nil {
-			_ = worker.Process.Kill()
-			_ = worker.Wait()
-			return err
-		}
-		_ = worker.Process.Release()
-		return nil
-	}
-	script := fmt.Sprintf(
-		`umask 077; cd %[1]s && rm -f %[3]s && { nohup ./g8e operator start --endpoint %[2]s %[4]s --working-dir %[1]s > %[3]s 2>&1 < /dev/null & echo $! > %[5]s; }`,
-		operatorDeployShellQuote(dir), endpoint, operatorDeployStartLog, strings.Join(quotedArgs, " "), operatorDeployPIDFile)
-	if _, err := s.run(ctx, script); err != nil {
-		return fmt.Errorf("start operator: %w", err)
-	}
-	return nil
+	_, err := s.remoteClient.ExecuteAgent(ctx, models.DeployHostRequest{
+		Action:     models.DeployHostActionStart,
+		WorkingDir: dir,
+		Binary:     "g8e",
+		Args:       args,
+	})
+	return err
 }
 
 func (s deploySSH) readDeploymentState(ctx context.Context, dir string) (*models.OperatorDeploymentState, error) {
@@ -672,20 +881,20 @@ func (s deploySSH) readDeploymentState(ctx context.Context, dir string) (*models
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 		}
-		state, err = readOperatorDeploymentState(ctx, fileSvc)
-		if err != nil {
-			return nil, err
+		var readErr error
+		state, readErr = readOperatorDeploymentState(ctx, fileSvc)
+		if readErr != nil {
+			return nil, readErr
 		}
 	} else {
-		// The remote CLI reads its runtime through RuntimeFileService.
-		data, err := s.run(ctx, fmt.Sprintf("cd %s && ./g8e operator deployment-state --working-dir %s", operatorDeployShellQuote(dir), operatorDeployShellQuote(dir)))
+		resp, err := s.remoteClient.ExecuteAgent(ctx, models.DeployHostRequest{
+			Action:     models.DeployHostActionState,
+			WorkingDir: dir,
+		})
 		if err != nil {
 			return nil, err
 		}
-		state, err = decodeOperatorDeploymentState(data)
-		if err != nil {
-			return nil, err
-		}
+		state = resp.State
 	}
 	if state != nil && state.LaunchID != s.launchID {
 		return nil, nil
@@ -813,10 +1022,6 @@ func deployOperatorBatch(ctx context.Context, host deploySSH, source string, dir
 	return results
 }
 
-func operatorDeployShellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
-}
-
 func operatorDeployArgsForDir(args []string, host, dir string) []string {
 	replace := strings.NewReplacer("{host}", host, "{dir}", dir, "{name}", filepath.Base(dir))
 	result := make([]string, 0, len(args)+2)
@@ -858,26 +1063,43 @@ func validateOperatorDeployFlags(
 	operatorEndpoint string,
 	approve bool,
 ) (effectiveHosts string, workerEndpoint string, err error) {
-	selectedTransports := 0
-	if local {
-		selectedTransports++
-	}
-	if hosts != "" {
-		selectedTransports++
-	}
 	if dockerContext != "" {
-		selectedTransports++
+		if local || hosts != "" {
+			return "", "", fmt.Errorf("%w: --docker-context cannot be combined with --local or --hosts", constants.ErrMissingRequiredField)
+		}
+	} else if !local && strings.TrimSpace(hosts) == "" {
+		return "", "", fmt.Errorf("%w: --hosts or --local is required", constants.ErrMissingRequiredField)
 	}
-	if selectedTransports != 1 {
-		return "", "", fmt.Errorf("%w: exactly one of --local, --hosts, or --docker-context is required", constants.ErrMissingRequiredField)
-	}
+
 	if local && !cmd.Flags().Changed("dest-dir") && !cmd.Flags().Changed("remote-dir") {
 		return "", "", fmt.Errorf("%w: --local requires --dest-dir", constants.ErrMissingRequiredField)
 	}
-	effectiveHosts = hosts
-	if local {
-		effectiveHosts = "local"
+
+	if dockerContext != "" {
+		effectiveHosts = dockerContext
+	} else {
+		seen := make(map[string]bool)
+		var targets []string
+		if local {
+			targets = append(targets, "local")
+			seen["local"] = true
+		}
+		if hosts != "" {
+			for _, raw := range strings.Split(hosts, ",") {
+				h := strings.TrimSpace(raw)
+				if h == "" || strings.HasPrefix(h, "-") || strings.ContainsAny(h, " \t\r\n") || seen[h] {
+					return "", "", fmt.Errorf("%w: invalid or duplicate host %q", constants.ErrMissingRequiredField, raw)
+				}
+				seen[h] = true
+				targets = append(targets, h)
+			}
+		}
+		if len(targets) == 0 {
+			return "", "", fmt.Errorf("%w: --hosts or --local is required", constants.ErrMissingRequiredField)
+		}
+		effectiveHosts = strings.Join(targets, ",")
 	}
+
 	if dockerContext != "" && strings.TrimSpace(dockerImage) == "" {
 		return "", "", fmt.Errorf("%w: --docker-image is required with --docker-context", constants.ErrMissingRequiredField)
 	}
@@ -893,12 +1115,38 @@ func validateOperatorDeployFlags(
 	if count < 1 || count > 5000 || startIndex < 1 || startIndex > 5000 || count > 5001-startIndex {
 		return "", "", fmt.Errorf("%w: --count and --start-index must select operators within 1..5000", constants.ErrMissingRequiredField)
 	}
+
 	endpoint, _ := cmd.Flags().GetString("endpoint")
 	endpoint = strings.TrimSpace(endpoint)
 	workerEndpoint = strings.TrimSpace(operatorEndpoint)
-	if workerEndpoint == "" {
-		workerEndpoint = endpoint
+
+	hasRemote := false
+	if dockerContext == "" {
+		for _, h := range strings.Split(effectiveHosts, ",") {
+			if isRemoteTarget(h) {
+				hasRemote = true
+				break
+			}
+		}
 	}
+
+	if hasRemote {
+		if background {
+			if workerEndpoint == "" {
+				return "", "", fmt.Errorf("%w: %w: --operator-endpoint is required for remote deployment with --background", constants.ErrMissingRequiredField, constants.ErrOperatorEndpointInvalid)
+			}
+			if isLoopbackEndpoint(workerEndpoint) {
+				return "", "", fmt.Errorf("%w: remote deployment requires a non-loopback --operator-endpoint (got %q)", constants.ErrOperatorEndpointInvalid, workerEndpoint)
+			}
+		} else if workerEndpoint != "" && isLoopbackEndpoint(workerEndpoint) {
+			return "", "", fmt.Errorf("%w: remote deployment requires a non-loopback --operator-endpoint (got %q)", constants.ErrOperatorEndpointInvalid, workerEndpoint)
+		}
+	} else {
+		if workerEndpoint == "" {
+			workerEndpoint = endpoint
+		}
+	}
+
 	if background && workerEndpoint == "" {
 		return "", "", fmt.Errorf("%w: --operator-endpoint or --endpoint is required with --background", constants.ErrMissingRequiredField)
 	}
@@ -951,29 +1199,73 @@ func executeDeploySSH(
 	hostList []string,
 	port int,
 	identityFile string,
-	local bool,
 	remoteDir, sourceBinary string,
 	dirs []string,
 	opts operatorDeployOptions,
 	parallel int,
-) ([]deployedOperator, []string, error) {
+	clientFactory remoteDeployClientFactory,
+) ([]deployedOperator, []string, func(), error) {
 	var deployed []deployedOperator
 	var failed []string
-	for _, host := range hostList {
-		s := deploySSH{host: strings.TrimSpace(host), port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: local}
-		cache, err := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
+	var clients []remoteDeployClient
+	cleanup := func() {
+		for _, c := range clients {
+			_ = c.Close()
+		}
+	}
+	var err error
+	defer func() {
 		if err != nil {
-			return deployed, failed, err
+			cleanup()
 		}
-		if err := s.installBinary(ctx, sourceBinary, cache); err != nil {
-			return deployed, failed, err
-		}
-		s.binaryDir = cache
-		if opts.preflight != nil {
-			if err := s.preflightGateway(ctx, opts.preflight); err != nil {
-				return deployed, failed, gatewayPreflightError(s.host, opts.endpoint, err)
+	}()
+
+	for _, host := range hostList {
+		host = strings.TrimSpace(host)
+		isLocal := isLocalTarget(host)
+		s := deploySSH{host: host, port: port, identityFile: identityFile, stderr: cmd.ErrOrStderr(), local: isLocal}
+
+		if isLocal {
+			cache, prepErr := s.prepareDir(ctx, strings.TrimSuffix(remoteDir, "/")+"/.deploy-bin")
+			if prepErr != nil {
+				err = prepErr
+				return deployed, failed, cleanup, err
+			}
+			if instErr := s.installBinary(ctx, sourceBinary, cache); instErr != nil {
+				err = instErr
+				return deployed, failed, cleanup, err
+			}
+			s.binaryDir = cache
+			if opts.preflight != nil {
+				if pfErr := s.preflightGateway(ctx, opts.preflight); pfErr != nil {
+					err = gatewayPreflightError(s.host, opts.endpoint, pfErr)
+					return deployed, failed, cleanup, err
+				}
+			}
+		} else {
+			rc, dialErr := clientFactory(ctx, host, port, identityFile)
+			if dialErr != nil {
+				err = fmt.Errorf("connect to remote host %s: %w", host, dialErr)
+				return deployed, failed, cleanup, err
+			}
+			clients = append(clients, rc)
+			s.remoteClient = rc
+
+			cache, upErr := rc.UploadBinary(ctx, sourceBinary, remoteDir)
+			if upErr != nil {
+				err = fmt.Errorf("upload binary to %s: %w", host, upErr)
+				return deployed, failed, cleanup, err
+			}
+			s.binaryDir = cache
+
+			if opts.preflight != nil {
+				if pfErr := s.preflightGateway(ctx, opts.preflight); pfErr != nil {
+					err = gatewayPreflightError(s.host, opts.endpoint, pfErr)
+					return deployed, failed, cleanup, err
+				}
 			}
 		}
+
 		results := deployOperatorBatch(ctx, s, sourceBinary, dirs, opts, parallel)
 		for result := range results {
 			cmd.Print(result.output)
@@ -984,9 +1276,10 @@ func executeDeploySSH(
 			}
 			deployed = append(deployed, result.op)
 		}
-		if err := ctx.Err(); err != nil {
-			return deployed, failed, err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			err = ctxErr
+			return deployed, failed, cleanup, err
 		}
 	}
-	return deployed, failed, nil
+	return deployed, failed, cleanup, nil
 }

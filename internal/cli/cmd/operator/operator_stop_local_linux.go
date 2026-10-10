@@ -134,3 +134,34 @@ func operatorArgValue(args []string, flag string) string {
 	}
 	return ""
 }
+
+// waitPIDTermination waits for the process with the given PID to exit, up to timeout.
+// It uses pidfd polling to avoid sleep loops.
+func waitPIDTermination(pid int, timeout time.Duration) (bool, error) {
+	fd, err := unix.PidfdOpen(pid, 0)
+	if errors.Is(err, unix.ESRCH) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer unix.Close(fd)
+
+	deadline := time.Now().Add(timeout)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return false, nil
+		}
+		ms := int((remaining + time.Millisecond - 1) / time.Millisecond)
+		fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+		n, err := unix.Poll(fds, ms)
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		return n > 0, nil
+	}
+}

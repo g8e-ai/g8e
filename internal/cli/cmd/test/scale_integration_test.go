@@ -34,12 +34,13 @@ import (
 // fakeScaleDeps records every child process and teardown call without
 // starting a Gateway or Operator.
 type fakeScaleDeps struct {
-	calls       []scaleProcess
-	failOn      string // fail the first call whose argv contains this substring
-	stopped     []string
-	portsErr    error
-	verifyErr   error
-	verifyCalls []string
+	calls        []scaleProcess
+	failOn       string // fail the first call whose argv contains this substring
+	stopped      []string
+	stoppedHosts []string
+	portsErr     error
+	verifyErr    error
+	verifyCalls  []string
 }
 
 // fakeScalePorts are deliberately not the default Gateway ports.
@@ -65,8 +66,9 @@ func (f *fakeScaleDeps) deps() scaleDeps {
 			f.verifyCalls = append(f.verifyCalls, runDir)
 			return f.verifyErr
 		},
-		stopWorkers: func(_ context.Context, fleetDir string) (int, error) {
+		stopWorkers: func(_ context.Context, fleetDir, hosts string) (int, error) {
 			f.stopped = append(f.stopped, fleetDir)
+			f.stoppedHosts = append(f.stoppedHosts, hosts)
 			return 0, nil
 		},
 		sample: func(ctx context.Context, _ scaleLayout, _ time.Duration) { <-ctx.Done() },
@@ -106,11 +108,11 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 
 	argvs := fake.argvs()
 	require.Len(t, argvs, 7)
-	assert.True(t, strings.HasPrefix(argvs[0], "gw start --cert-mode localhost --posture doctrine"))
+	assert.True(t, strings.HasPrefix(argvs[0], "gw start --listen-host 127.0.0.1 --cert-mode localhost --posture doctrine"))
 	assert.Contains(t, argvs[0], "--http-port 18080 --https-port 18443")
 	assert.NotContains(t, argvs[0], "--quiet", "gw start output must be logged for diagnostics")
 	assert.Equal(t, "auth enroll user -e 127.0.0.1:18080 -p 18443 --headless", argvs[1])
-	assert.Contains(t, argvs[2], "operator deploy --local")
+	assert.Contains(t, argvs[2], "operator deploy --hosts local")
 	assert.Contains(t, argvs[2], "-e 127.0.0.1 --gateway-http-port 18080 --gateway-https-port 18443")
 	assert.Contains(t, argvs[2], "--count 100 --start-index 1 ")
 	assert.Contains(t, argvs[3], "--count 50 --start-index 101 ")
@@ -122,6 +124,7 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 	layout := newScaleLayout(cfg.Root)
 	assert.Equal(t, []string{layout.Run}, fake.verifyCalls, "gateway ownership must be verified in layout.Run before enrollment")
 	assert.Equal(t, []string{layout.Fleet}, fake.stopped)
+	assert.Equal(t, []string{"local"}, fake.stoppedHosts)
 	assert.Equal(t, "go", fake.calls[4].Name)
 	assert.Contains(t, fake.calls[4].Env, scaleEnvRuntimeRoot+"="+layout.Run)
 	assert.Contains(t, fake.calls[4].Env, scaleEnvFleetDir+"="+layout.Fleet)
@@ -131,6 +134,24 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 	assert.Contains(t, fake.calls[4].Env, scaleEnvGatewayHTTPSPort+"=18443")
 	assert.Contains(t, fake.calls[5].Env, scaleEnvFleetRestartReport+"="+filepath.Join(layout.Out, "restart-report.json"))
 	assert.FileExists(t, filepath.Join(layout.Out, "scale-summary.json"))
+}
+
+func TestRunScale_RemoteHostsConfiguresGatewayAndDeploy(t *testing.T) {
+	cfg := scaleTestConfig(t)
+	cfg.Hosts = "remote1,remote2"
+	cfg.OperatorEndpoint = "192.168.1.50"
+	require.NoError(t, cfg.validate())
+	fake := &fakeScaleDeps{}
+
+	require.NoError(t, runScale(context.Background(), cfg, fake.deps()))
+
+	argvs := fake.argvs()
+	require.NotEmpty(t, argvs)
+	assert.True(t, strings.HasPrefix(argvs[0], "gw start --listen-host 0.0.0.0 --cert-mode full --posture doctrine"))
+	assert.Contains(t, argvs[2], "operator deploy --hosts remote1,remote2")
+	assert.Contains(t, argvs[2], "-e 192.168.1.50")
+	assert.Contains(t, argvs[2], "--operator-endpoint 192.168.1.50")
+	assert.Equal(t, []string{"remote1,remote2"}, fake.stoppedHosts)
 }
 
 func TestRunScale_FailedDeployStopsLaterPhasesButStillTearsDown(t *testing.T) {
@@ -144,6 +165,7 @@ func TestRunScale_FailedDeployStopsLaterPhasesButStillTearsDown(t *testing.T) {
 	require.Len(t, argvs, 5, "no scenario may run after a failed enrollment batch")
 	assert.Equal(t, "gw stop", argvs[4])
 	assert.Len(t, fake.stopped, 1)
+	assert.Equal(t, []string{"local"}, fake.stoppedHosts)
 
 	summary, readErr := os.ReadFile(filepath.Join(newScaleLayout(cfg.Root).Out, "scale-summary.json"))
 	require.NoError(t, readErr)

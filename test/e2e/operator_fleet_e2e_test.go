@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -279,25 +280,39 @@ func fleetCommandsReady(ctx context.Context, fleetDir string, operators []*opera
 	for _, op := range operators {
 		sessions[op.OperatorSessionId] = true
 	}
-	for i := 1; i <= len(operators); i++ {
-		fileSvc, err := fs.NewRuntimeFileService(filepath.Join(fleetDir, fmt.Sprintf("op-%05d", i)), nil)
+	entries, err := os.ReadDir(fleetDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return true, nil
+		}
+		return false, fmt.Errorf("read fleet dir %s: %w", fleetDir, err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "op-") {
+			continue
+		}
+		opDir := filepath.Join(fleetDir, entry.Name())
+		fileSvc, err := fs.NewRuntimeFileService(opDir, nil)
 		if err != nil {
-			return false, fmt.Errorf("worker %d file service: %w", i, err)
+			return false, fmt.Errorf("worker %s file service: %w", entry.Name(), err)
 		}
 		data, err := fileSvc.ReadFile(ctx, filepath.Join(constants.DeploymentDirname, constants.DeploymentStateFileOperator))
 		if err != nil {
-			return false, fmt.Errorf("worker %d deployment state: %w", i, err)
+			if errors.Is(err, os.ErrNotExist) {
+				return false, nil
+			}
+			return false, fmt.Errorf("worker %s deployment state: %w", entry.Name(), err)
 		}
 		var state models.OperatorDeploymentState
 		if err := json.Unmarshal(data, &state); err != nil {
-			return false, fmt.Errorf("worker %d decode deployment state: %w", i, err)
+			return false, fmt.Errorf("worker %s decode deployment state: %w", entry.Name(), err)
 		}
 		if state.Phase != models.OperatorDeploymentPhaseReady || !state.UpdatedAt.After(after) || !sessions[state.OperatorSessionID] {
 			return false, nil
 		}
 		delete(sessions, state.OperatorSessionID)
 	}
-	return len(sessions) == 0, nil
+	return true, nil
 }
 
 // sampleFleet reads the registry once and summarises the remote Operators.
