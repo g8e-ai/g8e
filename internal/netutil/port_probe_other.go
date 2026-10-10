@@ -10,11 +10,20 @@
 package netutil
 
 import (
+	"io"
 	"net"
 	"strconv"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
+
+func reserveTCPPort() (int, io.Closer, error) {
+	listener, err := net.Listen(string(constants.NetworkProtocolTCP), net.JoinHostPort(constants.LocalhostIP, "0"))
+	if err != nil {
+		return 0, nil, err
+	}
+	return listener.Addr().(*net.TCPAddr).Port, listener, nil
+}
 
 func checkTCPPortBind(port int) error {
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), net.JoinHostPort("", strconv.Itoa(port)))

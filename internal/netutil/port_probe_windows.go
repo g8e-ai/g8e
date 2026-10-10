@@ -10,9 +10,42 @@ package netutil
 import (
 	"errors"
 	"fmt"
+	"io"
 
 	"golang.org/x/sys/windows"
 )
+
+type tcpPortReservation struct {
+	socket windows.Handle
+}
+
+func (r *tcpPortReservation) Close() error {
+	return errors.Join(windows.Closesocket(r.socket), windows.WSACleanup())
+}
+
+func reserveTCPPort() (int, io.Closer, error) {
+	var data windows.WSAData
+	if err := windows.WSAStartup(0x202, &data); err != nil {
+		return 0, nil, fmt.Errorf("initialize Winsock: %w", err)
+	}
+	socket, err := bindTCPPort(0)
+	if err != nil {
+		return 0, nil, errors.Join(err, windows.WSACleanup())
+	}
+	reservation := &tcpPortReservation{socket: socket}
+	address, err := windows.Getsockname(socket)
+	if err != nil {
+		return 0, nil, fmt.Errorf("read reserved TCP address: %w", errors.Join(err, reservation.Close()))
+	}
+	switch address := address.(type) {
+	case *windows.SockaddrInet4:
+		return address.Port, reservation, nil
+	case *windows.SockaddrInet6:
+		return address.Port, reservation, nil
+	default:
+		return 0, nil, errors.Join(fmt.Errorf("unexpected reserved TCP address %T", address), reservation.Close())
+	}
+}
 
 func checkTCPPortBind(port int) (err error) {
 	var data windows.WSAData

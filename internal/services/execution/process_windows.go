@@ -14,14 +14,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
+
+	"golang.org/x/sys/windows"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// setProcessGroup is a no-op on Windows
+// setProcessGroup keeps non-interactive Operator commands from opening a console.
 func setProcessGroup(cmd *exec.Cmd) {
-	// Windows doesn't have process groups in the Unix sense
-	// Process tree management is handled differently
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.HideWindow = true
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NO_WINDOW
 }
 
 // killProcessGroup kills a process on Windows

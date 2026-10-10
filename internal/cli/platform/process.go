@@ -346,7 +346,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.ListenHost != "" {
 		args = append(args, "--listen-host", opts.ListenHost)
 	}
-	args = append(args, "--public-spectator", strconv.FormatBool(opts.PublicSpectatorEnabled))
+	// Boolean flags have an implicit true value; a separate "false" token
+	// becomes a positional argument instead of disabling the listeners.
+	args = append(args, "--public-spectator="+strconv.FormatBool(opts.PublicSpectatorEnabled))
 	if opts.PublicSpectatorPrivateAddr != "" {
 		args = append(args, "--public-spectator-private-listen", opts.PublicSpectatorPrivateAddr)
 	}

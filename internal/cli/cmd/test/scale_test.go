@@ -111,6 +111,7 @@ func TestScaleScenarioEnv_SetsFleetContract(t *testing.T) {
 		scaleEnvRuntimeRoot + "=" + layout.Run,
 		scaleEnvFleetSize + "=100",
 		scaleEnvFleetBin + "=bin",
+		scaleEnvFleetDir + "=" + layout.Fleet,
 		scaleEnvFleetSoak + "=1m0s",
 		scaleEnvFleetConcurrency + "=16,64",
 		scaleEnvFleetRounds + "=1",

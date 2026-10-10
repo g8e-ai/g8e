@@ -231,7 +231,8 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 	emittedFlags := make(map[string]bool)
 	for i := 0; i < len(args); i++ {
 		if strings.HasPrefix(args[i], "--") {
-			emittedFlags[strings.TrimPrefix(args[i], "--")] = true
+			flagName, _, _ := strings.Cut(strings.TrimPrefix(args[i], "--"), "=")
+			emittedFlags[flagName] = true
 			// Skip the value for non-boolean flags
 			// (we don't know which are bools here, so we just skip the next arg
 			// if it doesn't start with -- and isn't a positional)

@@ -109,9 +109,9 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 	assert.True(t, strings.HasPrefix(argvs[0], "gw start --cert-mode localhost --posture doctrine"))
 	assert.Contains(t, argvs[0], "--http-port 18080 --https-port 18443")
 	assert.NotContains(t, argvs[0], "--quiet", "gw start output must be logged for diagnostics")
-	assert.Equal(t, "auth enroll user -e localhost:18080 -p 18443 --headless", argvs[1])
+	assert.Equal(t, "auth enroll user -e 127.0.0.1:18080 -p 18443 --headless", argvs[1])
 	assert.Contains(t, argvs[2], "operator deploy --local")
-	assert.Contains(t, argvs[2], "-e localhost --gateway-http-port 18080 --gateway-https-port 18443")
+	assert.Contains(t, argvs[2], "-e 127.0.0.1 --gateway-http-port 18080 --gateway-https-port 18443")
 	assert.Contains(t, argvs[2], "--count 100 --start-index 1 ")
 	assert.Contains(t, argvs[3], "--count 50 --start-index 101 ")
 	assert.Contains(t, argvs[3], "--parallel 25")
@@ -124,6 +124,7 @@ func TestRunScale_RunsPhasesInOrderAndTearsDown(t *testing.T) {
 	assert.Equal(t, []string{layout.Fleet}, fake.stopped)
 	assert.Equal(t, "go", fake.calls[4].Name)
 	assert.Contains(t, fake.calls[4].Env, scaleEnvRuntimeRoot+"="+layout.Run)
+	assert.Contains(t, fake.calls[4].Env, scaleEnvFleetDir+"="+layout.Fleet)
 	assert.Contains(t, fake.calls[4].Env, "HOME="+layout.Home)
 	assert.Contains(t, fake.calls[4].Env, "USERPROFILE="+layout.Home)
 	assert.Contains(t, fake.calls[4].Env, scaleEnvGatewayHTTPPort+"=18080")
@@ -244,7 +245,7 @@ func TestVerifyScaleGatewayOwnership(t *testing.T) {
 	// Case 1: no runtime files -> fails on missing PID
 	err := verifyScaleGatewayOwnership(runDir, ports)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read gateway pid")
+	assert.Contains(t, err.Error(), "gateway pid file missing or empty")
 
 	// Case 2: valid PID file with current process PID, but missing launch profile
 	fileSvc, err := fs.NewRuntimeFileService(runDir, slog.Default())
@@ -264,6 +265,7 @@ func TestVerifyScaleGatewayOwnership(t *testing.T) {
 		HTTPPort:  19080,
 		HTTPSPort: 19443,
 		Posture:   constants.PostureDoctrine,
+		LogLevel:  constants.LogLevelInfo,
 	}
 	require.NoError(t, serve.WriteLaunchProfile(fileSvc, mismatchedCfg))
 
@@ -276,10 +278,10 @@ func TestVerifyScaleGatewayOwnership(t *testing.T) {
 		HTTPPort:  ports.HTTP,
 		HTTPSPort: ports.HTTPS,
 		Posture:   constants.PostureDoctrine,
+		LogLevel:  constants.LogLevelInfo,
 	}
 	require.NoError(t, serve.WriteLaunchProfile(fileSvc, matchingCfg))
 
 	err = verifyScaleGatewayOwnership(runDir, ports)
 	require.NoError(t, err)
 }
-

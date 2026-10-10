@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -32,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/netutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -41,6 +41,7 @@ const (
 	scaleEnvRuntimeRoot        = "G8E_E2E_RUNTIME_ROOT"
 	scaleEnvFleetSize          = "G8E_E2E_FLEET_SIZE"
 	scaleEnvFleetBin           = "G8E_E2E_FLEET_BIN"
+	scaleEnvFleetDir           = "G8E_E2E_FLEET_DIR"
 	scaleEnvFleetSoak          = "G8E_E2E_FLEET_SOAK"
 	scaleEnvFleetConcurrency   = "G8E_E2E_FLEET_CONCURRENCY"
 	scaleEnvFleetRounds        = "G8E_E2E_FLEET_ROUNDS"
@@ -364,7 +365,7 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 			}
 		}
 		gatewayStarted = true
-		if err := child("auth-enroll.log", "auth", "enroll", "user", "-e", "localhost:"+httpPort, "-p", httpsPort, "--headless"); err != nil {
+		if err := child("auth-enroll.log", "auth", "enroll", "user", "-e", constants.LocalhostIP+":"+httpPort, "-p", httpsPort, "--headless"); err != nil {
 			return fmt.Errorf("auth enroll user: %w", err)
 		}
 		return nil
@@ -383,7 +384,7 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 			started := time.Now()
 			runErr := child(fmt.Sprintf("deploy-%03d.log", i+1), "operator", "deploy", "--local",
 				"--dest-dir", layout.Fleet, "--count", strconv.Itoa(batch.Count), "--start-index", strconv.Itoa(batch.StartIndex),
-				"--roles", "data", "-e", "localhost", "--gateway-http-port", httpPort, "--gateway-https-port", httpsPort, "--background", "--approve", "--parallel", strconv.Itoa(cfg.Parallel), "--log", "info")
+				"--roles", "data", "-e", constants.LocalhostIP, "--gateway-http-port", httpPort, "--gateway-https-port", httpsPort, "--background", "--approve", "--parallel", strconv.Itoa(cfg.Parallel), "--log", "info")
 			batch.Seconds = time.Since(started).Seconds()
 			summary.Batches = append(summary.Batches, batch)
 			fmt.Fprintf(deps.stdout, "batch %d: op-%05d..op-%05d in %.1fs\n", i+1, batch.StartIndex, batch.StartIndex+batch.Count-1, batch.Seconds)
@@ -433,6 +434,7 @@ func scaleScenarioEnv(env []string, layout scaleLayout, cfg scaleConfig, bin str
 		scaleEnvRuntimeRoot+"="+layout.Run,
 		scaleEnvFleetSize+"="+strconv.Itoa(cfg.Count),
 		scaleEnvFleetBin+"="+bin,
+		scaleEnvFleetDir+"="+layout.Fleet,
 		scaleEnvFleetSoak+"="+cfg.Soak.String(),
 		scaleEnvFleetConcurrency+"="+cfg.FanOutConcurrency,
 		scaleEnvFleetRounds+"="+strconv.Itoa(cfg.Rounds),
@@ -448,19 +450,18 @@ func scaleScenarioEnv(env []string, layout scaleLayout, cfg scaleConfig, bin str
 // ports fails the deploy preflight, which dials exactly these.
 func reserveScalePorts() (scalePorts, error) {
 	var ports []int
-	var listeners []net.Listener
+	var reservations []io.Closer
 	defer func() {
-		for _, l := range listeners {
-			_ = l.Close()
+		for _, reservation := range reservations {
+			_ = reservation.Close()
 		}
 	}()
 	for len(ports) < 2 {
-		l, err := net.Listen("tcp", ":0")
+		port, reservation, err := netutil.ReserveTCPPort()
 		if err != nil {
 			return scalePorts{}, fmt.Errorf("%w: %w", constants.ErrPortUnavailable, err)
 		}
-		listeners = append(listeners, l)
-		port := l.Addr().(*net.TCPAddr).Port
+		reservations = append(reservations, reservation)
 		if _, reserved := constants.GatewayReservedLoopbackPorts[port]; !reserved {
 			ports = append(ports, port)
 		}
@@ -502,7 +503,6 @@ func verifyScaleGatewayOwnership(runDir string, ports scalePorts) error {
 	return nil
 }
 
-
 // scaleChildEnv isolates HOME and USERPROFILE from the developer's while
 // keeping the Go caches, so the scenario neither recompiles everything nor
 // needs the network.
@@ -524,7 +524,7 @@ func scaleChildEnv(layout scaleLayout) ([]string, error) {
 		key, _, _ := strings.Cut(kv, "=")
 		switch strings.ToUpper(key) {
 		case "HOME", "USERPROFILE", "GOCACHE", "GOMODCACHE", "GOPATH",
-			scaleEnvRuntimeRoot, scaleEnvFleetSize, scaleEnvFleetBin, scaleEnvFleetSoak,
+			scaleEnvRuntimeRoot, scaleEnvFleetSize, scaleEnvFleetBin, scaleEnvFleetDir, scaleEnvFleetSoak,
 			scaleEnvFleetConcurrency, scaleEnvFleetRounds, scaleEnvFleetReport, scaleEnvFleetRestartReport,
 			scaleEnvGatewayHTTPPort, scaleEnvGatewayHTTPSPort,
 			string(constants.EnvVar.E2EFleetSessions):

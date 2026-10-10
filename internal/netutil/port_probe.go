@@ -9,9 +9,20 @@ package netutil
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
+
+// ReserveTCPPort holds an ephemeral TCP port until the returned reservation is
+// closed. On Windows it binds without listening, avoiding firewall prompts.
+func ReserveTCPPort() (int, io.Closer, error) {
+	port, reservation, err := reserveTCPPort()
+	if err != nil {
+		return 0, nil, fmt.Errorf("%w: reserve TCP port: %w", constants.ErrPortUnavailable, err)
+	}
+	return port, reservation, nil
+}
 
 // CheckTCPPortAvailable probes the wildcard address used by the Gateway.
 // The port is released before return, so the eventual server bind can still race.

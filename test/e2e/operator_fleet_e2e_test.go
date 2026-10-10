@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -28,6 +29,8 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/operator"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -38,6 +41,7 @@ import (
 const (
 	fleetSizeEnv          = "G8E_E2E_FLEET_SIZE"           // required: remote Operators the script deployed
 	fleetBinEnv           = "G8E_E2E_FLEET_BIN"            // required: g8e binary used for `operator run`
+	fleetDirEnv           = "G8E_E2E_FLEET_DIR"            // required for restart: local op-NNNNN roots
 	fleetSoakEnv          = "G8E_E2E_FLEET_SOAK"           // optional: idle soak before fan-out (Go duration)
 	fleetConcurrencyEnv   = "G8E_E2E_FLEET_CONCURRENCY"    // optional: comma-separated fan-out concurrencies
 	fleetRoundsEnv        = "G8E_E2E_FLEET_ROUNDS"         // optional: fan-outs per concurrency level
@@ -179,6 +183,7 @@ type fleetRestartReport struct {
 func TestOperatorFleet_RecoversAfterGatewayRestart(t *testing.T) {
 	size := requireFleetSize(t)
 	bin := requireFleetEnv(t, fleetBinEnv)
+	fleetDir := requireFleetEnv(t, fleetDirEnv)
 	require.Empty(t, strings.TrimSpace(os.Getenv(string(constants.EnvVar.E2EFleetSessions))),
 		"the restart scenario runs against a dedicated Gateway and does not take a session cohort")
 	root, err := resolveRuntimeRoot()
@@ -229,8 +234,15 @@ func TestOperatorFleet_RecoversAfterGatewayRestart(t *testing.T) {
 			}
 			recovered = append(recovered, op)
 		}
-		return len(recovered) == size
-	}, fleetRecoveryWait, 2*time.Second, "all %d remote Operators must heartbeat again after the Gateway restart", size)
+		if len(recovered) != size {
+			return false
+		}
+		ready, err := fleetCommandsReady(pollCtx, fleetDir, recovered, restartAt)
+		if err != nil {
+			t.Logf("command subscription recovery poll: %v", err)
+		}
+		return err == nil && ready
+	}, fleetRecoveryWait, 2*time.Second, "all %d remote Operators must heartbeat and re-establish command subscriptions after the Gateway restart", size)
 	report.RecoveredIn = time.Since(restartAt).Seconds()
 
 	for _, op := range recovered {
@@ -245,6 +257,35 @@ func TestOperatorFleet_RecoversAfterGatewayRestart(t *testing.T) {
 	// One wave across the fleet plus the embedded Operator.
 	out := runFleetFanOut(t, bin, size+1, size, nil)
 	report.FanOutAfterRecover = out.Summary
+}
+
+// fleetCommandsReady checks transport observations written by the real local
+// workers after their command subscription ACK. A publish-socket heartbeat can
+// arrive while the separate command socket is still reconnecting.
+func fleetCommandsReady(ctx context.Context, fleetDir string, operators []*operatorv1.OperatorDocument, after time.Time) (bool, error) {
+	sessions := make(map[string]bool, len(operators))
+	for _, op := range operators {
+		sessions[op.OperatorSessionId] = true
+	}
+	for i := 1; i <= len(operators); i++ {
+		fileSvc, err := fs.NewRuntimeFileService(filepath.Join(fleetDir, fmt.Sprintf("op-%05d", i)), nil)
+		if err != nil {
+			return false, fmt.Errorf("worker %d file service: %w", i, err)
+		}
+		data, err := fileSvc.ReadFile(ctx, filepath.Join(constants.DeploymentDirname, constants.DeploymentStateFileOperator))
+		if err != nil {
+			return false, fmt.Errorf("worker %d deployment state: %w", i, err)
+		}
+		var state models.OperatorDeploymentState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return false, fmt.Errorf("worker %d decode deployment state: %w", i, err)
+		}
+		if state.Phase != models.OperatorDeploymentPhaseReady || !state.UpdatedAt.After(after) || !sessions[state.OperatorSessionID] {
+			return false, nil
+		}
+		delete(sessions, state.OperatorSessionID)
+	}
+	return len(sessions) == 0, nil
 }
 
 // sampleFleet reads the registry once and summarises the remote Operators.

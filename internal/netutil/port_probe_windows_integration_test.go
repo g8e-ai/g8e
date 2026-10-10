@@ -20,50 +20,28 @@ import (
 )
 
 func TestTCPPortProbe_BindsWithoutAcceptingConnectionsAndReleasesPort(t *testing.T) {
-	var data windows.WSAData
-	if err := windows.WSAStartup(0x202, &data); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := windows.WSACleanup(); err != nil {
-			t.Error(err)
-		}
-	})
-	socket, err := bindTCPPort(0)
+	port, reservation, err := ReserveTCPPort()
 	if err != nil {
 		t.Fatal(err)
 	}
 	closed := false
 	t.Cleanup(func() {
 		if !closed {
-			_ = windows.Closesocket(socket)
+			_ = reservation.Close()
 		}
 	})
 	// SO_ACCEPTCONN reports whether a socket has entered the listening state.
-	accepting, err := windows.GetsockoptInt(socket, windows.SOL_SOCKET, 0x0002)
+	accepting, err := windows.GetsockoptInt(reservation.(*tcpPortReservation).socket, windows.SOL_SOCKET, 0x0002)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if accepting != 0 {
 		t.Fatal("a port probe must not listen or register an inbound firewall server")
 	}
-	address, err := windows.Getsockname(socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var port int
-	switch address := address.(type) {
-	case *windows.SockaddrInet4:
-		port = address.Port
-	case *windows.SockaddrInet6:
-		port = address.Port
-	default:
-		t.Fatalf("unexpected socket address %T", address)
-	}
 	if err := CheckTCPPortAvailable(port); !errors.Is(err, constants.ErrPortUnavailable) {
 		t.Fatalf("bound port must be unavailable, got %v", err)
 	}
-	if err := windows.Closesocket(socket); err != nil {
+	if err := reservation.Close(); err != nil {
 		t.Fatal(err)
 	}
 	closed = true

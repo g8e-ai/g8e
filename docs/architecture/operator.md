@@ -182,6 +182,8 @@ A rejected transaction does not reach the L5 Actuator. The Warden produces deter
 
 The Actuator returns execution errors after final receipt processing. The host-local receipt and commitment record remain the authoritative execution evidence even when publication to the Gateway fails.
 
+On Windows, the execution service starts non-interactive command and shell subprocesses without allocating a console window. Output remains captured in execution results, including commands dispatched to background Operators.
+
 ## Local state and native actions
 
 The Operator's `.g8e/` runtime tree contains local PKI material and enrollment state, encrypted SQLite data including replay protection and audit records, the execution-vault key and state, and optional Git-backed file-ledger data. Runtime paths are owned by the Operator process and its local volume; they are not shared with the Gateway unless deployment configuration explicitly mounts them.
