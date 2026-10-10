@@ -391,6 +391,10 @@ func stopFailedStart(cmd *exec.Cmd) error {
 // start verification.
 const maxHealthResponseBytes = 8192
 
+// maxStartupDiagnosticBytes bounds the child output copied into a failed
+// background-start error. The complete output remains in g8e.log.
+const maxStartupDiagnosticBytes = 64 * 1024
+
 // healthResponseIsFromChild reports whether a 200 health response was
 // produced by the just-started child process. The gateway reports its own
 // PID in the health body; a foreign listener on the same port must not
@@ -472,6 +476,13 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 	}
 	logPath := pm.logSvc.LogFilePath()
+	logStartOffset, err := logHandle.Seek(0, io.SeekEnd)
+	if err != nil {
+		if closeErr := logHandle.Close(); closeErr != nil {
+			return fmt.Errorf("%w: seek log: %w; close log: %w", constants.ErrProcessStartFailed, err, closeErr)
+		}
+		return fmt.Errorf("%w: seek log: %w", constants.ErrProcessStartFailed, err)
+	}
 
 	opts.HTTPPort = availableHTTPPort
 	opts.HTTPSPort = availableHTTPSPort
@@ -547,8 +558,15 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 
 	failStart := func() error {
 		cleanupErr := errors.Join(stopChild(true), pm.deletePID(constants.OperatorPIDFilename))
+		diagnostic := pm.startupDiagnostic(logStartOffset)
 		if cleanupErr != nil {
+			if diagnostic != "" {
+				return fmt.Errorf("%w: %s (full log: %s): cleanup: %w", constants.ErrProcessStartFailed, diagnostic, logPath, cleanupErr)
+			}
 			return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
+		}
+		if diagnostic != "" {
+			return fmt.Errorf("%w: %s (full log: %s)", constants.ErrProcessStartFailed, diagnostic, logPath)
 		}
 		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
 	}
@@ -591,6 +609,30 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		return fmt.Errorf("%w: gateway did not become healthy, check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
 	}
 	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, logPath)
+}
+
+// startupDiagnostic returns the last non-empty line written by the child for
+// this start attempt. It never reads output from an earlier invocation.
+func (pm *ProcessManager) startupDiagnostic(startOffset int64) string {
+	handle, err := pm.logSvc.OpenLogForRead(context.Background())
+	if err != nil {
+		return ""
+	}
+	defer handle.Close()
+	if _, err := handle.Seek(startOffset, io.SeekStart); err != nil {
+		return ""
+	}
+	data, err := io.ReadAll(io.LimitReader(handle, maxStartupDiagnosticBytes))
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 func (pm *ProcessManager) StopOperator() error {

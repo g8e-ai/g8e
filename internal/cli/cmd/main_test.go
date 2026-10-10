@@ -349,3 +349,10 @@ func TestErrorFormatting(t *testing.T) {
 		assert.Contains(t, output, "test error")
 	})
 }
+
+func TestRootCommand_RuntimeErrorsAreRenderedOnceWithoutUsage(t *testing.T) {
+	rootCmd := NewRootCmd("dev", serve.VersionInfo{})
+
+	assert.True(t, rootCmd.SilenceErrors, "ExecuteWithVersionInfo owns error rendering")
+	assert.True(t, rootCmd.SilenceUsage, "runtime failures must not print command usage")
+}

@@ -131,6 +131,26 @@ func TestStartOperator_ProcessDeathDuringHealthCheckRemovesPIDFile(t *testing.T)
 	assertNoLiveChildAndNoPIDFile(t, pm, fileSvc)
 }
 
+// TestStartOperator_ProcessDeathReturnsChildDiagnostic verifies that a
+// background child failure is actionable at the invoking terminal. The log
+// remains the complete record, but the process manager must return the
+// diagnostic emitted by this start attempt instead of only telling the user
+// to inspect the log manually.
+func TestStartOperator_ProcessDeathReturnsChildDiagnostic(t *testing.T) {
+	t.Setenv("G8E_TEST_REEXEC", "error")
+	fileSvc := newStartFailureFileSvc(t)
+
+	pm, err := NewProcessManager(fileSvc)
+	require.NoError(t, err)
+
+	startErr := pm.StartOperator(minimalStartOpts())
+	require.Error(t, startErr)
+	assert.ErrorIs(t, startErr, constants.ErrProcessStartFailed)
+	assert.ErrorContains(t, startErr, "gateway child startup diagnostic")
+
+	assertNoLiveChildAndNoPIDFile(t, pm, fileSvc)
+}
+
 // freeTCPPort returns a currently free loopback TCP port.
 func freeTCPPort(t *testing.T) int {
 	t.Helper()

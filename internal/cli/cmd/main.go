@@ -42,9 +42,11 @@ var osExit = os.Exit
 
 func NewRootCmd(cliVersion string, vi serve.VersionInfo) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:     "g8e",
-		Version: cliVersion,
-		Short:   "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
+		Use:           "g8e",
+		Version:       cliVersion,
+		Short:         "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 

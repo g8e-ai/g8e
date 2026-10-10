@@ -37,6 +37,9 @@ import (
 //   - "hold": the subprocess stays alive without serving health. This lets
 //     tests prove that a foreign health response on the selected port is
 //     rejected even while the child process is still running.
+//   - "error": the subprocess writes a startup error to stderr and exits.
+//     This lets tests prove that StartOperator returns the child diagnostic
+//     instead of hiding it behind a log-file pointer.
 //
 // During normal test runs TestMain delegates to the default test runner.
 func TestMain(m *testing.M) {
@@ -47,6 +50,9 @@ func TestMain(m *testing.M) {
 			serveHealth()
 		case "hold":
 			time.Sleep(5 * time.Second)
+		case "error":
+			_, _ = fmt.Fprintln(os.Stderr, "gateway child startup diagnostic")
+			os.Exit(1)
 		}
 		os.Exit(0)
 	}
