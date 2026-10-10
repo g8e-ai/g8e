@@ -9,9 +9,7 @@ package testcmd
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -278,22 +276,16 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 			}
 			if os.Getenv(string(constants.EnvVar.MasterKeyFile)) == "" {
 				if _, err := os.Stat("./secrets/g8e_master_key"); errors.Is(err, os.ErrNotExist) {
-					keyBytes := make([]byte, 32)
-					if _, err := rand.Read(keyBytes); err != nil {
-						return fmt.Errorf("failed to generate master key for e2e-docker: %w", err)
-					}
-					tmpKey, err := os.CreateTemp("", "g8e-master-key-*")
+					keyDir, err := os.MkdirTemp("", "g8e-master-key-*")
 					if err != nil {
-						return fmt.Errorf("failed to create temp master key file: %w", err)
+						return fmt.Errorf("failed to create temp master key dir: %w", err)
 					}
-					defer os.Remove(tmpKey.Name())
-					encoded := base64.StdEncoding.EncodeToString(keyBytes)
-					if _, err := tmpKey.WriteString(encoded + "\n"); err != nil {
-						_ = tmpKey.Close()
-						return fmt.Errorf("failed to write temp master key: %w", err)
+					defer os.RemoveAll(keyDir)
+					keyPath, err := writeMasterKeyFile(keyDir)
+					if err != nil {
+						return fmt.Errorf("failed to provision master key for e2e-docker: %w", err)
 					}
-					_ = tmpKey.Close()
-					os.Setenv(string(constants.EnvVar.MasterKeyFile), tmpKey.Name())
+					os.Setenv(string(constants.EnvVar.MasterKeyFile), keyPath)
 					defer os.Unsetenv(string(constants.EnvVar.MasterKeyFile))
 				}
 			}

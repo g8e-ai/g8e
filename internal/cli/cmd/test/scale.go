@@ -352,6 +352,20 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 	if err != nil {
 		return err
 	}
+	if os.Getenv(string(constants.EnvVar.MasterKeyFile)) == "" {
+		// Headless hosts have no OS keychain, so the Gateway needs a key file.
+		// It lives outside the run root and is removed when the run ends.
+		keyDir, keyErr := os.MkdirTemp("", "g8e-scale-key-*")
+		if keyErr != nil {
+			return fmt.Errorf("%w: create master key dir: %w", constants.ErrScaleTestFailed, keyErr)
+		}
+		defer os.RemoveAll(keyDir)
+		keyPath, keyErr := writeMasterKeyFile(keyDir)
+		if keyErr != nil {
+			return fmt.Errorf("%w: %w", constants.ErrScaleTestFailed, keyErr)
+		}
+		env = append(env, string(constants.EnvVar.MasterKeyFile)+"="+keyPath)
+	}
 	summary := scaleSummary{
 		Count: cfg.Count, BatchSize: cfg.BatchSize, Parallel: cfg.Parallel,
 		Binary: bin, OS: runtime.GOOS, GatewayHTTPPort: ports.HTTP, GatewayHTTPSPort: ports.HTTPS,
