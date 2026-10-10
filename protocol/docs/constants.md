@@ -429,8 +429,6 @@ Shell command execution constants:
 - Terminal control characters: `CtrlC` (3), `Backspace` (8), `Delete` (127), `PrintableASCIIStart` (32), `PrintableASCIIEnd` (126)
 - `DefaultShellCommandTimeout` (30 seconds), `MaxShellCommandTimeout` (300 seconds), `ShutdownTimeout` (15 seconds)
 - `LocalhostHostname` (`localhost`), `LocalhostIP` (`127.0.0.1`)
-- `RemoteEphemeralScriptTemplate`: bash script template for remote Operator deployment with graceful cleanup
-- `RemoteInjectedBinaryMessage`, `RemoteInjectedScriptMinimal`: constants for binary injection without execution
 - `DangerousCommands`: list of commands blocked by safety policy (rm, dd, mkfs, fdisk, format, del, erase, shred, wipe, killall, pkill, reboot, shutdown, halt, poweroff, init, systemctl, service, iptables, ip6tables, nft, ufw, firewall-cmd, route, ifconfig, ip, brctl, tc, modprobe, insmod, rmmod, depmod, mount, umount, swapon, swapoff, mkswap, lvcreate, lvremove, lvchange, vgcreate, vgremove, pvcreate, pvremove, cryptsetup, passwd, chpasswd, usermod, userdel, groupmod, crontab, at, batch, sudo, su, doas, runuser, curl, wget)
 - `DangerousPatterns`: list of command patterns blocked by safety policy (rm -rf /, rm -rf /*, fork bomb, dd if=/dev/zero, mkfs, > /dev/sda, > /dev/vda, chmod 777 /, chown -R, nc -l, ncat -l, ssh, scp, rsync)
 - `ShellInjectionPatterns`: `$(`, backtick, `|`

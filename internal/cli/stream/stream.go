@@ -66,19 +66,21 @@ func RunStream(args []string) {
 	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
 
 	var (
-		arch            string
-		hostsFile       string
-		concurrency     int
-		timeoutSec      int
-		endpoint        string
-		noGit           bool
-		sshConfigArg    string
-		sshKnownHosts   string
-		binaryDir       string
-		sshIdentityFile string
-		sshUser         string
-		sshPassphrase   string
-		preFlightCheck  bool
+		arch             string
+		hostsFile        string
+		concurrency      int
+		timeoutSec       int
+		endpoint         string
+		gatewayHTTPPort  int
+		gatewayHTTPSPort int
+		noGit            bool
+		sshConfigArg     string
+		sshKnownHosts    string
+		binaryDir        string
+		sshIdentityFile  string
+		sshUser          string
+		sshPassphrase    string
+		preFlightCheck   bool
 	)
 
 	fs.StringVar(&arch, "arch", constants.ArchAMD64, "Target architecture: amd64, arm64, 386")
@@ -86,6 +88,9 @@ func RunStream(args []string) {
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
 	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts Operator on each remote host")
+	fs.StringVar(&endpoint, "e", "", "Platform endpoint (shorthand)")
+	fs.IntVar(&gatewayHTTPPort, "gateway-http-port", constants.Ports.OperatorHttp, "Gateway HTTP port to forward")
+	fs.IntVar(&gatewayHTTPSPort, "gateway-https-port", constants.Ports.OperatorHttps, "Gateway HTTPS port to forward")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	fs.StringVar(&sshKnownHosts, "known-hosts", "", "Path to SSH known_hosts file (default: ~/.ssh/known_hosts)")
@@ -142,9 +147,6 @@ func RunStream(args []string) {
 		os.Exit(constants.ExitGeneralError)
 	}
 
-	// Build Operator invocation args for the remote shell
-	operatorArgs := buildOperatorArgs(endpoint, noGit)
-
 	dialTimeout := time.Duration(timeoutSec) * time.Second
 
 	// Set up context with signal cancellation
@@ -168,9 +170,25 @@ func RunStream(args []string) {
 	}
 	fmt.Fprintln(os.Stderr, "[stream] streaming...")
 
+	opts := StreamHostOptions{
+		BinaryData:        binaryData,
+		NoGit:             noGit,
+		GatewayHTTPPort:   gatewayHTTPPort,
+		GatewayHTTPSPort:  gatewayHTTPSPort,
+		SSHConfigPath:     sshConfigArg,
+		SSHKnownHostsPath: sshKnownHosts,
+		DialTimeout:       dialTimeout,
+		SSHAuthSock:       os.Getenv(string(constants.EnvVar.SSHAuthSock)),
+		Username:          os.Getenv(string(constants.EnvVar.User)),
+		SSHIdentityFile:   sshIdentityFile,
+		SSHUser:           sshUser,
+		SSHPassphrase:     sshPassphrase,
+		PreFlightCheck:    preFlightCheck,
+	}
+
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, sshKnownHosts, concurrency, dialTimeout, os.Getenv(string(constants.EnvVar.SSHAuthSock)), os.Getenv(string(constants.EnvVar.User)), sshIdentityFile, sshUser, sshPassphrase, preFlightCheck)
+	results := runConcurrentStream(ctx, hosts, opts, concurrency)
 
 	// Tally results
 	var succeeded, failed int
@@ -210,18 +228,8 @@ func RunStream(args []string) {
 func runConcurrentStream(
 	ctx context.Context,
 	hosts []string,
-	binaryData []byte,
-	operatorArgs string,
-	sshConfigPath string,
-	sshKnownHostsPath string,
+	opts StreamHostOptions,
 	concurrency int,
-	dialTimeout time.Duration,
-	sshAuthSock string,
-	username string,
-	sshIdentityFile string,
-	sshUser string,
-	sshPassphrase string,
-	preFlightCheck bool,
 ) []streamResult {
 	resultCh := make(chan streamResult, len(hosts))
 	sem := make(chan struct{}, concurrency)
@@ -233,7 +241,7 @@ func runConcurrentStream(
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, sshKnownHostsPath, dialTimeout, sshAuthSock, username, sshIdentityFile, sshUser, sshPassphrase, preFlightCheck, resultCh)
+			streamToHost(ctx, h, opts, resultCh)
 		}(host)
 	}
 
@@ -344,22 +352,15 @@ func collectHosts(positional []string, hostsFile string) (hosts []string, err er
 	return hosts, nil
 }
 
-// buildOperatorArgs constructs the shell-safe argument string for the remote
-// Operator invocation. Returns empty string when no endpoint is specified
-// (inject-only mode).
-//
-// NOTE: Host-key policy is not passed here because strict mode is enforced on
-// the outgoing dial from g8ep (stream phase). If remote operators ever make
-// their own SSH connections, a --strict arg should be added here.
-func buildOperatorArgs(endpoint string, noGit bool) string {
-	if endpoint == "" {
-		return ""
-	}
-	parts := []string{"operator", "start", "-e", shellQuote(endpoint)}
+// buildOperatorCommand constructs the direct execution command for the remote
+// Operator invocation, binding to loopback through the SSH forwarded tunnels.
+func buildOperatorCommand(remotePath string, fwdHTTPPort, fwdHTTPSPort int, noGit bool) string {
+	cmd := fmt.Sprintf("%s operator start --endpoint %s --gateway-http-port %d --gateway-https-port %d",
+		remotePath, constants.LocalhostIP, fwdHTTPPort, fwdHTTPSPort)
 	if noGit {
-		parts = append(parts, "--no-git")
+		cmd += " --no-git"
 	}
-	return strings.Join(parts, " ")
+	return cmd
 }
 
 // shellQuote wraps a string in single quotes for safe inline shell embedding.
@@ -413,10 +414,17 @@ FLAGS
   --hosts <file|->              File of hosts (one per line), - for stdin
   --concurrency <N>             Max parallel SSH sessions (default: 50)
   --timeout <secs>              Per-host dial+inject timeout (default: 60)
-  --endpoint <host>             Platform endpoint: starts Operator if set
+  --endpoint, -e <host>         Platform endpoint: starts Operator if set
+  --gateway-http-port <port>    Gateway HTTP discovery port to forward (default: 8080)
+  --gateway-https-port <port>   Gateway HTTPS/mTLS port to forward (default: 8443)
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
+  --known-hosts <path>          SSH known_hosts path (default: ~/.ssh/known_hosts)
   --binary-dir <path>           Operator build dir (default: <project-root>/bin)
+  --ssh-identity-file <path>    SSH identity file path
+  --ssh-user <user>             SSH username
+  --ssh-passphrase <pass>       SSH private key passphrase
+  --preflight                   Enable pre-flight SSH connectivity check
 
 OUTPUT
   Per-host status events are written as JSON lines to stdout.

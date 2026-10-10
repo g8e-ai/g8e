@@ -12,6 +12,7 @@ package keystore
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -150,8 +151,8 @@ func TestLibsecretKeyring_DeleteMasterKey_Success(t *testing.T) {
 }
 
 func fakeExitError(exitCode int) error {
-	// exec.Command("sh", "-c", "exit 1").Run() gives a real exec.ExitError
-	cmd := exec.Command("sh", "-c", "exit 1")
+	// exec.Command("sh", "-c", "exit <code").Run() gives a real exec.ExitError
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("exit %d", exitCode))
 	return cmd.Run()
 }
 

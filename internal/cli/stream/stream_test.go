@@ -33,25 +33,17 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// buildOperatorArgs
+// buildOperatorCommand
 // ---------------------------------------------------------------------------
 
-func TestBuildOperatorArgs_Empty(t *testing.T) {
-	got := buildOperatorArgs("", false)
-	assert.Empty(t, got, "no endpoint should produce empty string")
+func TestBuildOperatorCommand_Default(t *testing.T) {
+	got := buildOperatorCommand("/tmp/.g8e-stream-1234", 12345, 12346, false)
+	assert.Equal(t, "/tmp/.g8e-stream-1234 operator start --endpoint 127.0.0.1 --gateway-http-port 12345 --gateway-https-port 12346", got)
 }
 
-func TestBuildOperatorArgs_EndpointOnly(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", false)
-	assert.Equal(t, "operator start -e '10.0.0.1'", got)
-}
-
-func TestBuildOperatorArgs_NoGit(t *testing.T) {
-	got := buildOperatorArgs("10.0.0.1", true)
-	assert.Contains(t, got, "operator start")
-	assert.Contains(t, got, "-e '10.0.0.1'")
-	assert.Contains(t, got, "--no-git")
-	assert.NotContains(t, got, "-k")
+func TestBuildOperatorCommand_NoGit(t *testing.T) {
+	got := buildOperatorCommand("/tmp/.g8e-stream-1234", 12345, 12346, true)
+	assert.Equal(t, "/tmp/.g8e-stream-1234 operator start --endpoint 127.0.0.1 --gateway-http-port 12345 --gateway-https-port 12346 --no-git", got)
 }
 
 // ---------------------------------------------------------------------------
@@ -712,7 +704,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 
 func TestRunConcurrentStream_NoHosts(t *testing.T) {
 	ctx := context.Background()
-	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", "", 10, 5*time.Second, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, nil, StreamHostOptions{BinaryData: []byte("bin")}, 10)
 	assert.Empty(t, results)
 }
 
@@ -721,7 +713,10 @@ func TestRunConcurrentStream_ContextCancelled(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host1", "host2", "host3"}
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 10, 100*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, StreamHostOptions{
+		BinaryData:  []byte("bin"),
+		DialTimeout: 100 * time.Millisecond,
+	}, 10)
 
 	assert.Len(t, results, len(hosts))
 	for _, res := range results {
@@ -735,7 +730,10 @@ func TestRunConcurrentStream_AllResultsCollected(t *testing.T) {
 	cancel()
 
 	hosts := []string{"a", "b", "c", "d", "e"}
-	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", "", 5, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, StreamHostOptions{
+		BinaryData:  []byte("x"),
+		DialTimeout: 50 * time.Millisecond,
+	}, 5)
 
 	assert.Len(t, results, len(hosts), "must collect exactly one result per host")
 
@@ -757,7 +755,10 @@ func TestRunConcurrentStream_ConcurrencyLimitRespected(t *testing.T) {
 		hosts[i] = "host"
 	}
 
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 3, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, StreamHostOptions{
+		BinaryData:  []byte("bin"),
+		DialTimeout: 50 * time.Millisecond,
+	}, 3)
 	assert.Len(t, results, len(hosts))
 }
 
@@ -772,7 +773,10 @@ func TestRunConcurrentStream_EmitsPerHostEventsToStdout(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host-a", "host-b"}
-	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 10, 50*time.Millisecond, "", "", "", "", "", false)
+	runConcurrentStream(ctx, hosts, StreamHostOptions{
+		BinaryData:  []byte("bin"),
+		DialTimeout: 50 * time.Millisecond,
+	}, 10)
 	w.Close()
 
 	var buf bytes.Buffer
@@ -874,7 +878,10 @@ func TestRunStream_ValidG8eBinaryWithCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", "", 1, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, []string{"host1"}, StreamHostOptions{
+		BinaryData:  binaryData,
+		DialTimeout: 50 * time.Millisecond,
+	}, 1)
 	require.Len(t, results, 1)
 	assert.NotEmpty(t, results[0].Error)
 }
@@ -1080,25 +1087,6 @@ func TestBoundedBuffer_StringOnEmpty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// proxyAddr
-// ---------------------------------------------------------------------------
-
-func TestProxyAddr_Network(t *testing.T) {
-	addr := &proxyAddr{addr: "test:22"}
-	assert.Equal(t, "tcp", addr.Network())
-}
-
-func TestProxyAddr_String(t *testing.T) {
-	addr := &proxyAddr{addr: "proxy.example.com:1080"}
-	assert.Equal(t, "proxy.example.com:1080", addr.String())
-}
-
-func TestProxyAddr_EmptyAddr(t *testing.T) {
-	addr := &proxyAddr{addr: ""}
-	assert.Equal(t, "", addr.String())
-}
-
-// ---------------------------------------------------------------------------
 // Additional edge cases for shellQuote
 // ---------------------------------------------------------------------------
 
@@ -1132,15 +1120,10 @@ func TestHumanBytes_Negative(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Additional edge cases for buildOperatorArgs
+// Additional edge cases for buildOperatorCommand
 // ---------------------------------------------------------------------------
 
-func TestBuildOperatorArgs_EndpointWithSpaces(t *testing.T) {
-	got := buildOperatorArgs("http://example.com:8080 with spaces", false)
-	assert.Contains(t, got, "'http://example.com:8080 with spaces'")
-}
-
-func TestBuildOperatorArgs_EndpointWithSpecialChars(t *testing.T) {
-	got := buildOperatorArgs("http://user:pass@host:port/path?query=value", false)
-	assert.Contains(t, got, "'http://user:pass@host:port/path?query=value'")
+func TestBuildOperatorCommand_CustomPorts(t *testing.T) {
+	got := buildOperatorCommand("/tmp/.g8e-stream-abcdef", 8080, 8443, false)
+	assert.Equal(t, "/tmp/.g8e-stream-abcdef operator start --endpoint 127.0.0.1 --gateway-http-port 8080 --gateway-https-port 8443", got)
 }

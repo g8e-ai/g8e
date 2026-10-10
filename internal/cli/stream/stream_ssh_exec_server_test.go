@@ -26,12 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/require"
 	sshlib "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -49,9 +48,11 @@ type execSSHServer struct {
 	addr    string
 	hostKey sshlib.PublicKey
 
-	mu       sync.Mutex
-	commands []string
-	stdins   [][]byte
+	mu               sync.Mutex
+	commands         []string
+	stdins           [][]byte
+	forwardListeners map[uint32]net.Listener
+	forwardedPorts   []uint32
 }
 
 func (s *execSSHServer) record(command string, stdin []byte) {
@@ -65,6 +66,21 @@ func (s *execSSHServer) snapshot() ([]string, [][]byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.commands...), append([][]byte(nil), s.stdins...)
+}
+
+func (s *execSSHServer) getForwardedPorts() []uint32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]uint32(nil), s.forwardedPorts...)
+}
+
+func (s *execSSHServer) closeForwardListeners() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ln := range s.forwardListeners {
+		_ = ln.Close()
+	}
+	s.forwardListeners = nil
 }
 
 func newHostSigner(t *testing.T) sshlib.Signer {
@@ -83,7 +99,9 @@ func (s *execSSHServer) serve(raw net.Conn, config *sshlib.ServerConfig, rejectS
 		return
 	}
 	defer conn.Close()
-	go sshlib.DiscardRequests(reqs)
+	defer s.closeForwardListeners()
+
+	go s.handleGlobalRequests(conn, reqs)
 
 	for newChannel := range chans {
 		if rejectSessions || newChannel.ChannelType() != "session" {
@@ -98,31 +116,167 @@ func (s *execSSHServer) serve(raw net.Conn, config *sshlib.ServerConfig, rejectS
 	}
 }
 
-func (s *execSSHServer) handleSession(channel sshlib.Channel, requests <-chan *sshlib.Request, respond func(string) execReply) {
-	defer channel.Close()
-	for req := range requests {
-		if req.Type != "exec" {
+func (s *execSSHServer) handleGlobalRequests(conn *sshlib.ServerConn, reqs <-chan *sshlib.Request) {
+	for req := range reqs {
+		switch req.Type {
+		case "tcpip-forward":
+			var payload struct {
+				Addr  string
+				RPort uint32
+			}
+			if err := sshlib.Unmarshal(req.Payload, &payload); err != nil {
+				if req.WantReply {
+					_ = req.Reply(false, nil)
+				}
+				continue
+			}
+			listenAddr := net.JoinHostPort(payload.Addr, fmt.Sprintf("%d", payload.RPort))
+			ln, err := net.Listen("tcp", listenAddr)
+			if err != nil {
+				if req.WantReply {
+					_ = req.Reply(false, nil)
+				}
+				continue
+			}
+			assignedPort := uint32(ln.Addr().(*net.TCPAddr).Port)
+			s.mu.Lock()
+			if s.forwardListeners == nil {
+				s.forwardListeners = make(map[uint32]net.Listener)
+			}
+			s.forwardListeners[assignedPort] = ln
+			s.forwardedPorts = append(s.forwardedPorts, assignedPort)
+			s.mu.Unlock()
+
+			if req.WantReply {
+				_ = req.Reply(true, sshlib.Marshal(struct{ Port uint32 }{Port: assignedPort}))
+			}
+
+			go s.acceptForwardedConn(conn, ln, payload.Addr, assignedPort)
+
+		case "cancel-tcpip-forward":
+			var payload struct {
+				Addr  string
+				RPort uint32
+			}
+			if err := sshlib.Unmarshal(req.Payload, &payload); err != nil {
+				if req.WantReply {
+					_ = req.Reply(false, nil)
+				}
+				continue
+			}
+			s.mu.Lock()
+			if ln, ok := s.forwardListeners[payload.RPort]; ok {
+				_ = ln.Close()
+				delete(s.forwardListeners, payload.RPort)
+			}
+			s.mu.Unlock()
+			if req.WantReply {
+				_ = req.Reply(true, nil)
+			}
+
+		default:
 			if req.WantReply {
 				_ = req.Reply(false, nil)
 			}
-			continue
 		}
-		var payload struct{ Command string }
-		if err := sshlib.Unmarshal(req.Payload, &payload); err != nil {
-			_ = req.Reply(false, nil)
+	}
+}
+
+func (s *execSSHServer) acceptForwardedConn(conn *sshlib.ServerConn, ln net.Listener, addr string, port uint32) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
 			return
 		}
-		_ = req.Reply(true, nil)
+		go func(localConn net.Conn) {
+			defer localConn.Close()
+			originHost, originPortStr, _ := net.SplitHostPort(localConn.RemoteAddr().String())
+			var originPort uint32
+			_, _ = fmt.Sscanf(originPortStr, "%d", &originPort)
 
-		// The client half-closes stdin after streaming the binary.
-		stdin, _ := io.ReadAll(channel)
-		s.record(payload.Command, stdin)
+			type forwardedTCPPayload struct {
+				Addr       string
+				Port       uint32
+				OriginAddr string
+				OriginPort uint32
+			}
+			extra := sshlib.Marshal(&forwardedTCPPayload{
+				Addr:       addr,
+				Port:       port,
+				OriginAddr: originHost,
+				OriginPort: originPort,
+			})
+			ch, reqs, err := conn.OpenChannel("forwarded-tcpip", extra)
+			if err != nil {
+				return
+			}
+			defer ch.Close()
+			go sshlib.DiscardRequests(reqs)
 
-		reply := respond(payload.Command)
-		_, _ = io.WriteString(channel, reply.stdout)
-		_, _ = io.WriteString(channel.Stderr(), reply.stderr)
-		_, _ = channel.SendRequest("exit-status", false, sshlib.Marshal(struct{ Status uint32 }{reply.status}))
-		return
+			var pipeWg sync.WaitGroup
+			pipeWg.Add(2)
+			go func() {
+				defer pipeWg.Done()
+				_, _ = io.Copy(ch, localConn)
+				_ = ch.CloseWrite()
+			}()
+			go func() {
+				defer pipeWg.Done()
+				_, _ = io.Copy(localConn, ch)
+				if tc, ok := localConn.(*net.TCPConn); ok {
+					_ = tc.CloseWrite()
+				}
+			}()
+			pipeWg.Wait()
+		}(c)
+	}
+}
+
+func (s *execSSHServer) handleSession(channel sshlib.Channel, requests <-chan *sshlib.Request, respond func(string) execReply) {
+	defer channel.Close()
+	for req := range requests {
+		switch req.Type {
+		case "subsystem":
+			var payload struct{ Subsystem string }
+			if err := sshlib.Unmarshal(req.Payload, &payload); err == nil && payload.Subsystem == "sftp" {
+				_ = req.Reply(true, nil)
+				server, err := sftp.NewServer(channel)
+				if err == nil {
+					_ = server.Serve()
+				}
+				return
+			}
+			if req.WantReply {
+				_ = req.Reply(false, nil)
+			}
+			return
+
+		case "exec":
+			var payload struct{ Command string }
+			if err := sshlib.Unmarshal(req.Payload, &payload); err != nil {
+				if req.WantReply {
+					_ = req.Reply(false, nil)
+				}
+				return
+			}
+			if req.WantReply {
+				_ = req.Reply(true, nil)
+			}
+
+			stdin, _ := io.ReadAll(channel)
+			s.record(payload.Command, stdin)
+
+			reply := respond(payload.Command)
+			_, _ = io.WriteString(channel, reply.stdout)
+			_, _ = io.WriteString(channel.Stderr(), reply.stderr)
+			_, _ = channel.SendRequest("exit-status", false, sshlib.Marshal(struct{ Status uint32 }{reply.status}))
+			return
+
+		default:
+			if req.WantReply {
+				_ = req.Reply(false, nil)
+			}
+		}
 	}
 }
 
@@ -151,11 +305,21 @@ func newStreamFixture(t *testing.T, server *execSSHServer) *streamFixture {
 	return &streamFixture{t: t, server: server, sshConfigPath: config, knownHostsPath: knownHosts, identityFile: identity}
 }
 
-func (f *streamFixture) stream(ctx context.Context, target string, binary []byte, operatorArgs string, preflight bool) streamResult {
+func (f *streamFixture) stream(ctx context.Context, target string, binary []byte, opts ...func(*StreamHostOptions)) streamResult {
 	f.t.Helper()
 	resultCh := make(chan streamResult, 1)
-	streamToHost(ctx, target, binary, operatorArgs, f.sshConfigPath, f.knownHostsPath, 2*time.Second,
-		"", "testuser", f.identityFile, "", "", preflight, resultCh)
+	streamOpts := StreamHostOptions{
+		BinaryData:        binary,
+		SSHConfigPath:     f.sshConfigPath,
+		SSHKnownHostsPath: f.knownHostsPath,
+		DialTimeout:       2 * time.Second,
+		Username:          "testuser",
+		SSHIdentityFile:   f.identityFile,
+	}
+	for _, fn := range opts {
+		fn(&streamOpts)
+	}
+	streamToHost(ctx, target, streamOpts, resultCh)
 	select {
 	case res := <-resultCh:
 		return res
@@ -169,86 +333,6 @@ func (f *streamFixture) target() string { return "testuser@" + f.server.addr }
 
 func exitReply(status uint32, stdout, stderr string) func(string) execReply {
 	return func(string) execReply { return execReply{stdout: stdout, stderr: stderr, status: status} }
-}
-
-func startProxyConn(t *testing.T, shellCommand string) *proxyConn {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(cancel)
-
-	cmd := proxyCommand(ctx, shellCommand)
-	stdin, err := cmd.StdinPipe()
-	require.NoError(t, err)
-	stdout, err := cmd.StdoutPipe()
-	require.NoError(t, err)
-	require.NoError(t, cmd.Start())
-	return &proxyConn{stdin: stdin, stdout: stdout, cmd: cmd, addr: "proxied:22"}
-}
-
-func TestProxyConn_CloseIsSafeForConcurrentCallers(t *testing.T) {
-	// x/crypto/ssh closes its net.Conn from several goroutines at teardown.
-	tests := []struct {
-		name         string
-		shellCommand string
-		wantErr      bool
-	}{
-		{name: "proxy command exits cleanly once stdin closes", shellCommand: "cat", wantErr: false},
-		{name: "proxy command exits non-zero", shellCommand: "exit 3", wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn := startProxyConn(t, tt.shellCommand)
-
-			const callers = 8
-			errs := make([]error, callers)
-			var wg sync.WaitGroup
-			for i := range errs {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					errs[i] = conn.Close()
-				}()
-			}
-			joined := make(chan struct{})
-			go func() {
-				wg.Wait()
-				close(joined)
-			}()
-			select {
-			case <-joined:
-			case <-time.After(10 * time.Second):
-				t.Fatal("concurrent Close calls did not all return; Close must be idempotent")
-			}
-
-			for i, err := range errs {
-				if !tt.wantErr {
-					assert.NoError(t, err, "caller %d", i)
-					continue
-				}
-				require.Error(t, err, "caller %d", i)
-				assert.Contains(t, err.Error(), "ssh: proxy command wait")
-				assert.Same(t, errs[0], err, "every caller observes the first close's result")
-			}
-			assert.Equal(t, errs[0], conn.Close(), "a later Close repeats the original result")
-		})
-	}
-}
-
-func TestDialSSH_ProxyCommandThatExitsImmediatelyFailsHandshake(t *testing.T) {
-	config := &sshlib.ClientConfig{
-		User:            "testuser",
-		HostKeyCallback: sshlib.FixedHostKey(newHostSigner(t).PublicKey()),
-		Timeout:         time.Second,
-	}
-
-	select {
-	case result := <-dialSSH(context.Background(), ssh.HostConfig{ProxyCommand: "exit 1", Hostname: "h", Port: "22"}, config, "h:22"):
-		assert.Nil(t, result.client)
-		require.Error(t, result.err)
-		assert.Contains(t, result.err.Error(), "ssh: client connection")
-	case <-time.After(5 * time.Second):
-		t.Fatal("dialSSH did not report the proxy failure")
-	}
 }
 
 func proxyCommandViaTestBinary() string {

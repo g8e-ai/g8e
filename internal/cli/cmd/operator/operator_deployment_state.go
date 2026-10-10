@@ -28,6 +28,8 @@ func operatorDeploymentStateCmdWithFactory(factory func(string, *slog.Logger) (f
 	var dir string
 	cmd := &cobra.Command{
 		Use: "deployment-state", Short: "Read local non-secret Operator deployment progress as JSON", Args: cobra.NoArgs,
+		Hidden:     true,
+		Deprecated: "use 'operator deploy-host' with action 'state'",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			fileSvc, err := factory(dir, slog.Default())
 			if err != nil {

@@ -5,21 +5,18 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-//go:build windows
+//go:build !windows
 
-package stream
+package ssh
 
 import (
 	"context"
 	"os/exec"
-	"path/filepath"
-	"syscall"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-func proxyCommand(ctx context.Context, command string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, filepath.Base(constants.PathBinSh), "-c", command) //nolint:gosec // Windows shell proxy command requires sh invocation
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd
+// ProxyCommand constructs an exec.Cmd for running a ProxyCommand on Unix.
+func ProxyCommand(ctx context.Context, command string) *exec.Cmd {
+	return exec.CommandContext(ctx, constants.PathBinSh, "-c", command)
 }

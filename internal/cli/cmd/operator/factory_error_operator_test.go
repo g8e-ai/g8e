@@ -9,6 +9,7 @@ package operatorcmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -28,6 +30,20 @@ var errFactory = fmt.Errorf("factory boom")
 func TestOperatorDeploymentStateCmd_FileSvcFactoryError(t *testing.T) {
 	cmd := operatorDeploymentStateCmdWithFactory(cmdtest.FailingFileSvcFactory(errFactory))
 	err := cmd.RunE(cmd, nil)
+	require.ErrorIs(t, err, constants.ErrFileServiceInit)
+	require.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorDeployHostCmd_FileSvcFactoryError(t *testing.T) {
+	cmd := operatorDeployHostCmdWithFactory(cmdtest.FailingFileSvcFactory(errFactory))
+	req := models.DeployHostRequest{Action: models.DeployHostActionState, WorkingDir: "/some/dir"}
+	reqData, err := json.Marshal(req)
+	require.NoError(t, err)
+	cmd.SetIn(bytes.NewReader(reqData))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	err = cmd.RunE(cmd, nil)
 	require.ErrorIs(t, err, constants.ErrFileServiceInit)
 	require.ErrorIs(t, err, errFactory)
 }

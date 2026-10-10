@@ -195,6 +195,8 @@ const (
 	// so a deploying CLI can discover enrollment progress without parsing logs.
 	DeploymentDirname           = "deployment"
 	DeploymentStateFileOperator = "operator.json"
+	DeployBinDirname            = ".deploy-bin"
+	DeployStartLogFilename      = "start.log"
 )
 
 // Storage constants for database filenames and paths.
@@ -421,13 +423,14 @@ const (
 
 // SSH config constants for basenames and key filenames.
 const (
-	SshConfigFilename     = "ssh_config"
-	SshDirname            = ".ssh"
-	SshConfigBasename     = "config"
-	SshKnownHostsBasename = "known_hosts"
-	SshKeyEd25519         = "id_ed25519"
-	SshKeyECDSA           = "id_ecdsa"
-	SshKeyRSA             = "id_rsa"
+	SshConfigFilename      = "ssh_config"
+	SshDirname             = ".ssh"
+	SshConfigBasename      = "config"
+	SshKnownHostsBasename  = "known_hosts"
+	SshKeyEd25519          = "id_ed25519"
+	SshKeyECDSA            = "id_ecdsa"
+	SshKeyRSA              = "id_rsa"
+	StreamTempBinaryPrefix = ".g8e-stream-"
 )
 
 // Agent config constants for AI tool config directories and filenames.

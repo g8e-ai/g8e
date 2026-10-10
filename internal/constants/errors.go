@@ -711,18 +711,20 @@ var (
 	ErrConfigConsensusQuorumLow  = errors.New("consensus posture requires consensus quorum >= 1")
 
 	// Operator main initialization errors
-	ErrPathsInitFailed        = errors.New("failed to initialize paths")
-	ErrWorkingDirFailed       = errors.New("failed to determine working directory")
-	ErrUnrecognizedCommand    = errors.New("unrecognized command or flag")
-	ErrMutuallyExclusiveFlags = errors.New("only one of --doctrine, --consensus, or --notary may be specified")
-	ErrFetchTrustBundle       = errors.New("failed to fetch trust bundle from Operator")
-	ErrNoTrustBundle          = errors.New("no trust bundle available")
-	ErrPrivateKeyRequired     = errors.New("private key is required")
-	ErrClientCertRequired     = errors.New("client certificate is required")
-	ErrReadClientCert         = errors.New("failed to read client certificate")
-	ErrReadPrivateKey         = errors.New("failed to read private key")
-	ErrLoadCertKeyPair        = errors.New("failed to load client certificate/key pair")
-	ErrOperatorDeployFailed   = errors.New("operator deploy failed")
+	ErrPathsInitFailed         = errors.New("failed to initialize paths")
+	ErrWorkingDirFailed        = errors.New("failed to determine working directory")
+	ErrUnrecognizedCommand     = errors.New("unrecognized command or flag")
+	ErrMutuallyExclusiveFlags  = errors.New("only one of --doctrine, --consensus, or --notary may be specified")
+	ErrFetchTrustBundle        = errors.New("failed to fetch trust bundle from Operator")
+	ErrNoTrustBundle           = errors.New("no trust bundle available")
+	ErrPrivateKeyRequired      = errors.New("private key is required")
+	ErrClientCertRequired      = errors.New("client certificate is required")
+	ErrReadClientCert          = errors.New("failed to read client certificate")
+	ErrReadPrivateKey          = errors.New("failed to read private key")
+	ErrLoadCertKeyPair         = errors.New("failed to load client certificate/key pair")
+	ErrOperatorDeployFailed    = errors.New("operator deploy failed")
+	ErrOperatorEndpointInvalid = errors.New("operator deploy: invalid worker gateway endpoint")
+	ErrWSLUnavailable          = errors.New("wsl: not available on target host")
 
 	// JWKS errors
 	ErrJWKSRequestCreate    = errors.New("jwks: failed to create request")
@@ -1132,6 +1134,8 @@ var (
 	ErrSSHContextCancelled      = errors.New("ssh: context cancelled")
 	ErrSSHRetryBackoffCancelled = errors.New("ssh: context cancelled during retry backoff")
 	ErrSSHBeforeRunCancelled    = errors.New("ssh: context cancelled before run")
+	ErrSSHNilClientConfig       = errors.New("ssh: client config is nil")
+	ErrSSHDialTimeout           = errors.New("ssh: dial timeout")
 
 	// Blob store errors
 	ErrBlobStoreCleanupFailed = errors.New("failed to cleanup expired blobs")

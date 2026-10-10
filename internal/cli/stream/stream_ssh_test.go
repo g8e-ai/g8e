@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -57,17 +56,11 @@ func TestStreamToHost_ContextCancelled(t *testing.T) {
 	streamToHost(
 		ctx,
 		"127.0.0.1",
-		[]byte("data"),
-		"",
-		"",
-		"",
-		2*time.Second,
-		"",
-		"user",
-		"",    // sshIdentityFile
-		"",    // sshUser
-		"",    // sshPassphrase
-		false, // enablePreFlightCheck
+		StreamHostOptions{
+			BinaryData:  []byte("data"),
+			DialTimeout: 2 * time.Second,
+			Username:    "user",
+		},
 		resultCh,
 	)
 
@@ -130,51 +123,6 @@ func TestBuildAuthMethods_WithPassphrase(t *testing.T) {
 	methods, err = ssh.BuildAuthMethods(r, "", "wrongpassphrase")
 	require.NoError(t, err)
 	assert.Len(t, methods, 1)
-}
-
-func TestProxyConn(t *testing.T) {
-	// Test proxyConn implementation with a simple echo command
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "sh", "-c", "cat")
-	stdin, err := cmd.StdinPipe()
-	require.NoError(t, err)
-	stdout, err := cmd.StdoutPipe()
-	require.NoError(t, err)
-	require.NoError(t, cmd.Start())
-
-	conn := &proxyConn{
-		stdin:  stdin,
-		stdout: stdout,
-		cmd:    cmd,
-		addr:   "test:22",
-	}
-
-	// Test Write
-	_, err = conn.Write([]byte("test"))
-	require.NoError(t, err)
-
-	// Test Read
-	buf := make([]byte, 4)
-	n, err := conn.Read(buf)
-	require.NoError(t, err)
-	assert.Equal(t, 4, n)
-	assert.Equal(t, []byte("test"), buf)
-
-	// Test Close
-	require.NoError(t, conn.Close())
-
-	// Test addresses
-	assert.Equal(t, "tcp", conn.LocalAddr().Network())
-	assert.Equal(t, "proxy", conn.LocalAddr().String())
-	assert.Equal(t, "tcp", conn.RemoteAddr().Network())
-	assert.Equal(t, "test:22", conn.RemoteAddr().String())
-
-	// Test deadline methods (should be no-ops)
-	assert.NoError(t, conn.SetDeadline(time.Now()))
-	assert.NoError(t, conn.SetReadDeadline(time.Now()))
-	assert.NoError(t, conn.SetWriteDeadline(time.Now()))
 }
 
 func TestParseConfig_ProxyCommand(t *testing.T) {

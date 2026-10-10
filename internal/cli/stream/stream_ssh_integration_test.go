@@ -142,17 +142,13 @@ func TestStreamToHost_Success(t *testing.T) {
 	streamToHost(
 		ctx,
 		target,
-		binaryData,
-		"", // no args
-		sshConfigPath,
-		khPath,
-		2*time.Second,
-		"", // no agent
-		"testuser",
-		"",    // sshIdentityFile
-		"",    // sshUser
-		"",    // sshPassphrase
-		false, // enablePreFlightCheck
+		StreamHostOptions{
+			BinaryData:        binaryData,
+			SSHConfigPath:     sshConfigPath,
+			SSHKnownHostsPath: khPath,
+			DialTimeout:       2 * time.Second,
+			Username:          "testuser",
+		},
 		resultCh,
 	)
 
@@ -202,17 +198,13 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 	streamToHost(
 		context.Background(),
 		"failedhost",
-		[]byte("data"),
-		"",
-		sshConfigPath,
-		khPath,
-		500*time.Millisecond,
-		"",
-		"user",
-		"",    // sshIdentityFile
-		"",    // sshUser
-		"",    // sshPassphrase
-		false, // enablePreFlightCheck
+		StreamHostOptions{
+			BinaryData:        []byte("data"),
+			SSHConfigPath:     sshConfigPath,
+			SSHKnownHostsPath: khPath,
+			DialTimeout:       500 * time.Millisecond,
+			Username:          "user",
+		},
 		resultCh,
 	)
 

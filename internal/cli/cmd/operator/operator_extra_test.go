@@ -139,4 +139,17 @@ func TestOperatorStreamCmdExtraFlags(t *testing.T) {
 		flag := cmd.Flags().Lookup("no-git")
 		assert.NotNil(t, flag)
 	})
+
+	t.Run("stream command has gateway tunnel port flags", func(t *testing.T) {
+		cmd := operatorStreamCmd()
+		httpPortFlag := cmd.Flags().Lookup("gateway-http-port")
+		httpsPortFlag := cmd.Flags().Lookup("gateway-https-port")
+		endpointFlag := cmd.Flags().Lookup("endpoint")
+		assert.NotNil(t, httpPortFlag)
+		assert.NotNil(t, httpsPortFlag)
+		assert.NotNil(t, endpointFlag)
+		assert.Equal(t, "8080", httpPortFlag.DefValue)
+		assert.Equal(t, "8443", httpsPortFlag.DefValue)
+		assert.Equal(t, "e", endpointFlag.Shorthand)
+	})
 }

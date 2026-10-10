@@ -150,7 +150,7 @@ func (t *OperatorDeployTool) deployToHost(ctx context.Context, hostname, operato
 	}
 
 	// Remote deployment via SSH
-	return t.deployViaSSH(hostname, operatorBinary, operatorArgs, timeout)
+	return t.deployViaSSH(ctx, hostname, operatorBinary, operatorArgs, timeout)
 }
 
 // deployLocally deploys the operator on the local machine.
@@ -190,7 +190,7 @@ func (t *OperatorDeployTool) deployLocally(ctx context.Context, hostname, operat
 }
 
 // deployViaSSH deploys the operator to a remote host via SSH.
-func (t *OperatorDeployTool) deployViaSSH(hostname, operatorBinary string, operatorArgs []string, timeout time.Duration) OperatorDeploymentResult {
+func (t *OperatorDeployTool) deployViaSSH(ctx context.Context, hostname, operatorBinary string, operatorArgs []string, timeout time.Duration) OperatorDeploymentResult {
 	result := OperatorDeploymentResult{
 		Hostname: hostname,
 		Success:  false,
@@ -240,7 +240,7 @@ func (t *OperatorDeployTool) deployViaSSH(hostname, operatorBinary string, opera
 
 	// Connect to SSH server
 	addr := net.JoinHostPort(r.Hostname, r.Port)
-	client, err := sshlib.Dial("tcp", addr, clientConfig)
+	client, err := ssh.DialSSH(ctx, r, clientConfig, addr)
 	if err != nil {
 		result.Error = fmt.Sprintf("SSH dial failed: %v", err)
 		result.Message = "Failed to connect via SSH"

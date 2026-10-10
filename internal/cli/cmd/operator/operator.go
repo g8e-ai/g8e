@@ -84,6 +84,7 @@ func Cmd() *cobra.Command {
 		operatorGatewayPreflightCmd(),
 		operatorStreamCmd(),
 		operatorModelCmd(),
+		operatorDeployHostCmd(),
 	)
 
 	return cmd
@@ -713,6 +714,9 @@ func operatorStreamCmd() *cobra.Command {
 	cmd.Flags().String("hosts", "", "File of hosts (one per line) or - for stdin")
 	cmd.Flags().Int("concurrency", 50, "Max parallel SSH sessions")
 	cmd.Flags().Int("timeout", 60, "Per-host dial+inject timeout in seconds")
+	cmd.Flags().StringP("endpoint", "e", "", "Platform endpoint: if set, starts Operator on each remote host")
+	cmd.Flags().Int("gateway-http-port", constants.Ports.OperatorHttp, "Gateway HTTP discovery port to forward")
+	cmd.Flags().Int("gateway-https-port", constants.Ports.OperatorHttps, "Gateway HTTPS/mTLS port to forward")
 	cmd.Flags().Bool("no-git", false, "Disable ledger")
 	cmd.Flags().String("ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	cmd.Flags().String("known-hosts", "", "Path to SSH known_hosts file (default: ~/.ssh/known_hosts)")

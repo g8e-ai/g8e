@@ -10,20 +10,38 @@ package stream
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pkg/sftp"
 	sshlib "golang.org/x/crypto/ssh"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 )
+
+// StreamHostOptions defines configuration for streaming the binary to a host.
+type StreamHostOptions struct {
+	BinaryData        []byte
+	NoGit             bool
+	GatewayHTTPPort   int
+	GatewayHTTPSPort  int
+	SSHConfigPath     string
+	SSHKnownHostsPath string
+	DialTimeout       time.Duration
+	SSHAuthSock       string
+	Username          string
+	SSHIdentityFile   string
+	SSHUser           string
+	SSHPassphrase     string
+	PreFlightCheck    bool
+}
 
 // streamResult is emitted by streamToHost for each host attempt.
 type streamResult struct {
@@ -32,12 +50,6 @@ type streamResult struct {
 	SizeBytes int64
 	Error     error
 	Elapsed   time.Duration
-}
-
-// dialResult is the result of an asynchronous SSH dial attempt.
-type dialResult struct {
-	client *sshlib.Client
-	err    error
 }
 
 // isTransientError checks if an error is transient and worth retrying.
@@ -59,80 +71,6 @@ func isTransientError(err error) bool {
 		}
 	}
 	return false
-}
-
-// dialSSH establishes an SSH connection to the given address, supporting both
-// direct TCP and ProxyCommand connections. It sends exactly one dialResult to
-// the returned channel.
-func dialSSH(ctx context.Context, r ssh.HostConfig, clientConfig *sshlib.ClientConfig, addr string) <-chan dialResult {
-	ch := make(chan dialResult, 1)
-	go func() {
-		var conn net.Conn
-		var err error
-
-		// Use ProxyCommand if specified
-		if r.ProxyCommand != "" {
-			// Execute proxy command and use its stdin/stdout as the connection
-			// Replace %h with hostname, %p with port
-			proxyCmd := strings.ReplaceAll(r.ProxyCommand, "%h", r.Hostname)
-			proxyCmd = strings.ReplaceAll(proxyCmd, "%p", r.Port)
-
-			cmd := proxyCommand(ctx, proxyCmd)
-			stdin, err := cmd.StdinPipe()
-			if err != nil {
-				ch <- dialResult{nil, fmt.Errorf("ssh: proxy stdin pipe: %w", err)}
-				return
-			}
-			stdout, err := cmd.StdoutPipe()
-			if err != nil {
-				ch <- dialResult{nil, fmt.Errorf("ssh: proxy stdout pipe: %w", err)}
-				return
-			}
-			if err := cmd.Start(); err != nil {
-				ch <- dialResult{nil, fmt.Errorf("ssh: start proxy: %w", err)}
-				return
-			}
-
-			// Create a net.Conn wrapper around the proxy command pipes
-			conn = &proxyConn{
-				stdin:  stdin,
-				stdout: stdout,
-				cmd:    cmd,
-				addr:   addr,
-			}
-		} else {
-			// Direct TCP connection with keepalive
-			conn, err = net.DialTimeout(string(constants.NetworkProtocolTCP), addr, clientConfig.Timeout)
-			if err != nil {
-				ch <- dialResult{nil, fmt.Errorf("ssh: dial: %w", err)}
-				return
-			}
-			// Enable TCP keepalive on the connection
-			if tcpConn, ok := conn.(*net.TCPConn); ok {
-				if err := tcpConn.SetKeepAlive(true); err != nil {
-					conn.Close()
-					ch <- dialResult{nil, fmt.Errorf("ssh: set keepalive: %w", err)}
-					return
-				}
-				if err := tcpConn.SetKeepAlivePeriod(constants.SSHKeepaliveInterval); err != nil {
-					conn.Close()
-					ch <- dialResult{nil, fmt.Errorf("ssh: set keepalive period: %w", err)}
-					return
-				}
-			}
-		}
-
-		// Establish SSH client over the connection
-		sshConn, chans, reqs, err := sshlib.NewClientConn(conn, addr, clientConfig)
-		if err != nil {
-			conn.Close()
-			ch <- dialResult{nil, fmt.Errorf("ssh: client connection: %w", err)}
-			return
-		}
-		client := sshlib.NewClient(sshConn, chans, reqs)
-		ch <- dialResult{client, nil}
-	}()
-	return ch
 }
 
 // preFlightCheck validates SSH connectivity and authentication before binary transfer.
@@ -163,46 +101,204 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 
 	addr := net.JoinHostPort(r.Hostname, r.Port)
 
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("ssh: preflight: %w", ctx.Err())
-	case result := <-dialSSH(ctx, r, clientConfig, addr):
-		if result.err != nil {
-			return result.err
-		}
-		defer result.client.Close()
+	client, err := ssh.DialSSH(ctx, r, clientConfig, addr)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
 
-		// Run a simple command to verify the session works
-		session, err := result.client.NewSession()
+	// Run a simple command to verify the session works
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("ssh: session: %w", err)
+	}
+	defer session.Close()
+
+	// Run 'true' command - minimal check that remote shell works
+	if err := session.Run(constants.SSHPreflightVerifyCommand); err != nil {
+		return fmt.Errorf("ssh: verify: %w", err)
+	}
+	return nil
+}
+
+func generateRemotePath() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate remote path: %w", err)
+	}
+	return fmt.Sprintf("%s/%s%x", constants.PathTmp, constants.StreamTempBinaryPrefix, b), nil
+}
+
+func uploadBinaryViaSFTP(client *sshlib.Client, binaryData []byte, remotePath string) error {
+	sftpClient, err := sftp.NewClient(client)
+	if err != nil {
+		return fmt.Errorf("ssh: sftp client: %w", err)
+	}
+	defer sftpClient.Close()
+
+	dstFile, err := sftpClient.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("ssh: sftp create: %w", err)
+	}
+
+	if _, err := io.Copy(dstFile, bytes.NewReader(binaryData)); err != nil {
+		_ = dstFile.Close()
+		return fmt.Errorf("ssh: sftp write: %w", err)
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return fmt.Errorf("ssh: sftp close: %w", err)
+	}
+
+	if err := sftpClient.Chmod(remotePath, constants.PermFileExecutable); err != nil {
+		return fmt.Errorf("ssh: sftp chmod: %w", err)
+	}
+
+	return nil
+}
+
+func removeRemoteBinary(client *sshlib.Client, remotePath string) {
+	sftpClient, err := sftp.NewClient(client)
+	if err != nil {
+		return
+	}
+	defer sftpClient.Close()
+	_ = sftpClient.Remove(remotePath)
+}
+
+func getListenerPort(listener net.Listener) (int, error) {
+	addr := listener.Addr()
+	if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+		return tcpAddr.Port, nil
+	}
+	_, portStr, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return 0, fmt.Errorf("ssh: parse listener addr %s: %w", addr.String(), err)
+	}
+	var port int
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		return 0, fmt.Errorf("ssh: parse listener port %s: %w", portStr, err)
+	}
+	return port, nil
+}
+
+type tunnelForwarder struct {
+	ctx          context.Context
+	cancel       context.CancelFunc
+	listener     net.Listener
+	localAddr    string
+	assignedPort int
+	wg           sync.WaitGroup
+}
+
+func startTunnelForwarder(ctx context.Context, client *sshlib.Client, localPort int) (*tunnelForwarder, error) {
+	remoteListenAddr := net.JoinHostPort(constants.LocalhostIP, "0")
+	listener, err := client.Listen("tcp", remoteListenAddr)
+	if err != nil {
+		return nil, fmt.Errorf("ssh: remote forward %s: %w", remoteListenAddr, err)
+	}
+
+	assignedPort, err := getListenerPort(listener)
+	if err != nil {
+		_ = listener.Close()
+		return nil, err
+	}
+
+	fwdCtx, cancel := context.WithCancel(ctx)
+	tf := &tunnelForwarder{
+		ctx:          fwdCtx,
+		cancel:       cancel,
+		listener:     listener,
+		localAddr:    net.JoinHostPort(constants.LocalhostIP, fmt.Sprintf("%d", localPort)),
+		assignedPort: assignedPort,
+	}
+
+	tf.wg.Add(1)
+	go tf.runAcceptLoop()
+
+	return tf, nil
+}
+
+func (tf *tunnelForwarder) Close() {
+	tf.cancel()
+	_ = tf.listener.Close()
+	tf.wg.Wait()
+}
+
+func (tf *tunnelForwarder) runAcceptLoop() {
+	defer tf.wg.Done()
+	var dialer net.Dialer
+
+	for {
+		remoteConn, err := tf.listener.Accept()
 		if err != nil {
-			return fmt.Errorf("ssh: session: %w", err)
+			return
 		}
-		defer session.Close()
 
-		// Run 'true' command - minimal check that remote shell works
-		if err := session.Run(constants.SSHPreflightVerifyCommand); err != nil {
-			return fmt.Errorf("ssh: verify: %w", err)
-		}
-		return nil
+		tf.wg.Add(1)
+		go func(rc net.Conn) {
+			defer tf.wg.Done()
+			defer rc.Close()
+
+			localConn, err := dialer.DialContext(tf.ctx, "tcp", tf.localAddr)
+			if err != nil {
+				return
+			}
+			defer localConn.Close()
+
+			tf.pipe(rc, localConn)
+		}(remoteConn)
 	}
 }
 
-// streamToHost injects the binary into one remote host via SSH and optionally
-// starts the operator. It sends exactly one streamResult to resultCh.
+func (tf *tunnelForwarder) pipe(c1, c2 net.Conn) {
+	var once sync.Once
+	closeBoth := func() {
+		once.Do(func() {
+			_ = c1.Close()
+			_ = c2.Close()
+		})
+	}
+	defer closeBoth()
+
+	copyDone := make(chan struct{})
+	watcherDone := make(chan struct{})
+
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-tf.ctx.Done():
+			closeBoth()
+		case <-copyDone:
+		}
+	}()
+
+	var copyWg sync.WaitGroup
+	copyWg.Add(2)
+
+	go func() {
+		defer copyWg.Done()
+		defer closeBoth()
+		_, _ = io.Copy(c1, c2)
+	}()
+
+	go func() {
+		defer copyWg.Done()
+		defer closeBoth()
+		_, _ = io.Copy(c2, c1)
+	}()
+
+	copyWg.Wait()
+	close(copyDone)
+	<-watcherDone
+}
+
+// streamToHost injects the binary into one remote host via SSH and starts
+// the operator through SSH remote forwarded tunnels. It sends exactly one streamResult to resultCh.
 func streamToHost(
 	ctx context.Context,
 	target string,
-	binaryData []byte,
-	operatorArgs string,
-	sshConfigPath string,
-	sshKnownHostsPath string,
-	dialTimeout time.Duration,
-	sshAuthSock string,
-	username string,
-	sshIdentityFile string,
-	sshUser string,
-	sshPassphrase string,
-	enablePreFlightCheck bool,
+	opts StreamHostOptions,
 	resultCh chan<- streamResult,
 ) {
 	start := time.Now()
@@ -211,7 +307,7 @@ func streamToHost(
 		resultCh <- streamResult{
 			Host:      target,
 			Status:    status,
-			SizeBytes: int64(len(binaryData)),
+			SizeBytes: int64(len(opts.BinaryData)),
 			Error:     err,
 			Elapsed:   time.Since(start),
 		}
@@ -224,21 +320,28 @@ func streamToHost(
 	default:
 	}
 
-	r, err := ssh.ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
+	if opts.GatewayHTTPPort == 0 {
+		opts.GatewayHTTPPort = constants.Ports.OperatorHttp
+	}
+	if opts.GatewayHTTPSPort == 0 {
+		opts.GatewayHTTPSPort = constants.Ports.OperatorHttps
+	}
+
+	r, err := ssh.ResolveHost(target, opts.SSHConfigPath, opts.Username, opts.SSHIdentityFile, opts.SSHUser)
 	if err != nil {
 		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: resolve host: %w", err))
 		return
 	}
 
 	// Pre-flight check if enabled
-	if enablePreFlightCheck {
-		if err := preFlightCheck(ctx, r, sshAuthSock, sshPassphrase, sshKnownHostsPath, dialTimeout); err != nil {
+	if opts.PreFlightCheck {
+		if err := preFlightCheck(ctx, r, opts.SSHAuthSock, opts.SSHPassphrase, opts.SSHKnownHostsPath, opts.DialTimeout); err != nil {
 			emit(constants.StreamStatusFailed, err)
 			return
 		}
 	}
 
-	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
+	authMethods, err := ssh.BuildAuthMethods(r, opts.SSHAuthSock, opts.SSHPassphrase)
 	if err != nil {
 		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: build auth: %w", err))
 		return
@@ -248,7 +351,7 @@ func streamToHost(
 		return
 	}
 
-	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(sshKnownHostsPath)
+	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(opts.SSHKnownHostsPath)
 	if cbErr != nil {
 		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: host key callback: %w", cbErr))
 		return
@@ -258,7 +361,7 @@ func streamToHost(
 		User:            r.User,
 		Auth:            authMethods,
 		HostKeyCallback: hostKeyCallback,
-		Timeout:         dialTimeout,
+		Timeout:         opts.DialTimeout,
 	}
 
 	addr := net.JoinHostPort(r.Hostname, r.Port)
@@ -278,75 +381,93 @@ func streamToHost(
 			}
 		}
 
-		var client *sshlib.Client
-		var session *sshlib.Session
-		keepaliveDone := make(chan struct{})
-
-		cleanup := func() {
-			close(keepaliveDone)
-			if session != nil {
-				_ = session.Close()
-			}
-			if client != nil {
-				_ = client.Close()
-			}
-		}
-
-		select {
-		case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
 			emit(constants.StreamStatusCancelled, constants.ErrSSHContextCancelled)
 			return
-		case result := <-dialSSH(ctx, r, clientConfig, addr):
-			if result.err != nil {
-				lastErr = result.err
-				if retryCount < constants.SSHMaxRetries && isTransientError(result.err) {
-					continue
-				}
-				emit(constants.StreamStatusFailed, fmt.Errorf("ssh: dial: %s (after %d retries): %w", addr, retryCount, result.err))
-				return
-			}
-			client = result.client
 		}
 
-		go func() {
-			ticker := time.NewTicker(constants.SSHKeepaliveInterval)
-			defer ticker.Stop()
-			missedCount := 0
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-keepaliveDone:
-					return
-				case <-ticker.C:
-					_, _, err := client.SendRequest(constants.SSHKeepaliveRequestType, true, nil)
-					if err != nil {
-						missedCount++
-						if missedCount >= constants.SSHKeepaliveMaxMissed {
-							_ = client.Close()
-							return
-						}
-					} else {
-						missedCount = 0
-					}
-				}
-			}
-		}()
-
-		session, err = client.NewSession()
+		client, err := ssh.DialSSH(ctx, r, clientConfig, addr)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+				emit(constants.StreamStatusCancelled, constants.ErrSSHContextCancelled)
+				return
+			}
 			lastErr = err
 			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
-				cleanup()
 				continue
 			}
-			cleanup()
+			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: dial: %s (after %d retries): %w", addr, retryCount, err))
+			return
+		}
+
+		stopKeepalive := ssh.StartKeepalive(ctx, client, constants.SSHKeepaliveInterval, constants.SSHKeepaliveMaxMissed)
+
+		remotePath, err := generateRemotePath()
+		if err != nil {
+			stopKeepalive()
+			_ = client.Close()
+			emit(constants.StreamStatusFailed, err)
+			return
+		}
+
+		cleanup := func(httpFwd, httpsFwd *tunnelForwarder) {
+			stopKeepalive()
+			if httpFwd != nil {
+				httpFwd.Close()
+			}
+			if httpsFwd != nil {
+				httpsFwd.Close()
+			}
+			removeRemoteBinary(client, remotePath)
+			_ = client.Close()
+		}
+
+		// Upload binary via SFTP
+		if err := uploadBinaryViaSFTP(client, opts.BinaryData, remotePath); err != nil {
+			lastErr = err
+			cleanup(nil, nil)
+			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
+				continue
+			}
+			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: upload binary (after %d retries): %w", retryCount, err))
+			return
+		}
+
+		// Setup tunnels for HTTP and HTTPS Gateway ports
+		httpFwd, err := startTunnelForwarder(ctx, client, opts.GatewayHTTPPort)
+		if err != nil {
+			lastErr = err
+			cleanup(nil, nil)
+			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
+				continue
+			}
+			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: start http tunnel: %w", err))
+			return
+		}
+
+		httpsFwd, err := startTunnelForwarder(ctx, client, opts.GatewayHTTPSPort)
+		if err != nil {
+			lastErr = err
+			cleanup(httpFwd, nil)
+			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
+				continue
+			}
+			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: start https tunnel: %w", err))
+			return
+		}
+
+		session, err := client.NewSession()
+		if err != nil {
+			lastErr = err
+			cleanup(httpFwd, httpsFwd)
+			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
+				continue
+			}
 			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: session (after %d retries): %w", retryCount, err))
 			return
 		}
 
-		// Wire binary data as the remote stdin.
-		session.Stdin = bytes.NewReader(binaryData)
+		session.Stdin = bytes.NewReader(nil)
 
 		// Capture stdout+stderr (bounded)
 		stderrBuf := &boundedBuffer{limit: constants.SSHCaptureMaxBytes}
@@ -354,16 +475,13 @@ func streamToHost(
 		session.Stderr = stderrBuf
 		session.Stdout = stdoutBuf
 
-		var remoteCmd string
-		if operatorArgs != "" {
-			remoteCmd = fmt.Sprintf(constants.RemoteEphemeralScriptTemplate, operatorArgs)
-		} else {
-			msg := fmt.Sprintf(constants.RemoteInjectedBinaryMessage, "$B", "$B")
-			remoteCmd = fmt.Sprintf(constants.RemoteInjectedScriptMinimal, msg)
-		}
+		remoteCmd := buildOperatorCommand(remotePath, httpFwd.assignedPort, httpsFwd.assignedPort, opts.NoGit)
 
+		var runWg sync.WaitGroup
 		runDone := make(chan struct{})
+		runWg.Add(1)
 		go func() {
+			defer runWg.Done()
 			select {
 			case <-ctx.Done():
 				_ = session.Signal(sshlib.SIGHUP)
@@ -374,6 +492,16 @@ func streamToHost(
 
 		err = session.Run(remoteCmd)
 		close(runDone)
+		runWg.Wait()
+		_ = session.Close()
+
+		cleanup(httpFwd, httpsFwd)
+
+		if ctx.Err() != nil {
+			emit(constants.StreamStatusCancelled, constants.ErrSSHContextCancelled)
+			return
+		}
+
 		if err != nil {
 			var exitErr *sshlib.ExitError
 			if errors.As(err, &exitErr) {
@@ -383,25 +511,21 @@ func streamToHost(
 				} else if tail := strings.TrimSpace(stdoutBuf.String()); tail != "" {
 					msg = fmt.Errorf("%w: %s", msg, tail)
 				}
-				cleanup()
 				emit(constants.StreamStatusExited, msg)
 				return
 			}
 			lastErr = err
 			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
-				cleanup()
 				continue
 			}
 			msg := fmt.Errorf("ssh: run: %w", err)
 			if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
 				msg = fmt.Errorf("%w: %s", msg, tail)
 			}
-			cleanup()
 			emit(constants.StreamStatusFailed, msg)
 			return
 		}
 
-		cleanup()
 		emit(constants.StreamStatusCompleted, nil)
 		return
 	}
@@ -435,62 +559,3 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *boundedBuffer) String() string { return b.buf.String() }
-
-// proxyConn wraps a proxy command's stdin/stdout as a net.Conn.
-type proxyConn struct {
-	stdin  io.WriteCloser
-	stdout io.Reader
-	cmd    *exec.Cmd
-	addr   string
-
-	// golang.org/x/crypto/ssh closes the net.Conn from more than one goroutine
-	// (connection teardown and the key-exchange loop), and exec.Cmd.Wait must
-	// run exactly once, so Close is idempotent and safe for concurrent use.
-	closeOnce sync.Once
-	closeErr  error
-}
-
-func (c *proxyConn) Read(b []byte) (int, error) {
-	return c.stdout.Read(b)
-}
-
-func (c *proxyConn) Write(b []byte) (int, error) {
-	return c.stdin.Write(b)
-}
-
-func (c *proxyConn) Close() error {
-	c.closeOnce.Do(func() {
-		_ = c.stdin.Close()
-		if err := c.cmd.Wait(); err != nil {
-			c.closeErr = fmt.Errorf("ssh: proxy command wait: %w", err)
-		}
-	})
-	return c.closeErr
-}
-
-func (c *proxyConn) LocalAddr() net.Addr {
-	return &proxyAddr{addr: constants.SSHProxyAddrLabel}
-}
-
-func (c *proxyConn) RemoteAddr() net.Addr {
-	return &proxyAddr{addr: c.addr}
-}
-
-func (c *proxyConn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *proxyConn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *proxyConn) SetWriteDeadline(t time.Time) error {
-	return nil
-}
-
-type proxyAddr struct {
-	addr string
-}
-
-func (a *proxyAddr) Network() string { return string(constants.NetworkProtocolTCP) }
-func (a *proxyAddr) String() string  { return a.addr }
