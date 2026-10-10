@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package testcmd
+package keystore
 
 import (
 	"encoding/base64"
@@ -19,10 +19,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-func TestWriteMasterKeyFile_WritesPrivateBase64Key(t *testing.T) {
+func TestProvisionMasterKeyFile_WritesPrivateBase64Key(t *testing.T) {
 	dir := t.TempDir()
 
-	path, err := writeMasterKeyFile(dir)
+	path, err := ProvisionMasterKeyFile(dir)
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dir, "master.key"), path)
 
@@ -37,10 +37,10 @@ func TestWriteMasterKeyFile_WritesPrivateBase64Key(t *testing.T) {
 	assert.Len(t, decoded, 32)
 }
 
-func TestWriteMasterKeyFile_FreshKeyEachCall(t *testing.T) {
-	first, err := writeMasterKeyFile(t.TempDir())
+func TestProvisionMasterKeyFile_FreshKeyEachCall(t *testing.T) {
+	first, err := ProvisionMasterKeyFile(t.TempDir())
 	require.NoError(t, err)
-	second, err := writeMasterKeyFile(t.TempDir())
+	second, err := ProvisionMasterKeyFile(t.TempDir())
 	require.NoError(t, err)
 
 	a, err := os.ReadFile(first)

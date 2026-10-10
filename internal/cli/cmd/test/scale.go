@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/netutil"
 	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 )
 
 // Environment contract consumed by test/e2e/operator_fleet_e2e_test.go and
@@ -360,7 +361,7 @@ func runScale(ctx context.Context, cfg scaleConfig, deps scaleDeps) (err error) 
 			return fmt.Errorf("%w: create master key dir: %w", constants.ErrScaleTestFailed, keyErr)
 		}
 		defer os.RemoveAll(keyDir)
-		keyPath, keyErr := writeMasterKeyFile(keyDir)
+		keyPath, keyErr := keystore.ProvisionMasterKeyFile(keyDir)
 		if keyErr != nil {
 			return fmt.Errorf("%w: %w", constants.ErrScaleTestFailed, keyErr)
 		}

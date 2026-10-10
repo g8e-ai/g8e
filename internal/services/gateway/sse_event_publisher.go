@@ -13,10 +13,11 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 )
 
 // sseCLIChannelPrefix prefixes the pub/sub channel of a CLI session's SSE stream.
-const sseCLIChannelPrefix = "sse:cli:"
+var sseCLIChannelPrefix = pubsub.SSECLIChannel("")
 
 // SSEEventPublisher is the Gateway's in-process producer path for SSE events:
 // it appends a durable row to the SSE event store and then publishes the live
@@ -112,9 +113,9 @@ func (p *SSEEventPublisher) publishLive(route SSERoute, rowID int64, payloadByte
 	var channel string
 	switch {
 	case route.CLISessionID != "":
-		channel = sseCLIChannelPrefix + route.CLISessionID
+		channel = pubsub.SSECLIChannel(route.CLISessionID)
 	case route.WebSessionID != "":
-		channel = "sse:web:" + route.WebSessionID
+		channel = pubsub.SSEWebChannel(route.WebSessionID)
 	}
 	if channel == "" || p.pubsub == nil {
 		return nil

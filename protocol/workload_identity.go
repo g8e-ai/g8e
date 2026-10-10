@@ -216,14 +216,28 @@ func (w *WorkloadIdentity) ExtractGatewayID(spiffeID string) (string, bool) {
 // Returns the session ID and true if the SPIFFE ID is a valid Operator identity.
 // Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 func (w *WorkloadIdentity) ExtractOperatorSessionID(spiffeID string) (string, bool) {
+	id, ok := w.ExtractOperatorIdentity(spiffeID)
+	return id.OperatorSessionID, ok
+}
+
+// OperatorWorkload is the identity an Operator SPIFFE ID carries.
+type OperatorWorkload struct {
+	OrganizationID    string
+	OperatorID        string
+	OperatorSessionID string
+}
+
+// ExtractOperatorIdentity parses an Operator SPIFFE ID. It returns false when
+// spiffeID is not a valid Operator identity.
+// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
+func (w *WorkloadIdentity) ExtractOperatorIdentity(spiffeID string) (OperatorWorkload, bool) {
 	prefix := fmt.Sprintf("spiffe://%s/operator/", TrustDomain)
 	if !strings.HasPrefix(spiffeID, prefix) {
-		return "", false
+		return OperatorWorkload{}, false
 	}
-	// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 	parts := strings.Split(strings.TrimPrefix(spiffeID, prefix), "/")
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-		return "", false
+		return OperatorWorkload{}, false
 	}
-	return parts[2], true
+	return OperatorWorkload{OrganizationID: parts[0], OperatorID: parts[1], OperatorSessionID: parts[2]}, true
 }

@@ -45,6 +45,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/protocol"
 )
 
@@ -301,9 +302,9 @@ authorized:
 	var channel string
 	switch {
 	case route.CLISessionID != "":
-		channel = "sse:cli:" + route.CLISessionID
+		channel = pubsub.SSECLIChannel(route.CLISessionID)
 	case route.WebSessionID != "":
-		channel = "sse:web:" + route.WebSessionID
+		channel = pubsub.SSEWebChannel(route.WebSessionID)
 	}
 
 	if channel != "" {
@@ -388,7 +389,7 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 		if operatorSessionID != "" && cliSess.OperatorSessionID != operatorSessionID {
 			return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this cli session"}
 		}
-		return "sse:cli:" + route.CLISessionID, nil
+		return pubsub.SSECLIChannel(route.CLISessionID), nil
 
 	case route.WebSessionID != "":
 		if operatorSessionID != "" {
@@ -405,7 +406,7 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 				return "", &sseAuthError{status: http.StatusForbidden, message: "web session does not match authenticated session"}
 			}
 		}
-		return "sse:web:" + route.WebSessionID, nil
+		return pubsub.SSEWebChannel(route.WebSessionID), nil
 
 	default:
 		return "", &sseAuthError{status: http.StatusBadRequest, message: "exactly one routing target required"}

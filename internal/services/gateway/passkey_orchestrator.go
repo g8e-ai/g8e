@@ -15,6 +15,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -113,7 +114,7 @@ func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, cliSessionID, txH
 		o.logger.Error("approval: failed to marshal published event", "error", err)
 		return
 	}
-	o.pubsub.Publish("sse:cli:"+cliSessionID, pubJSON)
+	o.pubsub.Publish(pubsub.SSECLIChannel(cliSessionID), pubJSON)
 }
 
 // EmitPasskeyRegisteredSSE publishes a passkey.registered SSE event scoped to the
@@ -159,5 +160,5 @@ func (o *PasskeyOrchestrator) EmitPasskeyRegisteredSSE(userID, cliSessionID stri
 		o.logger.Error("passkey: failed to marshal published event", string(constants.ConnectionStateError), err)
 		return
 	}
-	o.pubsub.Publish("sse:cli:"+cliSessionID, pubJSON)
+	o.pubsub.Publish(pubsub.SSECLIChannel(cliSessionID), pubJSON)
 }

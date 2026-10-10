@@ -88,7 +88,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Chaos testing harness and summary | `internal/tools/chaos/`, `internal/cli/cmd/test/chaos.go` | `./g8e test chaos --help`, `./g8e test summary` |
 | Public loop qualification harness | `internal/cli/cmd/test/public_loop.go` | `./g8e test public-loop --help` |
 | Operator fleet scale qualification | `internal/cli/cmd/test/scale.go`, `test/e2e/operator_fleet_e2e_test.go` | `./g8e test scale --help`, `make test-scale` |
-| Makefile platform test targets | `Makefile` | `make test`, `make test-unit`, `make test-integration`, `make test-enrollment-burst`, `make test-coverage`, `make test-docker`, `make test-cross-enrollment`, `make test-scale`, `make test-airgap` |
+| Makefile platform test targets | `Makefile` | `make test`, `make test-unit`, `make test-integration`, `make test-enrollment-burst`, `make test-operator-burst`, `make test-coverage`, `make test-docker`, `make test-cross-enrollment`, `make test-scale`, `make test-airgap` |
 | Cross-component test targets | `Makefile`, `ensemble/`, `console/`, `protocol/` | `make ensemble-test`, `make ensemble-test-external`, `make console-test`, `make ci-protocol` |
 | Integration Gateway fixture | `test/fixtures/gateway_fixture.go` | `NewGatewayFixture` |
 | File service test isolation | `internal/testutil/paths.go`, `internal/services/fs/file_service.go` | `testutil.TempDir` |
@@ -241,6 +241,8 @@ Use `-v` with `./g8e test integration` to stream individual test names and
 durations from `go test` while a package runs.
 
 The enrollment burst deadline contract (`TestPlatformEnrollmentBurst`) runs only without race or coverage instrumentation; use `make test-enrollment-burst` to measure it. Local CI and the platform GitHub Actions workflow run this target separately, preserving the ten-second performance budget while coverage exercises the scale correctness scenarios.
+
+The Operator transport burst (`TestOperatorTransportBoundary_BurstDeliversEveryCommittedIdentity`) enrolls 2000 in-process Operators only in an uninstrumented build; use `make test-operator-burst` to run it. The race-enabled integration suite runs the same contract with 16 Operators, and coverage runs skip it.
 
 ### Qualify Operator Deployment
 

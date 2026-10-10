@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package testcmd
+package keystore
 
 import (
 	"crypto/rand"
@@ -17,10 +17,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// writeMasterKeyFile writes a fresh base64-encoded 32-byte master key to a
-// private file in dir and returns its path. The file is owned by the caller,
-// who removes dir when the run ends.
-func writeMasterKeyFile(dir string) (string, error) {
+// ProvisionMasterKeyFile writes a fresh base64-encoded 32-byte master key to a
+// private file in dir and returns its path, in the format the external-file
+// keyring reads. The file is owned by the caller, who removes dir when done.
+func ProvisionMasterKeyFile(dir string) (string, error) {
 	keyBytes := make([]byte, 32)
 	if _, err := rand.Read(keyBytes); err != nil {
 		return "", fmt.Errorf("generate master key: %w", err)

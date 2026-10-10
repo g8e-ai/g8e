@@ -35,6 +35,16 @@ func ReceiptsChannel(operatorID, operatorSessionID string) string {
 	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixReceipts, operatorID, operatorSessionID)
 }
 
+// SSECLIChannel returns the in-process channel of a CLI session's SSE stream.
+func SSECLIChannel(cliSessionID string) string {
+	return fmt.Sprintf("%s:%s", constants.ChannelPrefixSSECLI, cliSessionID)
+}
+
+// SSEWebChannel returns the in-process channel of a web session's SSE stream.
+func SSEWebChannel(webSessionID string) string {
+	return fmt.Sprintf("%s:%s", constants.ChannelPrefixSSEWeb, webSessionID)
+}
+
 // AuditChannel returns the LFAA audit ingest channel for an operator session.
 func AuditChannel(operatorID, operatorSessionID string) string {
 	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixAudit, operatorID, operatorSessionID)

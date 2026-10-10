@@ -264,6 +264,7 @@ help:
 		'  test-unit                 Run Tier 1 unit tests' \
 		'  test-integration          Run Tier 2 in-process integration tests' \
 		'  test-enrollment-burst     Run the enrollment timing contract without instrumentation' \
+		'  test-operator-burst       Run the 2000-Operator transport burst without instrumentation' \
 		'  test-coverage             Run tests and enforce $(COVERAGE_THRESHOLD)% coverage (PKG=..., VERBOSE=true)' \
 		'  test-docker               Run Tier 3 Docker E2E tests' \
 		'  test-cross-enrollment     Run Tier 3 cross-enrollment E2E tests' \
@@ -830,6 +831,14 @@ test-enrollment-burst:
 	@echo "Running the uninstrumented enrollment burst timing contract..."
 	@go test -tags=integration $(TEST_COUNT) -timeout $(TEST_TIMEOUT) \
 		-run '^TestPlatformEnrollmentBurst$$' ./internal/services/gateway
+
+# The Operator transport burst enrolls 2000 in-process Operators, a size only
+# an uninstrumented build carries; the race build runs the same contract small.
+.PHONY: test-operator-burst
+test-operator-burst:
+	@echo "Running the uninstrumented 2000-Operator transport burst..."
+	@go test -tags=integration $(TEST_COUNT) -timeout 15m \
+		-run '^TestOperatorTransportBoundary_BurstDeliversEveryCommittedIdentity$$' ./test
 
 # Tier 3: Docker E2E Tests - requires a running platform.
 # Start the platform first (docker compose up or ./g8e gw start), approve all

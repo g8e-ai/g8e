@@ -55,6 +55,13 @@ const (
 	ChannelPrefixAudit     = "audit"
 )
 
+// SSE stream channel prefixes (the in-process channel of a connected CLI or
+// web session's SSE stream).
+const (
+	ChannelPrefixSSECLI = "sse:cli"
+	ChannelPrefixSSEWeb = "sse:web"
+)
+
 // SSE event type strings (used in SSE event framing and consumer dispatch).
 const (
 	SSEEventTypeApprovalCompleted = "approval.completed"

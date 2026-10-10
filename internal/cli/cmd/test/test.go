@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 )
 
 func Cmd() *cobra.Command {
@@ -281,7 +282,7 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 						return fmt.Errorf("failed to create temp master key dir: %w", err)
 					}
 					defer os.RemoveAll(keyDir)
-					keyPath, err := writeMasterKeyFile(keyDir)
+					keyPath, err := keystore.ProvisionMasterKeyFile(keyDir)
 					if err != nil {
 						return fmt.Errorf("failed to provision master key for e2e-docker: %w", err)
 					}
