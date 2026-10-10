@@ -97,6 +97,8 @@ func TestPlatformEnrollmentRouteAuth_NewRoutesClassified(t *testing.T) {
 		"platform enrollment status is RouteAuthNone (public, token-scoped)")
 	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentComplete),
 		"platform enrollment complete is RouteAuthNone (public, token + proof-of-possession)")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.AuthOperatorBootstrapWebSocket),
+		"operator bootstrap websocket is RouteAuthNone (public, token + proof-of-possession)")
 
 	// Owner surfaces — dual auth (web session or mTLS).
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentBatchDecision))

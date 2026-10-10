@@ -11,272 +11,410 @@ package serve
 
 import (
 	"context"
-	"encoding/hex"
+	"crypto/ecdsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-func newMockGateway(t *testing.T) *mockGateway {
-	mg := &mockGateway{
-		t:               t,
-		requestID:       "mock-req-" + hex.EncodeToString([]byte{1, 2, 3, 4}),
-		token:           "mock-token-" + hex.EncodeToString([]byte{5, 6, 7, 8}),
-		approveCh:       make(chan struct{}),
-		operatorID:      "op-uuid-123",
-		operatorSession: "op-session-456",
-		cliSession:      "cli-session-789",
-		posture:         "doctrine",
+const mockBootstrapRequestID = "req-bootstrap-1"
+
+// mockBootstrapSocket scripts one accepted bootstrap socket.
+type mockBootstrapSocket struct {
+	// dropAfterCreated closes the socket once the created frame is sent.
+	dropAfterCreated bool
+	// errorFrame, when set, is sent instead of the created frame.
+	errorFrame *models.OperatorBootstrapError
+}
+
+// mockBootstrapGateway serves the Gateway side of the Operator bootstrap
+// websocket: it records each request, issues the Operator certificate from a
+// test CA, and verifies both proofs against the submitted CSRs.
+type mockBootstrapGateway struct {
+	t        *testing.T
+	server   *httptest.Server
+	caPEM    string
+	caCert   *x509.Certificate
+	caKey    *ecdsa.PrivateKey
+	decision models.PlatformEnrollmentState
+	approve  chan struct{}
+	created  chan struct{}
+	// onComplete runs when the complete frame arrives, before the bundle is
+	// sent: the client has recorded the request and not yet the enrollment.
+	onComplete func()
+
+	mu       sync.Mutex
+	sockets  []mockBootstrapSocket
+	requests []models.OperatorBootstrapRequest
+	proofsOK bool
+}
+
+func newMockBootstrapGateway(t *testing.T, sockets ...mockBootstrapSocket) *mockBootstrapGateway {
+	t.Helper()
+	caPEM, caCert, caKey := generateTestCA(t)
+	mg := &mockBootstrapGateway{
+		t:        t,
+		caPEM:    caPEM,
+		caCert:   caCert,
+		caKey:    caKey,
+		decision: models.PlatformEnrollmentStateApproved,
+		approve:  make(chan struct{}),
+		created:  make(chan struct{}, 8),
+		sockets:  sockets,
 	}
-
-	// Generate self-signed certs for the response.
-	mg.operatorCertPEM = generateSelfSignedCertPEM(t, "g8e-operator-test")
-	mg.cliCertPEM = generateSelfSignedCertPEM(t, "g8e-cli-test")
-	mg.trustBundlePEM = generateSelfSignedCertPEM(t, "g8e-ca-test")
-
 	mux := http.NewServeMux()
-	registerBootstrappedStatus(mux)
-	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, mg.handleRequest)
-	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, mg.handleStatus)
-	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, mg.handleComplete)
+	mux.HandleFunc(constants.APIPaths.AuthOperatorBootstrapWebSocket, mg.serve)
 	mg.server = httptest.NewServer(mux)
 	t.Cleanup(mg.server.Close)
-
 	return mg
 }
 
-// TestOperatorEnroll_FullFlowWithApproval verifies the full nine-step
-// enrollment sequence against a mock gateway: generate keys, submit
-// request, persist pending state, wait for approval, sign transcript
-// with both keys, submit completion, write credentials, and return the
-// resolved identity.
-func TestOperatorEnroll_FullFlowWithApproval(t *testing.T) {
-	fileSvc := newTestFileSvc(t)
-	mg := newMockGateway(t)
-
-	client, err := NewOperatorPlatformEnrollmentClient(mg.server.URL, "op-test-instance", "op-test-host", fileSvc, testLogger())
-	require.NoError(t, err)
-
-	// Approve after a short delay to simulate owner approval.
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		mg.approve()
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := client.Enroll(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	// Verify the returned identity.
-	assert.Equal(t, mg.operatorID, result.OperatorID)
-	assert.Equal(t, mg.operatorSession, result.OperatorSessionID)
-	assert.Equal(t, mg.cliSession, result.CLISessionID)
-	assert.Equal(t, mg.posture, result.Posture)
-
-	// Verify credentials were written to disk.
-	assert.FileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)))
-	assert.FileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)))
-	assert.FileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.CliCertFilename)))
-	assert.FileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.CliKeyFilename)))
-	assert.FileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)))
-
-	// Verify pending state was removed after successful enrollment.
-	_, err = fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirPendingEnroll, constants.PendingEnrollmentFileOperator))
-	assert.Error(t, err, "pending state must be removed after successful enrollment")
-
-	// Verify credential permissions are 0600.
-	opCertInfo, err := fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert))
-	require.NoError(t, err)
-	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, opCertInfo.IsDir()), opCertInfo.Mode().Perm())
-
-	opKeyInfo, err := fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey))
-	require.NoError(t, err)
-	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, opKeyInfo.IsDir()), opKeyInfo.Mode().Perm())
-
-	// Trust bundle is 0644 (public).
-	bundleInfo, err := fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
-	require.NoError(t, err)
-	assert.Equal(t, testutil.FileMode(constants.PermFilePublic, bundleInfo.IsDir()), bundleInfo.Mode().Perm())
+func (mg *mockBootstrapGateway) url() string {
+	return buildOperatorBootstrapURL(mg.server.URL, 0)
 }
 
-// TestOperatorEnroll_PresentsTheDeploymentLaunchID verifies that a worker
-// launched by `operator deploy` puts its launch ID in the create request, which
-// is what keys the Gateway's pending-request announcement to the deploying CLI,
-// and that a worker launched any other way presents none.
-func TestOperatorEnroll_PresentsTheDeploymentLaunchID(t *testing.T) {
+func (mg *mockBootstrapGateway) dials() int {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+	return len(mg.requests)
+}
+
+func (mg *mockBootstrapGateway) received() []models.OperatorBootstrapRequest {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+	return append([]models.OperatorBootstrapRequest(nil), mg.requests...)
+}
+
+func (mg *mockBootstrapGateway) serve(w http.ResponseWriter, r *http.Request) {
+	conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	var frame models.OperatorBootstrapFrame
+	if err := conn.ReadJSON(&frame); err != nil || frame.Type != models.OperatorBootstrapFrameRequest || frame.Request == nil {
+		return
+	}
+	req := *frame.Request
+	mg.mu.Lock()
+	mg.requests = append(mg.requests, req)
+	var script mockBootstrapSocket
+	if n := len(mg.requests); n <= len(mg.sockets) {
+		script = mg.sockets[n-1]
+	}
+	mg.mu.Unlock()
+
+	if script.errorFrame != nil {
+		_ = conn.WriteJSON(models.OperatorBootstrapFrame{Type: models.OperatorBootstrapFrameError, Error: script.errorFrame})
+		return
+	}
+	if models.PlatformEnrollmentTokenHash(req.Token) != req.Enrollment.TokenHash || req.Enrollment.Operator == nil {
+		return
+	}
+	operatorFP, err := auth.CSRFingerprint(req.Enrollment.Operator.OperatorCSRPEM)
+	if err != nil {
+		return
+	}
+	cliFP, err := auth.CSRFingerprint(req.Enrollment.Operator.CLICSRPEM)
+	if err != nil {
+		return
+	}
+	fingerprints := models.PlatformEnrollmentCSRFingerprints{Operator: operatorFP, CLI: cliFP}
+	if err := conn.WriteJSON(models.OperatorBootstrapFrame{Type: models.OperatorBootstrapFrameCreated, Created: &models.PlatformEnrollmentCreateResponse{
+		RequestID:     mockBootstrapRequestID,
+		ComponentKind: models.PlatformComponentOperator,
+		Fingerprints:  fingerprints,
+		ExpiresAt:     time.Now().Add(30 * time.Minute).UTC(),
+	}}); err != nil {
+		return
+	}
+	mg.created <- struct{}{}
+	if script.dropAfterCreated {
+		return
+	}
+
+	select {
+	case <-mg.approve:
+	case <-r.Context().Done():
+		return
+	}
+	if err := conn.WriteJSON(models.OperatorBootstrapFrame{Type: models.OperatorBootstrapFrameDecision, Decision: &models.PlatformEnrollmentStatusResponse{
+		RequestID:     mockBootstrapRequestID,
+		ComponentKind: models.PlatformComponentOperator,
+		State:         mg.decision,
+	}}); err != nil || mg.decision != models.PlatformEnrollmentStateApproved {
+		return
+	}
+
+	if err := conn.ReadJSON(&frame); err != nil || frame.Type != models.OperatorBootstrapFrameComplete || frame.Complete == nil {
+		return
+	}
+	if mg.onComplete != nil {
+		mg.onComplete()
+	}
+	transcript, err := buildOperatorCompletionTranscript(mockBootstrapRequestID, req.Enrollment.TokenHash, req.Enrollment.InstanceID, operatorFP, cliFP)
+	if err != nil {
+		return
+	}
+	verified := mg.verifyProof(req.Enrollment.Operator.OperatorCSRPEM, frame.Complete.Operator, transcript) &&
+		mg.verifyProof(req.Enrollment.Operator.CLICSRPEM, frame.Complete.CLI, transcript)
+	mg.mu.Lock()
+	mg.proofsOK = verified
+	mg.mu.Unlock()
+	if !verified {
+		return
+	}
+	_ = conn.WriteJSON(models.OperatorBootstrapFrame{Type: models.OperatorBootstrapFrameBundle, Bundle: &models.OperatorBootstrapBundle{
+		Credentials: models.PlatformEnrollmentOperatorCredentials{
+			OperatorCert:      signTestCSR(mg.t, req.Enrollment.Operator.OperatorCSRPEM, mg.caCert, mg.caKey),
+			OperatorCertChain: mg.caPEM,
+			HubTrustBundle:    mg.caPEM,
+			OperatorID:        "op-1",
+			OperatorSessionID: "op-session-1",
+			CLISessionID:      "cli-session-1",
+			CLICert:           signTestCSR(mg.t, req.Enrollment.Operator.CLICSRPEM, mg.caCert, mg.caKey),
+			Posture:           "doctrine",
+		},
+		MaxConcurrentTasks: 25,
+		MaxMemoryMB:        2048,
+	}})
+}
+
+func (mg *mockBootstrapGateway) verifyProof(csrPEM, proof string, transcript []byte) bool {
+	signature, err := base64.RawURLEncoding.DecodeString(proof)
+	if err != nil {
+		return false
+	}
+	digest := sha256.Sum256(transcript)
+	return ecdsa.VerifyASN1(csrPublicKey(mg.t, csrPEM), digest[:], signature)
+}
+
+func newTestBootstrapClient(t *testing.T, mg *mockBootstrapGateway, launchID string) (*OperatorBootstrapClient, fs.RuntimeFileService) {
+	t.Helper()
+	fileSvc := newTestFileSvc(t)
+	deployment, err := NewOperatorDeploymentRecorder(fileSvc, launchID)
+	require.NoError(t, err)
+	client, err := NewOperatorBootstrapClient(OperatorBootstrapClientConfig{
+		URL:           mg.url(),
+		InstanceID:    "op-test-instance",
+		Hostname:      "op-test-host",
+		RuntimeConfig: json.RawMessage(`{"platform":"linux"}`),
+		Deployment:    deployment,
+		Logger:        testLogger(),
+	})
+	require.NoError(t, err)
+	return client, fileSvc
+}
+
+func readTestDeploymentState(t *testing.T, fileSvc fs.RuntimeFileService) models.OperatorDeploymentState {
+	t.Helper()
+	data, err := fileSvc.ReadFile(context.Background(), operatorDeploymentStateRelPath())
+	require.NoError(t, err)
+	var state models.OperatorDeploymentState
+	require.NoError(t, json.Unmarshal(data, &state))
+	return state
+}
+
+func enrollContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// TestOperatorBootstrap_HeldSocketDeliversInMemoryIdentity proves the whole
+// exchange runs on one socket held through the owner's decision, the proofs
+// verify against the submitted keys, and the identity never touches disk.
+func TestOperatorBootstrap_HeldSocketDeliversInMemoryIdentity(t *testing.T) {
+	mg := newMockBootstrapGateway(t)
+	client, fileSvc := newTestBootstrapClient(t, mg, "")
+
+	// Runs on the server goroutine, so it asserts rather than requires.
+	mg.onComplete = func() {
+		data, err := fileSvc.ReadFile(context.Background(), operatorDeploymentStateRelPath())
+		var state models.OperatorDeploymentState
+		if assert.NoError(t, err) && assert.NoError(t, json.Unmarshal(data, &state)) {
+			assert.Equal(t, models.OperatorDeploymentPhasePendingApproval, state.Phase)
+		}
+	}
+	go func() {
+		<-mg.created
+		close(mg.approve)
+	}()
+	identity, err := client.Enroll(enrollContext(t))
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, mg.dials(), "one socket carries the whole exchange")
+	mg.mu.Lock()
+	assert.True(t, mg.proofsOK, "both proofs verify against the submitted CSRs")
+	mg.mu.Unlock()
+
+	assert.Equal(t, "op-1", identity.OperatorID)
+	assert.Equal(t, "op-session-1", identity.OperatorSessionID)
+	assert.Equal(t, "doctrine", identity.Posture)
+	assert.Equal(t, mg.received()[0].Enrollment.SystemFingerprint, identity.SystemFingerprint)
+	assert.Equal(t, []byte(mg.caPEM), identity.TrustBundlePEM)
+	leaf, err := x509.ParseCertificate(identity.Certificate.Certificate[0])
+	require.NoError(t, err)
+	_, err = leaf.Verify(x509.VerifyOptions{Roots: certPoolOf(mg.caCert), KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}})
+	assert.NoError(t, err)
+
+	state := readTestDeploymentState(t, fileSvc)
+	assert.Equal(t, models.OperatorDeploymentPhaseEnrolled, state.Phase)
+	assert.Equal(t, mockBootstrapRequestID, state.RequestID)
+	assert.Equal(t, "op-session-1", state.OperatorSessionID)
+
+	for _, rel := range []string{
+		filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert),
+		filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey),
+		filepath.Join(constants.PkiDirname, constants.CliCertFilename),
+		filepath.Join(constants.PkiDirname, constants.CliKeyFilename),
+		filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
+		filepath.Join(constants.PkiDirname, constants.PkiSubdirPendingEnroll),
+	} {
+		exists, err := fileSvc.FileExists(context.Background(), rel)
+		require.NoError(t, err)
+		assert.False(t, exists, "%s must not be written", rel)
+	}
+}
+
+// TestOperatorBootstrap_PresentsTheDeploymentLaunchID verifies that a worker
+// launched by `operator deploy` puts its launch ID in the request, which keys
+// the Gateway's pending-request announcement to the deploying CLI.
+func TestOperatorBootstrap_PresentsTheDeploymentLaunchID(t *testing.T) {
 	for name, launchID := range map[string]string{
 		"deploy-launched": "35fe96f6-cb3c-4e7e-a392-ed72e84ac9ad",
 		"started by hand": "",
 	} {
 		t.Run(name, func(t *testing.T) {
-			fileSvc := newTestFileSvc(t)
-			mg := newMockGateway(t)
-			mg.approve()
-			client, err := NewOperatorPlatformEnrollmentClient(mg.server.URL, "op-test-instance", "op-test-host", fileSvc, testLogger())
-			require.NoError(t, err)
-			if launchID != "" {
-				recorder, err := NewOperatorDeploymentRecorder(fileSvc, launchID)
-				require.NoError(t, err)
-				client.SetDeploymentRecorder(recorder)
-			}
+			mg := newMockBootstrapGateway(t)
+			close(mg.approve)
+			client, _ := newTestBootstrapClient(t, mg, launchID)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_, err = client.Enroll(ctx)
+			_, err := client.Enroll(enrollContext(t))
 			require.NoError(t, err)
-
-			assert.Equal(t, launchID, mg.receivedDeploymentID())
+			assert.Equal(t, launchID, mg.received()[0].Enrollment.DeploymentID)
 		})
 	}
 }
 
-// TestOperatorEnroll_ResumeFromPendingState verifies that when a
-// pending state file exists, the client resumes the same request
-// without generating new keys. This is the kill-and-restart property.
-func TestOperatorEnroll_ResumeFromPendingState(t *testing.T) {
-	fileSvc := newTestFileSvc(t)
-	mg := newMockGateway(t)
+// TestOperatorBootstrap_DroppedSocketRedialsTheSameRequest proves a dropped
+// socket is redialed with the same token, keys, and CSRs, so the Gateway
+// resumes the one request instead of creating another.
+func TestOperatorBootstrap_DroppedSocketRedialsTheSameRequest(t *testing.T) {
+	mg := newMockBootstrapGateway(t, mockBootstrapSocket{dropAfterCreated: true})
+	close(mg.approve)
+	client, fileSvc := newTestBootstrapClient(t, mg, "")
 
-	// Generate keys and persist a pending state manually.
-	csrPEM, opKey, err := generateTestCSR(t, "g8e-operator-resume")
+	identity, err := client.Enroll(enrollContext(t))
 	require.NoError(t, err)
-	opFP, err := csrFingerprint(csrPEM)
-	require.NoError(t, err)
-	opKeyPEM, err := encodeECPrivateKeyPEM(opKey)
-	require.NoError(t, err)
+	assert.Equal(t, "op-session-1", identity.OperatorSessionID)
 
-	cliCSRPEM, cliKey, err := generateTestCSR(t, "g8e-cli-resume")
-	require.NoError(t, err)
-	cliFP, err := csrFingerprint(cliCSRPEM)
-	require.NoError(t, err)
-	cliKeyPEM, err := encodeECPrivateKeyPEM(cliKey)
-	require.NoError(t, err)
+	requests := mg.received()
+	require.Len(t, requests, 2)
+	assert.Equal(t, requests[0], requests[1], "the redial carries the identical in-memory request")
+	assert.Equal(t, models.OperatorDeploymentPhaseEnrolled, readTestDeploymentState(t, fileSvc).Phase)
+}
 
-	originalRequestID := "preexisting-req-id"
-	originalToken := "preexisting-token"
-	pending := &operatorPendingState{
-		RequestID:           originalRequestID,
-		Token:               originalToken,
-		OperatorFingerprint: opFP,
-		CLIFingerprint:      cliFP,
-		OperatorKeyPEM:      opKeyPEM,
-		CLIKeyPEM:           cliKeyPEM,
-		ExpiresAt:           time.Now().Add(30 * time.Minute).UTC(),
-		InstanceID:          "op-test-instance",
-		Hostname:            "op-test-host",
+// TestOperatorBootstrap_GatewayErrorFrames proves a retryable error frame is
+// redialed and a permanent one ends enrollment without another socket.
+func TestOperatorBootstrap_GatewayErrorFrames(t *testing.T) {
+	t.Run("retryable", func(t *testing.T) {
+		mg := newMockBootstrapGateway(t, mockBootstrapSocket{errorFrame: &models.OperatorBootstrapError{Retryable: true, Message: "issuance in progress"}})
+		close(mg.approve)
+		client, _ := newTestBootstrapClient(t, mg, "")
+
+		_, err := client.Enroll(enrollContext(t))
+		require.NoError(t, err)
+		assert.Equal(t, 2, mg.dials())
+	})
+	t.Run("permanent", func(t *testing.T) {
+		mg := newMockBootstrapGateway(t, mockBootstrapSocket{errorFrame: &models.OperatorBootstrapError{Message: "invalid component"}})
+		client, _ := newTestBootstrapClient(t, mg, "")
+
+		_, err := client.Enroll(enrollContext(t))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid component")
+		assert.Equal(t, 1, mg.dials())
+	})
+}
+
+// TestOperatorBootstrap_TerminalDecisionsFailClosed proves a denial or expiry
+// ends enrollment on the first socket.
+func TestOperatorBootstrap_TerminalDecisionsFailClosed(t *testing.T) {
+	for state, want := range map[models.PlatformEnrollmentState]string{
+		models.PlatformEnrollmentStateDenied:  "denied",
+		models.PlatformEnrollmentStateExpired: "expired",
+	} {
+		t.Run(string(state), func(t *testing.T) {
+			mg := newMockBootstrapGateway(t)
+			mg.decision = state
+			close(mg.approve)
+			client, _ := newTestBootstrapClient(t, mg, "")
+
+			_, err := client.Enroll(enrollContext(t))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), want)
+			assert.Equal(t, 1, mg.dials())
+		})
 	}
-
-	client, err := NewOperatorPlatformEnrollmentClient(mg.server.URL, "op-test-instance", "op-test-host", fileSvc, testLogger())
-	require.NoError(t, err)
-
-	err = client.persistPendingState(client.pendingStatePath(), pending)
-	require.NoError(t, err)
-	recorder, err := NewOperatorDeploymentRecorder(fileSvc, "resume-launch")
-	require.NoError(t, err)
-	client.SetDeploymentRecorder(recorder)
-
-	// Override the mock gateway to use the preexisting request ID and
-	// token so the status and completion endpoints recognize the
-	// resumed request.
-	mg.requestID = originalRequestID
-	mg.token = originalToken
-
-	// Approve immediately.
-	mg.approve()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := client.Enroll(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	// The result should carry the mock gateway's operator ID/session,
-	// proving the completion endpoint was reached with the original
-	// token.
-	assert.Equal(t, mg.operatorID, result.OperatorID)
-	assert.Equal(t, mg.operatorSession, result.OperatorSessionID)
-	data, err := fileSvc.ReadFile(ctx, operatorDeploymentStateRelPath())
-	require.NoError(t, err)
-	var progress models.OperatorDeploymentState
-	require.NoError(t, json.Unmarshal(data, &progress))
-	assert.Equal(t, "resume-launch", progress.LaunchID)
-	assert.Equal(t, originalRequestID, progress.RequestID)
-	assert.Equal(t, mg.operatorSession, progress.OperatorSessionID)
-	assert.Equal(t, models.OperatorDeploymentPhaseEnrolled, progress.Phase)
-	assert.NotContains(t, string(data), originalToken)
-	assert.NotContains(t, string(data), opKeyPEM)
-	assert.NotContains(t, string(data), cliKeyPEM)
 }
 
-// TestOperatorEnroll_DenialFailsClosed verifies that a denied request
-// causes enrollment to fail with a clear error and leaves no
-// credentials on disk.
-func TestOperatorEnroll_DenialFailsClosed(t *testing.T) {
-	fileSvc := newTestFileSvc(t)
-	mg := newMockGateway(t)
+// TestOperatorBootstrap_CancellationEndsTheHeldSocket proves the held socket
+// closes when the Operator is stopped before the owner decides.
+func TestOperatorBootstrap_CancellationEndsTheHeldSocket(t *testing.T) {
+	mg := newMockBootstrapGateway(t)
+	client, _ := newTestBootstrapClient(t, mg, "")
 
-	// Override the status handler to return "denied".
-	close(mg.approveCh) // prevent approval
-	mg.t = t
-	mux := http.NewServeMux()
-	registerBootstrappedStatus(mux)
-	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, mg.handleRequest)
-	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, func(w http.ResponseWriter, r *http.Request) {
-		resp := models.PlatformEnrollmentStatusResponse{
-			RequestID:     mg.requestID,
-			ComponentKind: models.PlatformComponentOperator,
-			State:         models.PlatformEnrollmentStateDenied,
-			ExpiresAt:     time.Now().Add(25 * time.Minute).UTC(),
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	})
-	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, mg.handleComplete)
-	mg.server.Close()
-	mg.server = httptest.NewServer(mux)
-	mg.t.Cleanup(mg.server.Close)
-
-	client, err := NewOperatorPlatformEnrollmentClient(mg.server.URL, "op-test-instance", "op-test-host", fileSvc, testLogger())
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err = client.Enroll(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-mg.created
+		cancel()
+	}()
+	_, err := client.Enroll(ctx)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "denied")
-
-	// No credentials should be on disk.
-	assert.NoFileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)))
-	assert.NoFileExists(t, fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)))
-
-	// Pending state should still exist (denial is terminal but the
-	// client leaves it so the operator doesn't silently re-generate
-	// keys on restart).
-	exists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirPendingEnroll, constants.PendingEnrollmentFileOperator))
-	require.NoError(t, err)
-	assert.True(t, exists, "pending state should remain after denial so restart doesn't silently generate new keys")
+	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.Equal(t, 1, mg.dials())
 }
 
-// registerBootstrappedStatus serves a gateway that already has an owner, so
-// enrollment proceeds straight to request submission.
-func registerBootstrappedStatus(mux *http.ServeMux) {
-	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(models.BootstrapStatusResponse{Bootstrapped: true})
-	})
+// TestOperatorBootstrap_UnreachableGatewayIsRetriedUntilCancelled proves an
+// Operator started before its Gateway keeps redialing rather than exiting.
+func TestOperatorBootstrap_UnreachableGatewayIsRetriedUntilCancelled(t *testing.T) {
+	mg := newMockBootstrapGateway(t)
+	url := mg.url()
+	mg.server.Close()
+	client, _ := newTestBootstrapClient(t, mg, "")
+	client.cfg.URL = url
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	_, err := client.Enroll(ctx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.False(t, strings.Contains(err.Error(), "refused the bootstrap websocket"))
+}
+
+func certPoolOf(certs ...*x509.Certificate) *x509.CertPool {
+	pool := x509.NewCertPool()
+	for _, cert := range certs {
+		pool.AddCert(cert)
+	}
+	return pool
 }

@@ -9,13 +9,11 @@ package serve
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
@@ -121,154 +119,6 @@ func StartOperator(ctx context.Context, opts ServeOperatorOptions, vi VersionInf
 		}
 	}()
 
-	trustStore := certs.NewTrustStore(nil)
-
-	trustLoaded := LoadTrustBundle(ctx, logger, opts.TrustBundlePath, fileSvc, trustStore)
-	if !trustLoaded {
-		if opts.Endpoint != "" {
-			baseURL := buildGatewayHTTPBaseURL(opts.Endpoint, opts.HTTPPort)
-			trustURL := baseURL + constants.WellKnownPKICABundle
-			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
-			pemData, err := certs.FetchTrustBundle(ctx, trustURL, "")
-			if err != nil {
-				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
-				fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFetchTrustBundle, err)
-				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e gw start\n")
-				return nil, startFailure(constants.ExitConfigError, fmt.Errorf("%w: %w", constants.ErrFetchTrustBundle, err))
-			}
-			LogCertBundle(logger, "fetched-trust-bundle", pemData)
-			trustStore.SetCA(pemData)
-		} else {
-			logger.Error("No trust bundle available and no endpoint specified")
-			fmt.Fprintf(os.Stderr, "%s. Provide --trust-bundle or --endpoint\n", constants.ErrNoTrustBundle)
-			return nil, startFailure(constants.ExitConfigError, constants.ErrNoTrustBundle)
-		}
-	}
-	logger.Info("Trust bundle loaded")
-
-	privateKey := resolveKeyPath(opts.PrivateKey, fileSvc, logger)
-	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
-	enrolled := false
-
-	// If no installed operator credentials exist and an endpoint is
-	// provided, drive the owner-approved platform enrollment protocol
-	// to obtain them. The operator submits both an operator CSR and a CLI
-	// CSR, waits for owner approval, signs the canonical completion
-	// transcript with both private keys, and writes the issued credentials
-	// atomically. Pending state is persisted to
-	// pki/pending-enrollment/g8eo.json so a kill-and-restart resumes the
-	// same request and key material.
-	if privateKey == "" && clientCert == "" && opts.Endpoint != "" {
-		// Persist an explicitly supplied CA before enrollment so the bootstrap
-		// response cannot replace the trust selected by the operator owner.
-		if opts.TrustBundlePath != "" {
-			pemData, err := os.ReadFile(opts.TrustBundlePath)
-			pool := x509.NewCertPool()
-			if err != nil || !pool.AppendCertsFromPEM(pemData) {
-				logger.Error("Invalid explicit trust bundle", "path", opts.TrustBundlePath)
-				return nil, startFailure(constants.ExitConfigError, fmt.Errorf("%w: invalid explicit trust bundle %s", constants.ErrCAParseFailed, opts.TrustBundlePath))
-			}
-			path := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-			if err := fileSvc.WriteFile(ctx, path, pemData, constants.PermFilePublic); err != nil {
-				logger.Error("Failed to persist explicit trust bundle", "error", err)
-				return nil, startFailure(constants.ExitConfigError, err)
-			}
-		}
-		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
-		gatewayHTTPURL := buildGatewayHTTPBaseURL(opts.Endpoint, opts.HTTPPort)
-		hostname, err := os.Hostname()
-		if err != nil {
-			logger.Error("Failed to resolve hostname for enrollment", string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
-			return nil, startFailure(constants.ExitConfigError, err)
-		}
-		role := operatorRoles(opts)
-		account := auth.ResolveCurrentAccount()
-		instanceID := operatorInstanceID(hostname, role, effectiveWorkDir)
-		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
-		if err != nil {
-			logger.Error("Failed to create enrollment client", string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
-			return nil, startFailure(constants.ExitConfigError, err)
-		}
-		enrollClient.SetDeploymentRecorder(deployment)
-		enrollClient.SetFingerprintOptions(operatorFingerprintOptions(opts, effectiveWorkDir, account))
-		result, err := enrollClient.Enroll(ctx)
-		if err != nil {
-			logger.Error("Platform enrollment failed", string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
-			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
-			fmt.Fprintf(os.Stderr, "  Pending state is persisted; restart to resume the same request.\n")
-			return nil, startFailure(constants.ExitConfigError, err)
-		}
-
-		os.Setenv(string(constants.EnvVar.OperatorSessionID), result.OperatorSessionID)
-		if result.Posture != "" {
-			opts.Posture = result.Posture
-		}
-		privateKey = result.OperatorKeyPath
-		clientCert = result.OperatorCertPath
-		enrolled = true
-
-		// Reload the trust bundle from the newly written file.
-		caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		pemData, err := fileSvc.ReadFile(ctx, caBundleRel)
-		if err != nil {
-			logger.Error("Failed to reload trust bundle after enrollment", "path", fileSvc.Resolve(caBundleRel), string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFailedToReadTrustBundle, err)
-			return nil, startFailure(constants.ExitConfigError, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err))
-		}
-		trustStore.SetCA(pemData)
-		logger.Info("Trust bundle reloaded after enrollment", "path", fileSvc.Resolve(caBundleRel))
-		logger.Info("Platform enrollment completed, using enrolled certificates")
-	}
-
-	if privateKey == "" {
-		fmt.Fprintf(os.Stderr, "%s (-k or --key). Expected locations:\n", constants.ErrPrivateKeyRequired)
-		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorKeyDesc)
-		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientKeyDesc)
-		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
-		return nil, startFailure(constants.ExitConfigError, constants.ErrPrivateKeyRequired)
-	}
-
-	if clientCert == "" {
-		fmt.Fprintf(os.Stderr, "%s (--cert or --client-cert). Expected locations:\n", constants.ErrClientCertRequired)
-		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorCertDesc)
-		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientCertDesc)
-		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
-		return nil, startFailure(constants.ExitConfigError, constants.ErrClientCertRequired)
-	}
-
-	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-
-	var cert tls.Certificate
-	var certPEM []byte
-	if enrolled {
-		cert, certPEM, err = loadClientCertPairViaFileSvc(ctx, fileSvc, clientCert, privateKey)
-	} else {
-		cert, certPEM, err = loadClientCertPair(clientCert, privateKey)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return nil, startFailure(constants.ExitConfigError, err)
-	}
-	if enrolled {
-		// Enrollment returns runtime-relative paths for file-service writes.
-		// Background renewal uses os/x509 APIs and therefore needs the same
-		// files expressed as absolute paths.
-		clientCert = fileSvc.Resolve(clientCert)
-		privateKey = fileSvc.Resolve(privateKey)
-	}
-
-	clientIdentity.SetCertificate(cert)
-	LogCertBundle(logger, "client-cert", certPEM)
-	logger.Info("[TLS-DEBUG] client cert loaded",
-		"cert_file", clientCert,
-		"key_file", privateKey,
-	)
-
-	effectiveWorkDir = resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
-
 	cfg, err := config.Load(buildOperatorLoadOptions(opts, operatorEndpoint, effectiveWorkDir))
 	if err != nil {
 		exitCode, actionable := classifyConfigLoadError(err)
@@ -278,8 +128,49 @@ func StartOperator(ctx context.Context, opts ServeOperatorOptions, vi VersionInf
 		}
 		return nil, startFailure(exitCode, err)
 	}
-
 	cfg.Version = vi.Version
+
+	// An owner-supplied CA is read, never persisted, and wins over the
+	// trust delivered in the bundle.
+	var explicitTrust []byte
+	if opts.TrustBundlePath != "" {
+		explicitTrust, err = os.ReadFile(opts.TrustBundlePath)
+		if err != nil || !x509.NewCertPool().AppendCertsFromPEM(explicitTrust) {
+			logger.Error("Invalid explicit trust bundle", "path", opts.TrustBundlePath)
+			return nil, startFailure(constants.ExitConfigError, fmt.Errorf("%w: invalid explicit trust bundle %s", constants.ErrCAParseFailed, opts.TrustBundlePath))
+		}
+	}
+
+	identity, err := enrollOperator(ctx, opts, cfg, operatorEndpoint, effectiveWorkDir, explicitTrust, deployment, logger)
+	if err != nil {
+		logger.Error("Operator enrollment failed", string(constants.ConnectionStateError), err)
+		fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", operatorEndpoint)
+		return nil, startFailure(constants.ExitConfigError, err)
+	}
+
+	trustStore := certs.NewTrustStore(nil)
+	if explicitTrust != nil {
+		trustStore.SetCA(explicitTrust)
+	} else {
+		trustStore.SetCA(identity.TrustBundlePEM)
+	}
+	clientIdentity.SetCertificate(identity.Certificate)
+	LogCertBundle(logger, "client-cert", identity.CertificatePEM)
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+
+	cfg.OperatorID = identity.OperatorID
+	cfg.OperatorSessionId = identity.OperatorSessionID
+	cfg.SystemFingerprint = identity.SystemFingerprint
+	if identity.Posture != "" {
+		cfg.Posture = config.GatewayPosture(identity.Posture)
+	}
+	if identity.MaxConcurrentTasks > 0 {
+		cfg.MaxConcurrentTasks = identity.MaxConcurrentTasks
+	}
+	if identity.MaxMemoryMB > 0 {
+		cfg.MaxMemoryMB = identity.MaxMemoryMB
+	}
 
 	if cfg.CloudMode {
 		logger.Info("Cloud Operator mode enabled", "provider", cfg.CloudProvider)
@@ -327,13 +218,35 @@ func StartOperator(ctx context.Context, opts ServeOperatorOptions, vi VersionInf
 		}
 	}()
 
-	rt.wg.Add(1)
-	go func() {
-		defer rt.wg.Done()
-		RunClientCertRenewalLoop(runCtx, cfg, fileSvc, clientCert, privateKey, logger, clientIdentity)
-	}()
-
 	return rt, nil
+}
+
+// enrollOperator obtains the Operator's in-memory identity over the Gateway
+// bootstrap websocket. Every start enrolls: no identity survives the process.
+func enrollOperator(ctx context.Context, opts ServeOperatorOptions, cfg *config.Config, endpoint, workDir string, explicitTrust []byte, deployment *OperatorDeploymentRecorder, logger *slog.Logger) (*OperatorIdentity, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("resolve hostname: %w", err)
+	}
+	runtimeConfig, err := operatorRuntimeConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewOperatorBootstrapClient(OperatorBootstrapClientConfig{
+		URL:                buildOperatorBootstrapURL(endpoint, opts.HTTPPort),
+		InstanceID:         operatorInstanceID(hostname, operatorRoles(opts), workDir),
+		Hostname:           hostname,
+		RuntimeConfig:      runtimeConfig,
+		FingerprintOptions: operatorFingerprintOptions(opts, workDir, auth.ResolveCurrentAccount()),
+		TrustBundlePEM:     explicitTrust,
+		Deployment:         deployment,
+		Logger:             logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("Enrolling Operator over the bootstrap websocket", "endpoint", endpoint)
+	return client.Enroll(ctx)
 }
 
 // Failed delivers the service start failure, if any.

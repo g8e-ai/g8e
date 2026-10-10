@@ -13,7 +13,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -44,8 +43,6 @@ type ServeOperatorOptions struct {
 	HTTPPort          int
 	HTTPSPort         int
 	TrustBundlePath   string
-	PrivateKey        string
-	ClientCert        string
 	WorkingDir        string
 	DeploymentID      string
 	LaunchDir         string
@@ -90,79 +87,12 @@ func resolveOperatorEndpoint(endpoint string) string {
 	return constants.DefaultEndpoint
 }
 
-// buildGatewayHTTPBaseURL constructs a plain-HTTP gateway base URL from an
-// endpoint flag value. If the endpoint already has a scheme, it is preserved.
-// If it has a port, that port is used; otherwise httpPort (or the operator HTTP
-// default when httpPort is zero) is appended. The returned string has no
-// trailing slash.
-func buildGatewayHTTPBaseURL(endpoint string, httpPort int) string {
-	endpoint = strings.TrimSpace(endpoint)
-	if endpoint == "" {
-		return ""
-	}
-
-	if strings.Contains(endpoint, "://") {
-		return strings.TrimRight(endpoint, "/")
-	}
-
-	if _, _, err := net.SplitHostPort(endpoint); err == nil {
-		return "http://" + endpoint
-	}
-
-	if httpPort == 0 {
-		httpPort = constants.Ports.OperatorHttp
-	}
-	return fmt.Sprintf("http://%s:%d", endpoint, httpPort)
-}
-
 // resolveWorkingDir returns workingDir if set, otherwise falls back to launchDir.
 func resolveWorkingDir(workingDir, launchDir string) string {
 	if workingDir != "" {
 		return workingDir
 	}
 	return launchDir
-}
-
-// resolveKeyPath returns the explicit key path if set, otherwise checks the default
-// operator and client key paths on disk. Returns empty string if none are found.
-func resolveKeyPath(privateKey string, fileSvc fs.RuntimeFileService, logger *slog.Logger) string {
-	if privateKey != "" {
-		return privateKey
-	}
-	opKeyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
-	if exists, err := fileSvc.FileExists(context.Background(), opKeyRel); err == nil && exists {
-		opKeyPath := fileSvc.Resolve(opKeyRel)
-		logger.Info("Using default Operator key from project directory", "path", opKeyPath)
-		return opKeyPath
-	}
-	cliKeyRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
-	if exists, err := fileSvc.FileExists(context.Background(), cliKeyRel); err == nil && exists {
-		cliKeyPath := fileSvc.Resolve(cliKeyRel)
-		logger.Info("Using default client key from project directory", "path", cliKeyPath)
-		return cliKeyPath
-	}
-	return ""
-}
-
-// resolveCertPath returns the explicit cert path if set, otherwise checks the default
-// operator and client cert paths on disk. Returns empty string if none are found.
-func resolveCertPath(clientCert string, fileSvc fs.RuntimeFileService, logger *slog.Logger) string {
-	if clientCert != "" {
-		return clientCert
-	}
-	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
-	if exists, err := fileSvc.FileExists(context.Background(), opCertRel); err == nil && exists {
-		opCertPath := fileSvc.Resolve(opCertRel)
-		logger.Info("Using default Operator certificate from project directory", "path", opCertPath)
-		return opCertPath
-	}
-	cliCertRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
-	if exists, err := fileSvc.FileExists(context.Background(), cliCertRel); err == nil && exists {
-		cliCertPath := fileSvc.Resolve(cliCertRel)
-		logger.Info("Using default client certificate from project directory", "path", cliCertPath)
-		return cliCertPath
-	}
-	return ""
 }
 
 // classifyConfigLoadError inspects a config.Load error and returns the
@@ -173,47 +103,6 @@ func resolveCertPath(clientCert string, fileSvc fs.RuntimeFileService, logger *s
 // time), so the former posture-required enrollment-pending path is gone.
 func classifyConfigLoadError(err error) (exitCode int, actionable string) {
 	return constants.ExitConfigError, ""
-}
-
-// loadClientCertPair reads the cert and key PEM files and returns the TLS certificate
-// along with the raw cert PEM bytes for logging. It uses os.ReadFile directly,
-// so certPath and keyPath must be absolute or resolvable against the process
-// working directory (CLI flag paths, project-directory discovery paths).
-func loadClientCertPair(certPath, keyPath string) (tls.Certificate, []byte, error) {
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
-	}
-	keyPEM, err := os.ReadFile(keyPath)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
-	}
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrLoadCertKeyPair, err)
-	}
-	return cert, certPEM, nil
-}
-
-// loadClientCertPairViaFileSvc reads the cert and key PEM files from the .g8e/
-// runtime tree via RuntimeFileService and returns the TLS certificate along
-// with the raw cert PEM bytes for logging. certPath and keyPath must be
-// relative to the runtime tree root (as returned by the platform enrollment
-// client). Use loadClientCertPair for arbitrary user-supplied paths instead.
-func loadClientCertPairViaFileSvc(ctx context.Context, fileSvc fs.RuntimeFileService, certPath, keyPath string) (tls.Certificate, []byte, error) {
-	certPEM, err := fileSvc.ReadFile(ctx, certPath)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
-	}
-	keyPEM, err := fileSvc.ReadFile(ctx, keyPath)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
-	}
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrLoadCertKeyPair, err)
-	}
-	return cert, certPEM, nil
 }
 
 // resolveLatticeOpt returns the flag value if set, otherwise falls back to the

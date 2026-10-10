@@ -53,16 +53,19 @@ type PlatformEnrollmentController struct {
 	logger    *slog.Logger
 	enrollSvc *PlatformEnrollmentService
 	userSvc   *UserService
+	reg       *RegistrationService
 	responder *response.Writer
 }
 
 // PlatformEnrollmentControllerDeps groups all dependencies for
-// PlatformEnrollmentController.
+// PlatformEnrollmentController. Reg records the runtime config an Operator
+// declares on the bootstrap websocket.
 type PlatformEnrollmentControllerDeps struct {
 	Cfg       *config.Config
 	Logger    *slog.Logger
 	EnrollSvc *PlatformEnrollmentService
 	UserSvc   *UserService
+	Reg       *RegistrationService
 	Responder *response.Writer
 }
 
@@ -72,6 +75,7 @@ func newPlatformEnrollmentController(deps PlatformEnrollmentControllerDeps) *Pla
 		logger:    deps.Logger,
 		enrollSvc: deps.EnrollSvc,
 		userSvc:   deps.UserSvc,
+		reg:       deps.Reg,
 		responder: deps.Responder,
 	}
 }
@@ -120,6 +124,12 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentRequest(w http.Re
 			return
 		}
 		c.writeEnrollmentError(w, err)
+		return
+	}
+	// An Operator enrolls only over the bootstrap websocket; it makes no
+	// HTTP requests to the Gateway.
+	if req.ComponentKind == models.PlatformComponentOperator {
+		c.writeEnrollmentError(w, constants.ErrPlatformEnrollmentInvalidComponent)
 		return
 	}
 
@@ -171,7 +181,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentStatus(w http.Res
 		if deadlineErr := http.NewResponseController(w).SetWriteDeadline(time.Time{}); deadlineErr != nil && !errors.Is(deadlineErr, http.ErrNotSupported) {
 			c.logger.Warn("platform enrollment: clear status write deadline", "error", deadlineErr)
 		}
-		resp, err = c.enrollSvc.WaitForDecision(r.Context(), token)
+		resp, err = c.enrollSvc.WaitForDecision(r.Context(), models.PlatformEnrollmentTokenHash(token))
 	} else {
 		resp, err = c.enrollSvc.GetStatus(r.Context(), token)
 	}

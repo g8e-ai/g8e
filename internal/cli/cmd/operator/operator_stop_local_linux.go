@@ -10,8 +10,10 @@
 package operatorcmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"golang.org/x/sys/unix"
 )
 
@@ -74,15 +76,9 @@ func discoverLocalOperators() ([]localOperatorProcess, error) {
 		} else if !filepath.IsAbs(dir) {
 			dir = filepath.Join(cwd, dir)
 		}
-		sessionID := ""
-		env, _ := os.ReadFile(filepath.Join(root, "environ"))
-		for _, value := range strings.Split(string(env), "\x00") {
-			if v, ok := strings.CutPrefix(value, string(constants.EnvVar.OperatorSessionID)+"="); ok {
-				sessionID = v
-			}
-		}
+		dir = filepath.Clean(dir)
 		processes = append(processes, localOperatorProcess{
-			pid: pid, dir: filepath.Clean(dir), sessionID: sessionID,
+			pid: pid, dir: dir, sessionID: localOperatorSessionID(dir),
 			close: func() { unix.Close(fd) },
 			signal: func(force bool) error {
 				sig := unix.SIGTERM
@@ -117,6 +113,21 @@ func discoverLocalOperators() ([]localOperatorProcess, error) {
 		})
 	}
 	return processes, nil
+}
+
+// localOperatorSessionID reads the session the worker in dir recorded at
+// enrollment. Each launch resets the record, so it names the live process;
+// "" falls back to hostname and working-directory matching.
+func localOperatorSessionID(dir string) string {
+	fileSvc, err := fs.NewRuntimeFileService(dir, slog.Default())
+	if err != nil {
+		return ""
+	}
+	state, err := readOperatorDeploymentState(context.Background(), fileSvc)
+	if err != nil || state == nil {
+		return ""
+	}
+	return state.OperatorSessionID
 }
 
 func isLocalOperatorArgv(args []string) bool {

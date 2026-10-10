@@ -11,17 +11,14 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
-	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
@@ -32,17 +29,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestG8eoService_Start_SuccessFlow(t *testing.T) {
-	// 1. Setup mock client server for bootstrap
-	server := newG8eoBootstrapTestServer(t)
-	defer server.Close()
-
-	// 2. Configure g8eo to point to the mock server
+// enrolledTestConfig is a config carrying the in-memory identity StartOperator
+// applies from the bootstrap bundle before the service starts.
+func enrolledTestConfig(t *testing.T) *config.Config {
+	t.Helper()
 	cfg := testutil.NewTestConfig(t)
-	// Extract host and port from httptest server URL
-	u := server.URL[8:] // strip https://
-	cfg.Endpoint = "127.0.0.1"
-	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPSPort)
+	cfg.OperatorID = "test-op-1"
+	cfg.OperatorSessionId = "test-sess-1"
+	return cfg
+}
+
+func TestG8eoService_Start_SuccessFlow(t *testing.T) {
+	cfg := enrolledTestConfig(t)
 	cfg.PubSubURL = "wss://127.0.0.1:0" // dummy
 	cfg.NoGit = true
 
@@ -68,24 +66,16 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 		assert.Equal(t, cfg.TLSServerName, serverName)
 		assert.NotNil(t, logger)
 		assert.Same(t, tlsConfig, receivedTLSConfig)
-		assert.Equal(t, 10, cfg.MaxConcurrentTasks)
-		assert.Equal(t, "test-op-1", cfg.OperatorID)
-		assert.Equal(t, "test-sess-1", cfg.OperatorSessionId)
 		return pubsubtest.NewMockOperatorPubSubClient(), nil
 	}
 	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), tlsConfig, fileSvc, factory)
 	require.NoError(t, err)
-
-	// 3. Inject mocks
-	require.NotNil(t, service.bootstrap)
-	service.bootstrap.SetHTTPClient(server.Client())
 
 	// Inject test keystore (bypasses OS keychain for cross-platform CI)
 	service.mu.Lock()
 	service.keystore = ks
 	service.mu.Unlock()
 
-	// 4. Start the service
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -117,23 +107,15 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 }
 
 func TestG8eoService_Start_FactoryFailureStopsBeforeDependents(t *testing.T) {
-	server := newG8eoBootstrapTestServer(t)
-	defer server.Close()
-
-	cfg := testutil.NewTestConfig(t)
-	u := server.URL[8:]
-	cfg.Endpoint = "127.0.0.1"
-	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPSPort)
+	cfg := enrolledTestConfig(t)
 
 	factoryErr := fmt.Errorf("pub/sub client factory unavailable")
 	factoryCalls := 0
 	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), newTestTLSConfig(t), newTestFileSvc(t), func(string, string, *slog.Logger, *certs.TLSConfig) (pubsub.PubSubClient, error) {
 		factoryCalls++
-		assert.Equal(t, 10, cfg.MaxConcurrentTasks)
 		return nil, factoryErr
 	})
 	require.NoError(t, err)
-	service.bootstrap.SetHTTPClient(server.Client())
 
 	err = service.Start(context.Background())
 	require.Error(t, err)
@@ -144,32 +126,4 @@ func TestG8eoService_Start_FactoryFailureStopsBeforeDependents(t *testing.T) {
 	assert.Nil(t, service.pubSubCommands)
 	assert.Nil(t, service.execution)
 	service.cancel()
-}
-
-func newG8eoBootstrapTestServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/operators/reauth" {
-			resp := auth.AuthServicesResponse{
-				Success:           true,
-				OperatorID:        "test-op-1",
-				OperatorSessionId: "test-sess-1",
-				Config: &auth.BootstrapConfig{
-					MaxConcurrentTasks: 10,
-					MaxMemoryMB:        1024,
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, testutil_MarshalJSON(t, resp))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-}
-
-func testutil_MarshalJSON(t *testing.T, v interface{}) string {
-	t.Helper()
-	b, err := json.Marshal(v)
-	require.NoError(t, err)
-	return string(b)
 }

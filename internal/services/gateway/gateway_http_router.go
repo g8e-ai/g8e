@@ -75,6 +75,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentDecision, h.platformEnrollmentController.handlePlatformEnrollmentDecision)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentBatchDecision, h.platformEnrollmentController.handlePlatformEnrollmentBatchDecision)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRevoke, h.platformEnrollmentController.handlePlatformEnrollmentRevoke)
+	mux.HandleFunc(constants.APIPaths.AuthOperatorBootstrapWebSocket, h.platformEnrollmentController.handleOperatorBootstrap)
 
 	// CLI rotation — mTLS-protected; the caller's identity is derived from
 	// the verified CLI certificate. NOT registered on buildHTTPRouter
@@ -328,13 +329,15 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 
 	// Platform enrollment discovery surface — request/status/complete are
 	// reachable over plain HTTP so an unenrolled workload (dashboard,
-	// ensemble, operator) without a client certificate can initiate
-	// enrollment. pending and decision are intentionally NOT registered
+	// ensemble, application) without a client certificate can initiate
+	// enrollment; an unenrolled Operator does the same over the bootstrap
+	// websocket. pending and decision are intentionally NOT registered
 	// here: they require owner authentication (web session or mTLS),
 	// which is only available over HTTPS.
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, h.platformEnrollmentController.handlePlatformEnrollmentRequest)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
+	mux.HandleFunc(constants.APIPaths.AuthOperatorBootstrapWebSocket, h.platformEnrollmentController.handleOperatorBootstrap)
 
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleG8eBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)

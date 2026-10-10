@@ -915,6 +915,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:    logger,
 			EnrollSvc: ls.platformEnrollmentSvc,
 			UserSvc:   userSvc,
+			Reg:       reg,
 			Responder: ls.responder,
 		},
 		ObserveControllerDeps: ObserveControllerDeps{

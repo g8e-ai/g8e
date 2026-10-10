@@ -622,9 +622,11 @@ func Load(opts LoadOptions) (*Config, error) {
 	opts.ProvenanceOperatorEnabled = opts.ProvenanceOperatorEnabled || opts.OperatorRoles.Has(constants.OperatorRoleProvenance)
 	opts.ProviderBoundaryObserverEnabled = opts.ProviderBoundaryObserverEnabled || opts.OperatorRoles.Has(constants.OperatorRoleObserver)
 
-	// Resolve the worker root before initializing process-wide runtime paths.
-	// An explicit --working-dir owns the Operator's .g8e vault, ledger, PKI,
-	// and databases; the repository root is only the default when it is absent.
+	// Resolve the worker root. An explicit --working-dir owns the Operator's
+	// .g8e vault, ledger, PKI, and databases; the repository root is only the
+	// default when it is absent. Runtime directories are derived from it here,
+	// never from the process-wide paths.Infra, so Operators sharing a process
+	// cannot overwrite each other's roots.
 	projectRoot := FindProjectRoot()
 	if projectRoot == "" {
 		projectRoot = "."
@@ -639,9 +641,7 @@ func Load(opts LoadOptions) (*Config, error) {
 			return nil, fmt.Errorf("%w: %q", constants.ErrConfigInvalidWorkingDir, opts.WorkDir)
 		}
 	}
-	if err := paths.InitWithBase(workDir); err != nil {
-		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
-	}
+	runtimeDir := filepath.Join(workDir, constants.RuntimeDirname)
 
 	if opts.OperatorEndpoint == "" {
 		return nil, constants.ErrEndpointRequired
@@ -712,22 +712,18 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Default PKIDir to .g8e/pki if not explicitly set
 	if cfg.PKIDir == "" {
-		cfg.PKIDir = paths.Infra.PkiDir
+		cfg.PKIDir = filepath.Join(runtimeDir, constants.PkiDirname)
 	}
 
 	// Default SecretsDir to .g8e/secrets if not explicitly set
 	if cfg.SecretsDir == "" {
-		cfg.SecretsDir = paths.Infra.SecretsDir
+		cfg.SecretsDir = filepath.Join(runtimeDir, constants.SecretsDirname)
 	}
 
 	// Default VaultDir to .g8e/vault if not explicitly set
 	if cfg.VaultDir == "" {
-		cfg.VaultDir = paths.Infra.VaultDir
+		cfg.VaultDir = filepath.Join(runtimeDir, constants.VaultDirname)
 	}
-
-	// Read operator session ID from environment variable (in-memory only, never persisted)
-	// This is set by the deploy script after enrollment to track the operator's session
-	cfg.OperatorSessionId = os.Getenv(string(constants.EnvVar.OperatorSessionID))
 
 	return cfg, nil
 }

@@ -17,7 +17,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
@@ -66,9 +65,6 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.False(t, service.startTime.Before(before), "startTime should be >= before")
 	assert.False(t, service.startTime.After(after), "startTime should be <= after")
 	assert.Equal(t, time.UTC, service.startTime.Location())
-
-	assert.NotNil(t, service.bootstrap)
-	assert.IsType(t, &auth.BootstrapService{}, service.bootstrap)
 
 	assert.Nil(t, service.execution)
 	assert.Nil(t, service.fileEdit)
@@ -220,7 +216,6 @@ func TestG8eoService_ConcurrentStateAccess(t *testing.T) {
 			service.mu.RLock()
 			_ = service.running
 			_ = service.config
-			_ = service.bootstrap
 			service.mu.RUnlock()
 			done <- struct{}{}
 		}()

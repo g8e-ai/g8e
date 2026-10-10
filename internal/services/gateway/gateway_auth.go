@@ -125,6 +125,11 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentStatus, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentComplete, RouteAuthNone)
 
+	// Operator bootstrap websocket — public, token-scoped like the platform
+	// enrollment surface. An unenrolled Operator has no client certificate;
+	// the token hash, proofs, and owner decision gate the PEM bundle.
+	r.addExact(constants.APIPaths.AuthOperatorBootstrapWebSocket, RouteAuthNone)
+
 	// Console SPA (public, no auth required)
 	r.addPrefix(constants.APIPaths.ConsolePrefix, RouteAuthNone)
 

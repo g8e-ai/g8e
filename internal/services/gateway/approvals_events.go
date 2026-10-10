@@ -90,10 +90,18 @@ func (p *ApprovalsChangePublisher) announceEnrollments(ctx context.Context, payl
 // The internal invalidation uses the registered approvals event; no enrollment
 // token or request details enter pub/sub.
 func (p *ApprovalsChangePublisher) EnrollmentsDecided(ctx context.Context) {
+	p.EnrollmentIssuanceSettled()
+	p.EnrollmentsChanged(ctx)
+}
+
+// EnrollmentIssuanceSettled wakes token-authenticated completions held on
+// another completion's issuance lease once that issuance committed, rolled
+// back, or was recovered. It uses the same internal invalidation as
+// EnrollmentsDecided and changes no owner view, so no SSE is sent.
+func (p *ApprovalsChangePublisher) EnrollmentIssuanceSettled() {
 	if p.publisher.pubsub != nil {
 		p.publisher.pubsub.Publish(string(constants.EventPlatformApprovalsChanged), nil)
 	}
-	p.EnrollmentsChanged(ctx)
 }
 
 // publish emits the event to every unexpired web session and active CLI session of userID.

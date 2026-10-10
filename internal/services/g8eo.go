@@ -22,7 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 
-	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
@@ -45,7 +44,6 @@ type G8eoService struct {
 	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
 
-	bootstrap        *auth.BootstrapService
 	secretManager    *gateway.SecretManager
 	execution        *execution.ExecutionService
 	fileEdit         *execution.FileEditService
@@ -100,12 +98,6 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 		done:                make(chan struct{}),
 	}
 
-	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	service.bootstrap = bootstrapService
-
 	return service, nil
 }
 
@@ -153,16 +145,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 	}
 
-	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNotAuthenticated, err)
-	}
-
-	if err = vs.bootstrap.ApplyBootstrapConfig(bootstrapConfig); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
-	}
-
 	vs.logger.Info("Establishing g8e connectivity...")
+	var err error
 	vs.pubSubClient, err = vs.pubSubClientFactory(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger, vs.tlsConfig)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)

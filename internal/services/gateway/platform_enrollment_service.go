@@ -259,14 +259,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		if req.DeploymentID != "" {
 			s.approvals.EnrollmentRequested(ctx, existing.ID, req.DeploymentID)
 		}
-		return &models.PlatformEnrollmentCreateResponse{
-			RequestID:     existing.ID,
-			ComponentKind: existing.ComponentKind,
-			ComponentName: existing.ComponentName,
-			Fingerprints:  existing.Fingerprints,
-			ApprovalURL:   buildApprovalURL(approvalURLBase, existing.ID),
-			ExpiresAt:     existing.ExpiresAt,
-		}, nil
+		return createResponse(existing, approvalURLBase), nil
 	}
 
 	// Submit the CREATE envelope for audit. The handler is audit-only:
@@ -306,14 +299,33 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		"expires_at", expiresAt)
 	s.approvals.EnrollmentRequested(ctx, requestID, req.DeploymentID)
 
+	return createResponse(persistedReq, approvalURLBase), nil
+}
+
+// ResumeRequest returns the creation response of the request the token
+// owns, in any state. A requester that lost its connection after the request
+// left the live states (so creation reports a token conflict) resumes it here
+// and proceeds to the decision and the idempotent completion.
+func (s *PlatformEnrollmentService) ResumeRequest(ctx context.Context, token string, approvalURLBase string) (*models.PlatformEnrollmentCreateResponse, error) {
+	if token == "" {
+		return nil, constants.ErrPlatformEnrollmentTokenRequired
+	}
+	req, err := s.loadByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return createResponse(req, approvalURLBase), nil
+}
+
+func createResponse(req *models.PlatformEnrollmentRequest, approvalURLBase string) *models.PlatformEnrollmentCreateResponse {
 	return &models.PlatformEnrollmentCreateResponse{
-		RequestID:     requestID,
+		RequestID:     req.ID,
 		ComponentKind: req.ComponentKind,
-		ComponentName: componentName,
-		Fingerprints:  fingerprints,
-		ApprovalURL:   buildApprovalURL(approvalURLBase, requestID),
-		ExpiresAt:     expiresAt,
-	}, nil
+		ComponentName: req.ComponentName,
+		Fingerprints:  req.Fingerprints,
+		ApprovalURL:   buildApprovalURL(approvalURLBase, req.ID),
+		ExpiresAt:     req.ExpiresAt,
+	}
 }
 
 // GetStatus returns the requester-visible state and expiry for a request
@@ -325,7 +337,11 @@ func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string)
 	if token == "" {
 		return nil, constants.ErrPlatformEnrollmentTokenRequired
 	}
-	req, err := s.loadByToken(ctx, token)
+	return s.statusByTokenHash(ctx, models.PlatformEnrollmentTokenHash(token))
+}
+
+func (s *PlatformEnrollmentService) statusByTokenHash(ctx context.Context, tokenHash string) (*models.PlatformEnrollmentStatusResponse, error) {
+	req, err := s.loadByTokenHash(ctx, tokenHash)
 	if err != nil {
 		return nil, err
 	}
@@ -339,27 +355,22 @@ func (s *PlatformEnrollmentService) GetStatus(ctx context.Context, token string)
 	return s.statusResponse(req), nil
 }
 
-// WaitForDecision holds one status request while its enrollment is pending.
-// Subscribe before reading the snapshot so a concurrent committed decision
-// cannot fall between the read and the wait. Only decision events trigger a
-// subsequent read; expiry and cancellation bound the wait.
-func (s *PlatformEnrollmentService) WaitForDecision(ctx context.Context, token string) (*models.PlatformEnrollmentStatusResponse, error) {
+// WaitForDecision holds one status request, keyed by the requester's token
+// hash, while its enrollment is pending. Subscribe before reading the snapshot
+// so a concurrent committed decision cannot fall between the read and the
+// wait. Only decision events trigger a subsequent read; expiry and
+// cancellation bound the wait.
+func (s *PlatformEnrollmentService) WaitForDecision(ctx context.Context, tokenHash string) (*models.PlatformEnrollmentStatusResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if s.approvals.publisher.pubsub == nil {
-		return nil, constants.ErrPlatformEnrollmentDepsRequired
+	changed, unregister, err := s.watchEnrollmentChanges()
+	if err != nil {
+		return nil, err
 	}
-	changed := make(chan struct{}, 1)
-	unregister := s.approvals.publisher.pubsub.RegisterHandler(string(constants.EventPlatformApprovalsChanged), func(_ string, _ []byte) {
-		select {
-		case changed <- struct{}{}:
-		default:
-		}
-	})
 	defer unregister()
 
-	status, err := s.GetStatus(ctx, token)
+	status, err := s.statusByTokenHash(ctx, tokenHash)
 	if err != nil || status.State != models.PlatformEnrollmentStatePending {
 		return status, err
 	}
@@ -370,14 +381,54 @@ func (s *PlatformEnrollmentService) WaitForDecision(ctx context.Context, token s
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-expiry.C:
-			return s.GetStatus(ctx, token)
+			return s.statusByTokenHash(ctx, tokenHash)
 		case <-changed:
-			status, err = s.GetStatus(ctx, token)
+			status, err = s.statusByTokenHash(ctx, tokenHash)
 			if err != nil || status.State != models.PlatformEnrollmentStatePending {
 				return status, err
 			}
 		}
 	}
+}
+
+// CompleteHeld completes like Complete, but holds while another completion
+// of the same request owns the issuance lease, as when a requester redials
+// after its connection dropped mid-issuance. It re-reads only when an
+// issuance settles; cancellation bounds the wait.
+func (s *PlatformEnrollmentService) CompleteHeld(ctx context.Context, token string, proofs models.PlatformEnrollmentProofs) (*models.PlatformEnrollmentCompleteResponse, error) {
+	changed, unregister, err := s.watchEnrollmentChanges()
+	if err != nil {
+		return nil, err
+	}
+	defer unregister()
+	for {
+		resp, err := s.Complete(ctx, token, proofs)
+		if !errors.Is(err, constants.ErrPlatformEnrollmentIssuanceInProgress) {
+			return resp, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-changed:
+		}
+	}
+}
+
+// watchEnrollmentChanges subscribes to the internal enrollment invalidation
+// published when a decision commits or an issuance settles. The returned
+// channel coalesces events; callers re-read state on each receive.
+func (s *PlatformEnrollmentService) watchEnrollmentChanges() (<-chan struct{}, func(), error) {
+	if s.approvals.publisher.pubsub == nil {
+		return nil, nil, constants.ErrPlatformEnrollmentDepsRequired
+	}
+	changed := make(chan struct{}, 1)
+	unregister := s.approvals.publisher.pubsub.RegisterHandler(string(constants.EventPlatformApprovalsChanged), func(_ string, _ []byte) {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+	return changed, unregister, nil
 }
 
 // Decide authorizes an owner decision (approve or deny) on a pending
@@ -698,6 +749,7 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 		// issuance. Its retry reads the stored result; the lease TTL bounds the work.
 		sagaCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), constants.PlatformEnrollmentIssuanceLeaseTTL)
 		defer cancel()
+		defer s.approvals.EnrollmentIssuanceSettled()
 		return s.issueComponent(sagaCtx, req)
 
 	case models.PlatformEnrollmentStateIssuing:
@@ -884,6 +936,7 @@ func (s *PlatformEnrollmentService) ReconcileExpiredLeases(ctx context.Context) 
 		return fmt.Errorf("platform enrollment: count recovered leases: %w", err)
 	}
 	if count > 0 {
+		s.approvals.EnrollmentIssuanceSettled()
 		s.approvals.EnrollmentsChanged(ctx)
 	}
 	return nil
@@ -1064,10 +1117,15 @@ func (s *PlatformEnrollmentService) expireRequest(ctx context.Context, req *mode
 
 // loadByToken resolves the opaque token through the indexed token hash.
 func (s *PlatformEnrollmentService) loadByToken(ctx context.Context, token string) (*models.PlatformEnrollmentRequest, error) {
+	return s.loadByTokenHash(ctx, models.PlatformEnrollmentTokenHash(token))
+}
+
+// loadByTokenHash loads a request by its indexed token hash.
+func (s *PlatformEnrollmentService) loadByTokenHash(ctx context.Context, tokenHash string) (*models.PlatformEnrollmentRequest, error) {
 	var data []byte
 	err := s.db.db.QueryRowWithRetry(ctx, `SELECT json_set(data, '$.id', id, '$.created_at', created_at)
 		FROM documents WHERE collection = ? AND json_extract(data, '$.token_hash') = ? LIMIT 1`,
-		platformEnrollmentCollectionName(), models.PlatformEnrollmentTokenHash(token)).Scan(&data)
+		platformEnrollmentCollectionName(), tokenHash).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, constants.ErrPlatformEnrollmentRequestNotFound
 	}

@@ -8,7 +8,6 @@
 package serve
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -17,19 +16,16 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"sync"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
-
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,10 +42,10 @@ import (
 // (operator + CLI fingerprints).
 func TestBuildOperatorCompletionTranscript_MatchesGatewayProto(t *testing.T) {
 	requestID := "req-abc-123"
-	tokenHash := "deadbeef" + repeatChar("0", 56)
+	tokenHash := "deadbeef" + strings.Repeat("0", 56)
 	instanceID := "operator-test-host"
-	operatorFP := "aaaa" + repeatChar("1", 60)
-	cliFP := "bbbb" + repeatChar("2", 60)
+	operatorFP := "aaaa" + strings.Repeat("1", 60)
+	cliFP := "bbbb" + strings.Repeat("2", 60)
 
 	// Build via the client function.
 	clientTranscript, err := buildOperatorCompletionTranscript(requestID, tokenHash, instanceID, operatorFP, cliFP)
@@ -82,10 +78,8 @@ func TestBuildOperatorCompletionTranscript_ComponentKindIsOperator(t *testing.T)
 	transcript, err := buildOperatorCompletionTranscript("req", "hash", "instance", "opfp", "clifp")
 	require.NoError(t, err)
 
-	// Decode the protobuf and check the component_kind field.
 	msg := &commonv1.PlatformEnrollmentCompletionTranscript{}
-	err = proto.Unmarshal(transcript, msg)
-	require.NoError(t, err)
+	require.NoError(t, proto.Unmarshal(transcript, msg))
 	assert.Equal(t, commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_OPERATOR, msg.GetComponentKind())
 }
 
@@ -101,8 +95,7 @@ func TestBuildOperatorCompletionTranscript_IncludesBothFingerprints(t *testing.T
 	require.NoError(t, err)
 
 	msg := &commonv1.PlatformEnrollmentCompletionTranscript{}
-	err = proto.Unmarshal(transcript, msg)
-	require.NoError(t, err)
+	require.NoError(t, proto.Unmarshal(transcript, msg))
 	require.NotNil(t, msg.Fingerprints)
 	assert.Equal(t, operatorFP, msg.Fingerprints.GetOperator())
 	assert.Equal(t, cliFP, msg.Fingerprints.GetCli())
@@ -117,7 +110,6 @@ func TestBuildOperatorCompletionTranscript_IncludesBothFingerprints(t *testing.T
 // the same vector file for their respective component kinds. This test
 // ties the Go operator client to the cross-language golden vector.
 func TestBuildOperatorCompletionTranscript_SharedParityVector(t *testing.T) {
-	// Inputs from the shared parity vector.
 	const requestID = "parity-req-001"
 	const tokenHash = "aabbccdd"
 	const instanceID = "parity-host"
@@ -138,40 +130,32 @@ func TestBuildOperatorCompletionTranscript_SharedParityVector(t *testing.T) {
 
 // --- CSR fingerprint ---
 
-// TestCsrFingerprint_MatchesGatewayComputation verifies the client's
-// CSR fingerprint computation matches the gateway's: SHA-256 of the
-// SubjectPublicKeyInfo DER bytes, hex-encoded.
-func TestCsrFingerprint_MatchesGatewayComputation(t *testing.T) {
-	csrPEM, privKey, err := generateTestCSR(t, "test-fp")
-	require.NoError(t, err)
+// TestCSRFingerprint_MatchesGatewayComputation verifies the fingerprint
+// the Operator checks the created frame against matches the gateway's:
+// SHA-256 of the SubjectPublicKeyInfo DER bytes, hex-encoded.
+func TestCSRFingerprint_MatchesGatewayComputation(t *testing.T) {
+	csrPEM, privKey := generateTestCSR(t, "test-fp")
 
-	// Client computation.
-	clientFP, err := csrFingerprint(csrPEM)
+	clientFP, err := auth.CSRFingerprint(csrPEM)
 	require.NoError(t, err)
 
 	// Gateway computation (mirrors parsePlatformEnrollmentCSR).
 	publicDER, err := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
 	require.NoError(t, err)
 	digest := sha256.Sum256(publicDER)
-	expectedFP := hex.EncodeToString(digest[:])
-
-	assert.Equal(t, expectedFP, clientFP)
+	assert.Equal(t, hex.EncodeToString(digest[:]), clientFP)
 }
 
-// TestCsrFingerprint_RejectsNonP256Key verifies the fingerprint
+// TestCSRFingerprint_RejectsNonP256Key verifies the fingerprint
 // function fails closed on a non-P-256 key.
-func TestCsrFingerprint_RejectsNonP256Key(t *testing.T) {
-	// Generate an RSA CSR (not P-256).
+func TestCSRFingerprint_RejectsNonP256Key(t *testing.T) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	require.NoError(t, err)
-	template := x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: "test-p384"},
-	}
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "test-p384"}}, privKey)
 	require.NoError(t, err)
 	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes}))
 
-	_, err = csrFingerprint(csrPEM)
+	_, err = auth.CSRFingerprint(csrPEM)
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentUnsupportedKey)
 }
 
@@ -181,10 +165,8 @@ func TestCsrFingerprint_RejectsNonP256Key(t *testing.T) {
 // hash matches the gateway's: SHA-256 of the raw token, hex-encoded.
 func TestTokenHash_MatchesGatewayComputation(t *testing.T) {
 	token := "test-token-value-abc123"
-	clientHash := models.PlatformEnrollmentTokenHash(token)
 	digest := sha256.Sum256([]byte(token))
-	expectedHash := hex.EncodeToString(digest[:])
-	assert.Equal(t, expectedHash, clientHash)
+	assert.Equal(t, hex.EncodeToString(digest[:]), models.PlatformEnrollmentTokenHash(token))
 }
 
 // --- Transcript signing and verification ---
@@ -194,295 +176,203 @@ func TestTokenHash_MatchesGatewayComputation(t *testing.T) {
 // corresponding public key. This mirrors the gateway's
 // verifyPlatformEnrollmentProof.
 func TestSignTranscript_ProducesVerifiableASN1Signature(t *testing.T) {
-	csrPEM, privateKey, err := generateTestCSR(t, "test-sign")
+	csrPEM, privateKey := generateTestCSR(t, "test-sign")
+
+	transcript := []byte("test transcript bytes for verification")
+	proof, err := signTranscript(privateKey, transcript)
 	require.NoError(t, err)
 
-	// Extract the public key from the CSR.
+	signature, err := base64.RawURLEncoding.DecodeString(proof)
+	require.NoError(t, err)
+	digest := sha256.Sum256(transcript)
+	assert.True(t, ecdsa.VerifyASN1(csrPublicKey(t, csrPEM), digest[:], signature), "signature must verify against the CSR public key")
+}
+
+// --- Bootstrap URL ---
+
+func TestBuildOperatorBootstrapURL(t *testing.T) {
+	path := constants.APIPaths.AuthOperatorBootstrapWebSocket
+	tests := []struct {
+		name     string
+		endpoint string
+		httpPort int
+		want     string
+	}{
+		{"bare host uses the Operator HTTP default", "g8e.local", 0, "ws://g8e.local:" + strconv.Itoa(constants.Ports.OperatorHttp) + path},
+		{"bare host uses the given port", "10.0.0.5", 9000, "ws://10.0.0.5:9000" + path},
+		{"endpoint port wins", "10.0.0.5:7000", 9000, "ws://10.0.0.5:7000" + path},
+		{"http maps to ws", "http://g8e.local:8080/", 0, "ws://g8e.local:8080" + path},
+		{"https maps to wss", "https://g8e.example.com", 0, "wss://g8e.example.com" + path},
+		{"ws scheme is kept", "wss://g8e.example.com:8443", 0, "wss://g8e.example.com:8443" + path},
+		{"surrounding whitespace is trimmed", "  g8e.local:8080\n", 0, "ws://g8e.local:8080" + path},
+		{"empty endpoint", "", 0, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, buildOperatorBootstrapURL(tt.endpoint, tt.httpPort))
+		})
+	}
+}
+
+// --- Client construction ---
+
+func TestNewOperatorBootstrapClient_RejectsIncompleteConfig(t *testing.T) {
+	deployment, err := NewOperatorDeploymentRecorder(newTestFileSvc(t), "")
+	require.NoError(t, err)
+	valid := OperatorBootstrapClientConfig{
+		URL:           "ws://g8e.local:8080" + constants.APIPaths.AuthOperatorBootstrapWebSocket,
+		InstanceID:    "op-instance",
+		Hostname:      "op-host",
+		RuntimeConfig: []byte(`{}`),
+		Deployment:    deployment,
+		Logger:        testLogger(),
+	}
+	_, err = NewOperatorBootstrapClient(valid)
+	require.NoError(t, err)
+
+	for name, mutate := range map[string]func(*OperatorBootstrapClientConfig){
+		"url":            func(c *OperatorBootstrapClientConfig) { c.URL = "" },
+		"instance id":    func(c *OperatorBootstrapClientConfig) { c.InstanceID = "" },
+		"hostname":       func(c *OperatorBootstrapClientConfig) { c.Hostname = "" },
+		"runtime config": func(c *OperatorBootstrapClientConfig) { c.RuntimeConfig = nil },
+		"deployment":     func(c *OperatorBootstrapClientConfig) { c.Deployment = nil },
+		"logger":         func(c *OperatorBootstrapClientConfig) { c.Logger = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := valid
+			mutate(&cfg)
+			_, err := NewOperatorBootstrapClient(cfg)
+			assert.ErrorIs(t, err, constants.ErrInternal)
+		})
+	}
+
+	t.Run("unparseable trust bundle", func(t *testing.T) {
+		cfg := valid
+		cfg.TrustBundlePEM = []byte("not a certificate")
+		_, err := NewOperatorBootstrapClient(cfg)
+		assert.ErrorIs(t, err, constants.ErrCAParseFailed)
+	})
+}
+
+// --- Delivered identity ---
+
+// TestOperatorBootstrapAttempt_IdentityPairsBundleWithInMemoryKey proves the
+// delivered certificate is usable with the key that never left the process.
+func TestOperatorBootstrapAttempt_IdentityPairsBundleWithInMemoryKey(t *testing.T) {
+	caPEM, caCert, caKey := generateTestCA(t)
+	operatorCSR, operatorKey := generateTestCSR(t, "g8e-operator-test")
+	attempt := &operatorBootstrapAttempt{operatorKey: operatorKey}
+	attempt.request.Enrollment.SystemFingerprint = "system-fp"
+
+	bundle := &models.OperatorBootstrapBundle{
+		Credentials: models.PlatformEnrollmentOperatorCredentials{
+			OperatorCert:      signTestCSR(t, operatorCSR, caCert, caKey),
+			OperatorCertChain: caPEM,
+			HubTrustBundle:    caPEM,
+			OperatorID:        "op-1",
+			OperatorSessionID: "op-session-1",
+			Posture:           "doctrine",
+		},
+		MaxConcurrentTasks: 25,
+		MaxMemoryMB:        2048,
+	}
+	identity, err := attempt.identity(bundle)
+	require.NoError(t, err)
+
+	assert.Equal(t, "op-1", identity.OperatorID)
+	assert.Equal(t, "op-session-1", identity.OperatorSessionID)
+	assert.Equal(t, "doctrine", identity.Posture)
+	assert.Equal(t, "system-fp", identity.SystemFingerprint)
+	assert.Equal(t, 25, identity.MaxConcurrentTasks)
+	assert.Equal(t, 2048, identity.MaxMemoryMB)
+	assert.Equal(t, []byte(caPEM), identity.TrustBundlePEM)
+	assert.Len(t, identity.Certificate.Certificate, 2, "leaf and chain are presented together")
+	assert.True(t, operatorKey.Equal(identity.Certificate.PrivateKey))
+
+	t.Run("a certificate for another key is refused", func(t *testing.T) {
+		otherCSR, _ := generateTestCSR(t, "g8e-operator-other")
+		foreign := *bundle
+		foreign.Credentials.OperatorCert = signTestCSR(t, otherCSR, caCert, caKey)
+		_, err := attempt.identity(&foreign)
+		assert.ErrorIs(t, err, constants.ErrLoadCertKeyPair)
+	})
+
+	for name, mutate := range map[string]func(*models.PlatformEnrollmentOperatorCredentials){
+		"certificate": func(c *models.PlatformEnrollmentOperatorCredentials) { c.OperatorCert = "" },
+		"trust":       func(c *models.PlatformEnrollmentOperatorCredentials) { c.HubTrustBundle = "" },
+		"operator id": func(c *models.PlatformEnrollmentOperatorCredentials) { c.OperatorID = "" },
+		"session":     func(c *models.PlatformEnrollmentOperatorCredentials) { c.OperatorSessionID = "" },
+	} {
+		t.Run("missing "+name, func(t *testing.T) {
+			incomplete := *bundle
+			mutate(&incomplete.Credentials)
+			_, err := attempt.identity(&incomplete)
+			assert.Error(t, err)
+		})
+	}
+}
+
+// --- Helpers ---
+
+// generateTestCSR generates a P-256 CSR and returns its PEM and private key.
+func generateTestCSR(t *testing.T, commonName string) (string, *ecdsa.PrivateKey) {
+	t.Helper()
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		Subject: pkix.Name{CommonName: commonName, Organization: []string{"g8e"}},
+	}, privKey)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes})), privKey
+}
+
+// generateTestCA returns a self-signed P-256 CA as PEM, certificate, and key.
+func generateTestCA(t *testing.T) (string, *x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "g8e-test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), cert, key
+}
+
+// signTestCSR issues a client certificate for the CSR's key from the CA.
+func signTestCSR(t *testing.T, csrPEM string, caCert *x509.Certificate, caKey *ecdsa.PrivateKey) string {
+	t.Helper()
+	serial, err := rand.Int(rand.Reader, big.NewInt(1<<62))
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "g8e-operator-test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, caCert, csrPublicKey(t, csrPEM), caKey)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+}
+
+// csrPublicKey returns the P-256 public key a CSR carries.
+func csrPublicKey(t *testing.T, csrPEM string) *ecdsa.PublicKey {
+	t.Helper()
 	block, _ := pem.Decode([]byte(csrPEM))
 	require.NotNil(t, block)
 	csr, err := x509.ParseCertificateRequest(block.Bytes)
 	require.NoError(t, err)
 	publicKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
 	require.True(t, ok)
-
-	transcript := []byte("test transcript bytes for verification")
-	proof, err := signTranscript(privateKey, transcript)
-	require.NoError(t, err)
-
-	// Decode the base64url signature.
-	signature, err := base64.RawURLEncoding.DecodeString(proof)
-	require.NoError(t, err)
-
-	// Verify as the gateway would.
-	digest := sha256.Sum256(transcript)
-	assert.True(t, ecdsa.VerifyASN1(publicKey, digest[:], signature), "signature must verify against the CSR public key")
-}
-
-// --- Pending state persistence ---
-
-// TestOperatorPendingState_PersistAndLoad verifies the pending state
-// is persisted with 0600 permissions and can be loaded back.
-func TestOperatorPendingState_PersistAndLoad(t *testing.T) {
-	fileSvc := newTestFileSvc(t)
-	client, err := NewOperatorPlatformEnrollmentClient("http://localhost:8080", "op-instance", "op-host", fileSvc, testLogger())
-	require.NoError(t, err)
-
-	state := &operatorPendingState{
-		RequestID:           "req-123",
-		Token:               "secret-token",
-		OperatorFingerprint: "op-fp",
-		CLIFingerprint:      "cli-fp",
-		OperatorKeyPEM:      "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----\n",
-		CLIKeyPEM:           "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----\n",
-		ExpiresAt:           time.Now().Add(30 * time.Minute).UTC(),
-		InstanceID:          "op-instance",
-		Hostname:            "op-host",
-	}
-
-	pendingPath := client.pendingStatePath()
-	err = client.persistPendingState(pendingPath, state)
-	require.NoError(t, err)
-
-	// Verify 0600 permissions.
-	absPath := fileSvc.Resolve(pendingPath)
-	info, err := fileSvc.Stat(context.Background(), pendingPath)
-	require.NoError(t, err)
-	assert.Equal(t, testutil.FileMode(constants.PermFilePrivate, info.IsDir()), info.Mode().Perm(), "pending state must be 0600 at %s", absPath)
-
-	// Load and verify round-trip.
-	loaded, err := client.loadPendingState(pendingPath)
-	require.NoError(t, err)
-	require.NotNil(t, loaded)
-	assert.Equal(t, state.RequestID, loaded.RequestID)
-	assert.Equal(t, state.Token, loaded.Token)
-	assert.Equal(t, state.OperatorFingerprint, loaded.OperatorFingerprint)
-	assert.Equal(t, state.CLIFingerprint, loaded.CLIFingerprint)
-	assert.Equal(t, state.OperatorKeyPEM, loaded.OperatorKeyPEM)
-	assert.Equal(t, state.CLIKeyPEM, loaded.CLIKeyPEM)
-	assert.Equal(t, state.InstanceID, loaded.InstanceID)
-	assert.Equal(t, state.Hostname, loaded.Hostname)
-	assert.True(t, state.ExpiresAt.Equal(loaded.ExpiresAt))
-}
-
-// TestOperatorPendingState_LoadReturnsNilWhenNoFile verifies the load
-// returns nil (not an error) when no pending state file exists.
-func TestOperatorPendingState_LoadReturnsNilWhenNoFile(t *testing.T) {
-	fileSvc := newTestFileSvc(t)
-	client, err := NewOperatorPlatformEnrollmentClient("http://localhost:8080", "op-instance", "op-host", fileSvc, testLogger())
-	require.NoError(t, err)
-
-	loaded, err := client.loadPendingState(client.pendingStatePath())
-	require.NoError(t, err)
-	assert.Nil(t, loaded)
-}
-
-// TestOperatorPendingState_RemoveIsIdempotent verifies removing a
-// non-existent pending state file does not error.
-func TestOperatorPendingState_RemoveIsIdempotent(t *testing.T) {
-	fileSvc := newTestFileSvc(t)
-	client, err := NewOperatorPlatformEnrollmentClient("http://localhost:8080", "op-instance", "op-host", fileSvc, testLogger())
-	require.NoError(t, err)
-
-	err = client.removePendingState(client.pendingStatePath())
-	assert.NoError(t, err)
-}
-
-// --- Full enroll flow against a mock gateway ---
-
-// mockGateway is a test HTTP server that simulates the gateway's
-// platform enrollment endpoints for the operator component.
-type mockGateway struct {
-	t               *testing.T
-	server          *httptest.Server
-	requestID       string
-	token           string
-	approveCh       chan struct{}
-	operatorCertPEM string
-	cliCertPEM      string
-	trustBundlePEM  string
-	operatorID      string
-	operatorSession string
-	cliSession      string
-	posture         string
-
-	mu           sync.Mutex
-	deploymentID string
-}
-
-func (mg *mockGateway) receivedDeploymentID() string {
-	mg.mu.Lock()
-	defer mg.mu.Unlock()
-	return mg.deploymentID
-}
-
-func (mg *mockGateway) handleRequest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	var req models.PlatformEnrollmentCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	mg.mu.Lock()
-	mg.deploymentID = req.DeploymentID
-	mg.mu.Unlock()
-	if req.ComponentKind != models.PlatformComponentOperator {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	if req.Operator == nil || req.Operator.OperatorCSRPEM == "" || req.Operator.CLICSRPEM == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	if req.SystemFingerprint == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	resp := models.PlatformEnrollmentCreateResponse{
-		RequestID:     mg.requestID,
-		ComponentKind: models.PlatformComponentOperator,
-		ComponentName: models.PlatformOperatorName,
-		Fingerprints: models.PlatformEnrollmentCSRFingerprints{
-			Operator: "op-fp-placeholder",
-			CLI:      "cli-fp-placeholder",
-		},
-		ApprovalURL: mg.server.URL + "/console/",
-		ExpiresAt:   time.Now().Add(30 * time.Minute).UTC(),
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
-}
-
-func (mg *mockGateway) handleStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	// wait=true holds the response until the owner decides, as the Gateway does.
-	if r.URL.Query().Get("wait") == "true" {
-		select {
-		case <-mg.approveCh:
-		case <-r.Context().Done():
-			return
-		}
-	}
-	state := models.PlatformEnrollmentStatePending
-	select {
-	case <-mg.approveCh:
-		state = models.PlatformEnrollmentStateApproved
-	default:
-	}
-	resp := models.PlatformEnrollmentStatusResponse{
-		RequestID:     mg.requestID,
-		ComponentKind: models.PlatformComponentOperator,
-		State:         state,
-		ExpiresAt:     time.Now().Add(25 * time.Minute).UTC(),
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
-func (mg *mockGateway) handleComplete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	var req models.PlatformEnrollmentCompleteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	if req.Token == "" {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	if req.Proofs.Operator == "" || req.Proofs.CLI == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	resp := models.PlatformEnrollmentCompleteResponse{
-		RequestID:     mg.requestID,
-		ComponentKind: models.PlatformComponentOperator,
-		Operator: &models.PlatformEnrollmentOperatorCredentials{
-			OperatorCert:      mg.operatorCertPEM,
-			OperatorCertChain: "",
-			HubTrustBundle:    mg.trustBundlePEM,
-			OperatorSessionID: mg.operatorSession,
-			OperatorID:        mg.operatorID,
-			CLISessionID:      mg.cliSession,
-			CLICert:           mg.cliCertPEM,
-			CLICertChain:      "",
-			Posture:           mg.posture,
-		},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
-}
-
-// approve releases any held status request with "approved".
-func (mg *mockGateway) approve() {
-	close(mg.approveCh)
-}
-
-// --- Helpers ---
-
-// generateTestCSR generates a P-256 CSR and returns the PEM, the
-// private key, and the public key.
-func generateTestCSR(t *testing.T, commonName string) (string, *ecdsa.PrivateKey, error) {
-	t.Helper()
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", nil, err
-	}
-	template := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   commonName,
-			Organization: []string{"g8e"},
-		},
-	}
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
-	if err != nil {
-		return "", nil, err
-	}
-	csrPEM := string(pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE REQUEST",
-		Bytes: csrBytes,
-	}))
-	return csrPEM, privKey, nil
-}
-
-// generateSelfSignedCertPEM generates a self-signed cert and returns
-// its PEM encoding. Used for mock gateway responses.
-func generateSelfSignedCertPEM(t *testing.T, commonName string) string {
-	t.Helper()
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: commonName},
-		NotBefore:    time.Now().Add(-1 * time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}
-	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
-	require.NoError(t, err)
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes}))
-}
-
-// repeatChar returns a string of n repetitions of c.
-func repeatChar(c string, n int) string {
-	result := ""
-	for i := 0; i < n; i++ {
-		result += c
-	}
-	return result
+	return publicKey
 }

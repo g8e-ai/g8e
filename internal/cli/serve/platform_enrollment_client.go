@@ -8,664 +8,428 @@
 package serve
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
-
-	"net/url"
+	"net"
 	"os"
-	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
-	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
-
-	"google.golang.org/protobuf/proto"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// Operator enrollment protocol constants. The operator is the only
-// component that submits two CSRs (operator + CLI) and signs the
-// completion transcript with both private keys.
+// Bootstrap redial backoff after a dropped socket or a transient Gateway
+// error. The request, token, and keys are reused on every redial.
 const (
-	operatorEnrollDefaultDeadline = 30 * time.Minute
+	operatorBootstrapRedialBase = time.Second
+	operatorBootstrapRedialMax  = 30 * time.Second
 )
 
-// OperatorEnrollmentResult is the resolved operator identity after a
-// successful platform enrollment. The caller writes OperatorSessionID
-// to the G8E_OPERATOR_SESSION_ID env var and sets OperatorID/Posture
-// on the config before constructing the g8eo service.
-type OperatorEnrollmentResult struct {
-	OperatorCertPath  string
-	OperatorKeyPath   string
-	CLICertPath       string
-	CLIKeyPath        string
-	TrustBundlePath   string
-	OperatorID        string
-	OperatorSessionID string
-	CLISessionID      string
-	Posture           string
+// OperatorIdentity is the enrolled Operator's identity and runtime grant. It
+// lives in process memory only and is never written to disk: a stop or reboot
+// loses it, and the Operator must enroll again.
+type OperatorIdentity struct {
+	Certificate        tls.Certificate
+	CertificatePEM     []byte
+	TrustBundlePEM     []byte
+	OperatorID         string
+	OperatorSessionID  string
+	Posture            string
+	SystemFingerprint  string
+	MaxConcurrentTasks int
+	MaxMemoryMB        int
 }
 
-// operatorPendingState is the resumable pending enrollment attempt,
-// persisted to pki/pending-enrollment/g8eo.json with 0600 permissions.
-// The private keys and requester token are secret; the request ID,
-// fingerprints, and expiry are not.
-type operatorPendingState struct {
-	RequestID           string    `json:"request_id"`
-	Token               string    `json:"token"`
-	OperatorFingerprint string    `json:"operator_fingerprint"`
-	CLIFingerprint      string    `json:"cli_fingerprint"`
-	OperatorKeyPEM      string    `json:"operator_key_pem"`
-	CLIKeyPEM           string    `json:"cli_key_pem"`
-	ExpiresAt           time.Time `json:"expires_at"`
-	InstanceID          string    `json:"instance_id"`
-	Hostname            string    `json:"hostname"`
-	OperatorCSRPEM      string    `json:"operator_csr_pem"`
-	CLICSRPEM           string    `json:"cli_csr_pem"`
-	SystemFingerprint   string    `json:"system_fingerprint"`
+// OperatorBootstrapClientConfig configures one Operator enrollment.
+type OperatorBootstrapClientConfig struct {
+	// URL is the Gateway bootstrap websocket (buildOperatorBootstrapURL).
+	URL        string
+	InstanceID string
+	Hostname   string
+	// RuntimeConfig is the canonical JSON OperatorRuntimeConfig the Gateway
+	// records for the issued Operator (operatorRuntimeConfig).
+	RuntimeConfig      json.RawMessage
+	FingerprintOptions auth.FingerprintOptions
+	// TrustBundlePEM, when set, is the owner-supplied CA a wss:// bootstrap
+	// URL must chain to; otherwise the system roots apply.
+	TrustBundlePEM []byte
+	Deployment     *OperatorDeploymentRecorder
+	Logger         *slog.Logger
 }
 
-// OperatorPlatformEnrollmentClient drives the owner-approved platform
-// enrollment protocol for the operator component. It mirrors the
-// ensemble Python client: the same
-// nine-step resumable sequence, the same canonical completion
-// transcript, and the same atomic credential writes.
-//
-// The caller (RunOperator) decides whether to load an existing identity
-// or enroll. This client does not hide that decision behind an
-// ensure* method.
-type OperatorPlatformEnrollmentClient struct {
-	gatewayHTTPURL  string
-	instanceID      string
-	hostname        string
-	fileSvc         fs.RuntimeFileService
-	logger          *slog.Logger
-	fingerprintOpts auth.FingerprintOptions
-	deployment      *OperatorDeploymentRecorder
+// OperatorBootstrapClient enrolls the Operator over the Gateway bootstrap
+// websocket (models.OperatorBootstrapFrameType). It is the Operator's only
+// enrollment path: no HTTP request is made, and nothing it generates or
+// receives touches disk.
+type OperatorBootstrapClient struct {
+	cfg    OperatorBootstrapClientConfig
+	dialer *websocket.Dialer
 }
 
-// NewOperatorPlatformEnrollmentClient constructs an enrollment client.
-// gatewayHTTPURL is the gateway's plain-HTTP bootstrap surface (e.g.
-// http://g8eg:8080), with no trailing slash.
-func NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*OperatorPlatformEnrollmentClient, error) {
-	if gatewayHTTPURL == "" {
-		return nil, fmt.Errorf("%w: gateway HTTP URL is required for operator platform enrollment", constants.ErrInternal)
+func NewOperatorBootstrapClient(cfg OperatorBootstrapClientConfig) (*OperatorBootstrapClient, error) {
+	if cfg.URL == "" || cfg.InstanceID == "" || cfg.Hostname == "" || len(cfg.RuntimeConfig) == 0 ||
+		cfg.Deployment == nil || cfg.Logger == nil {
+		return nil, fmt.Errorf("%w: operator bootstrap requires a URL, instance ID, hostname, runtime config, deployment recorder, and logger", constants.ErrInternal)
 	}
-	if instanceID == "" || hostname == "" {
-		return nil, fmt.Errorf("%w: instance ID and hostname are required for operator platform enrollment", constants.ErrInternal)
+	var tlsCfg *tls.Config
+	if len(cfg.TrustBundlePEM) > 0 {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(cfg.TrustBundlePEM) {
+			return nil, fmt.Errorf("%w: operator bootstrap trust bundle", constants.ErrCAParseFailed)
+		}
+		tlsCfg = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
 	}
-	return &OperatorPlatformEnrollmentClient{
-		gatewayHTTPURL: trimTrailingSlash(gatewayHTTPURL),
-		instanceID:     instanceID,
-		hostname:       hostname,
-		fileSvc:        fileSvc,
-		logger:         logger,
+	return &OperatorBootstrapClient{cfg: cfg, dialer: httpclient.WebSocketDialerWithTLS(tlsCfg)}, nil
+}
+
+// operatorBootstrapAttempt is the in-memory enrollment request, reused on
+// every redial so the Gateway resumes it instead of creating another.
+type operatorBootstrapAttempt struct {
+	request      models.OperatorBootstrapRequest
+	operatorKey  *ecdsa.PrivateKey
+	cliKey       *ecdsa.PrivateKey
+	fingerprints models.PlatformEnrollmentCSRFingerprints
+	requestID    string
+}
+
+// operatorBootstrapRetry marks a failure the same attempt survives by
+// redialing: a dropped socket, an unreachable Gateway, or a transient
+// Gateway error frame.
+type operatorBootstrapRetry struct{ err error }
+
+func (e *operatorBootstrapRetry) Error() string { return e.err.Error() }
+func (e *operatorBootstrapRetry) Unwrap() error { return e.err }
+
+// Enroll creates the enrollment request, holds the bootstrap socket through
+// the owner's decision, proves possession of both keys, and returns the
+// delivered identity. Only the context, a denial, an expiry, or a permanent
+// Gateway error ends it; everything else redials with the same request.
+func (c *OperatorBootstrapClient) Enroll(ctx context.Context) (*OperatorIdentity, error) {
+	attempt, err := c.newAttempt()
+	if err != nil {
+		return nil, err
+	}
+	delay := operatorBootstrapRedialBase
+	for {
+		identity, err := c.exchange(ctx, attempt)
+		if err == nil {
+			return identity, nil
+		}
+		var retry *operatorBootstrapRetry
+		if ctx.Err() != nil || !errors.As(err, &retry) {
+			return nil, err
+		}
+		c.cfg.Logger.Warn("operator enrollment: bootstrap socket ended; redialing",
+			"request_id", attempt.requestID, "retry_in", delay, "error", err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+		delay = min(2*delay, operatorBootstrapRedialMax)
+	}
+}
+
+func (c *OperatorBootstrapClient) newAttempt() (*operatorBootstrapAttempt, error) {
+	operatorCSR, operatorKey, err := GenerateCSR("g8e-operator-" + c.cfg.Hostname)
+	if err != nil {
+		return nil, err
+	}
+	cliCSR, cliKey, err := GenerateCSR("g8e-cli-" + c.cfg.Hostname)
+	if err != nil {
+		return nil, err
+	}
+	operatorFP, err := auth.CSRFingerprint(operatorCSR)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: operator csr fingerprint: %w", err)
+	}
+	cliFP, err := auth.CSRFingerprint(cliCSR)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: cli csr fingerprint: %w", err)
+	}
+	systemFingerprint, err := auth.GenerateOperatorFingerprint(c.cfg.Logger, c.cfg.FingerprintOptions)
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: system fingerprint: %w", err)
+	}
+	token, err := models.NewPlatformEnrollmentToken()
+	if err != nil {
+		return nil, fmt.Errorf("operator enrollment: generate request token: %w", err)
+	}
+	return &operatorBootstrapAttempt{
+		request: models.OperatorBootstrapRequest{
+			Token: token,
+			Enrollment: models.PlatformEnrollmentCreateRequest{
+				ComponentKind:     models.PlatformComponentOperator,
+				InstanceID:        c.cfg.InstanceID,
+				Hostname:          c.cfg.Hostname,
+				SystemFingerprint: systemFingerprint.Fingerprint,
+				DeploymentID:      c.cfg.Deployment.LaunchID(),
+				TokenHash:         models.PlatformEnrollmentTokenHash(token),
+				Operator: &models.PlatformOperatorCSRPayload{
+					OperatorCSRPEM: operatorCSR,
+					CLICSRPEM:      cliCSR,
+				},
+			},
+			RuntimeConfig: c.cfg.RuntimeConfig,
+		},
+		operatorKey:  operatorKey,
+		cliKey:       cliKey,
+		fingerprints: models.PlatformEnrollmentCSRFingerprints{Operator: operatorFP, CLI: cliFP},
 	}, nil
 }
 
-// SetFingerprintOptions sets the options that differentiate operators on the same system.
-func (c *OperatorPlatformEnrollmentClient) SetFingerprintOptions(opts auth.FingerprintOptions) {
-	c.fingerprintOpts = opts
+// exchange runs one bootstrap socket to the bundle. Transport failures are
+// retryable; the Gateway's error frame says whether its failure is.
+func (c *OperatorBootstrapClient) exchange(ctx context.Context, attempt *operatorBootstrapAttempt) (*OperatorIdentity, error) {
+	conn, resp, err := c.dialer.DialContext(ctx, c.cfg.URL, nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if errors.Is(err, websocket.ErrBadHandshake) {
+		return nil, fmt.Errorf("operator enrollment: Gateway refused the bootstrap websocket (HTTP %d): %w", resp.StatusCode, err)
+	}
+	if err != nil {
+		return nil, &operatorBootstrapRetry{fmt.Errorf("operator enrollment: dial %s: %w", c.cfg.URL, err)}
+	}
+	defer conn.Close()
+	// The socket is held for the owner's decision; cancellation closes it.
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+
+	if err := conn.WriteJSON(models.OperatorBootstrapFrame{Type: models.OperatorBootstrapFrameRequest, Request: &attempt.request}); err != nil {
+		return nil, &operatorBootstrapRetry{fmt.Errorf("operator enrollment: send request: %w", err)}
+	}
+
+	created, err := readOperatorBootstrapFrame(conn, models.OperatorBootstrapFrameCreated)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.observeCreated(ctx, attempt, created.Created); err != nil {
+		return nil, err
+	}
+
+	decided, err := readOperatorBootstrapFrame(conn, models.OperatorBootstrapFrameDecision)
+	if err != nil {
+		return nil, err
+	}
+	if decided.Decision == nil {
+		return nil, fmt.Errorf("operator enrollment: decision frame missing its decision")
+	}
+	switch decided.Decision.State {
+	case models.PlatformEnrollmentStateApproved, models.PlatformEnrollmentStateIssuing, models.PlatformEnrollmentStateCompleted:
+	case models.PlatformEnrollmentStateDenied:
+		return nil, fmt.Errorf("operator enrollment: request %s was denied by the owner", attempt.requestID)
+	case models.PlatformEnrollmentStateExpired:
+		return nil, fmt.Errorf("operator enrollment: request %s expired before approval", attempt.requestID)
+	default:
+		return nil, fmt.Errorf("operator enrollment: request %s ended in state %s", attempt.requestID, decided.Decision.State)
+	}
+
+	proofs, err := attempt.proofs()
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.WriteJSON(models.OperatorBootstrapFrame{Type: models.OperatorBootstrapFrameComplete, Complete: proofs}); err != nil {
+		return nil, &operatorBootstrapRetry{fmt.Errorf("operator enrollment: send completion: %w", err)}
+	}
+
+	delivered, err := readOperatorBootstrapFrame(conn, models.OperatorBootstrapFrameBundle)
+	if err != nil {
+		return nil, err
+	}
+	identity, err := attempt.identity(delivered.Bundle)
+	if err != nil {
+		return nil, err
+	}
+	c.cfg.Logger.Info("operator enrollment: completed",
+		"request_id", attempt.requestID,
+		"operator_id", identity.OperatorID,
+		"operator_session_id", identity.OperatorSessionID)
+	if err := c.cfg.Deployment.Record(ctx, models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhaseEnrolled, OperatorSessionID: identity.OperatorSessionID}); err != nil {
+		return nil, err
+	}
+	return identity, nil
 }
 
-// SetDeploymentRecorder makes the client publish non-secret progress for a
-// deploying CLI. Without it, enrollment records nothing.
-func (c *OperatorPlatformEnrollmentClient) SetDeploymentRecorder(recorder *OperatorDeploymentRecorder) {
-	c.deployment = recorder
-}
-
-func (c *OperatorPlatformEnrollmentClient) recordDeployment(ctx context.Context, state models.OperatorDeploymentState) error {
-	if c.deployment == nil {
+// observeCreated announces the request once; a redial resumes the same one.
+func (c *OperatorBootstrapClient) observeCreated(ctx context.Context, attempt *operatorBootstrapAttempt, created *models.PlatformEnrollmentCreateResponse) error {
+	if created == nil || created.RequestID == "" {
+		return fmt.Errorf("operator enrollment: created frame missing its request")
+	}
+	if created.Fingerprints.Operator != attempt.fingerprints.Operator || created.Fingerprints.CLI != attempt.fingerprints.CLI {
+		return fmt.Errorf("operator enrollment: request %s does not carry this Operator's keys", created.RequestID)
+	}
+	if attempt.requestID == created.RequestID {
 		return nil
 	}
-	return c.deployment.Record(ctx, state)
+	if attempt.requestID != "" {
+		return fmt.Errorf("operator enrollment: Gateway resumed request %s, expected %s", created.RequestID, attempt.requestID)
+	}
+	attempt.requestID = created.RequestID
+	c.cfg.Logger.Info("operator enrollment: request submitted",
+		"request_id", created.RequestID,
+		"operator_fingerprint", attempt.fingerprints.Operator,
+		"cli_fingerprint", attempt.fingerprints.CLI,
+		"approval_url", created.ApprovalURL,
+		"expires_at", created.ExpiresAt)
+	fmt.Fprintf(os.Stderr, "Approve with: g8e auth enroll approve %s\n", created.RequestID)
+	return c.cfg.Deployment.Record(ctx, models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhasePendingApproval, RequestID: created.RequestID})
 }
 
-// Enroll performs the full nine-step platform enrollment sequence and
-// returns the resolved operator identity. If a resumable pending
-// attempt exists on disk, it resumes from that state rather than
-// generating new keys. The context controls cancellation; on
-// cancellation the pending state is left on disk so a restart can
-// resume the same request.
-func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*OperatorEnrollmentResult, error) {
-	pendingPath := c.pendingStatePath()
+// readOperatorBootstrapFrame reads the next frame and requires want. A read
+// failure is a dropped socket (retryable); an error frame carries the
+// Gateway's own verdict.
+func readOperatorBootstrapFrame(conn *websocket.Conn, want models.OperatorBootstrapFrameType) (models.OperatorBootstrapFrame, error) {
+	var frame models.OperatorBootstrapFrame
+	if err := conn.ReadJSON(&frame); err != nil {
+		return frame, &operatorBootstrapRetry{fmt.Errorf("operator enrollment: await %s: %w", want, err)}
+	}
+	if frame.Type == models.OperatorBootstrapFrameError {
+		if frame.Error == nil {
+			return frame, fmt.Errorf("operator enrollment: Gateway ended the exchange without a reason")
+		}
+		err := fmt.Errorf("operator enrollment: Gateway: %s", frame.Error.Message)
+		if frame.Error.Retryable {
+			return frame, &operatorBootstrapRetry{err}
+		}
+		return frame, err
+	}
+	if frame.Type != want {
+		return frame, fmt.Errorf("operator enrollment: expected %s frame, got %q", want, frame.Type)
+	}
+	return frame, nil
+}
 
-	// Step 2: Load persisted pending attempt if it exists.
-	pending, err := c.loadPendingState(pendingPath)
+// proofs signs the canonical completion transcript with both private keys.
+func (a *operatorBootstrapAttempt) proofs() (*models.PlatformEnrollmentProofs, error) {
+	transcript, err := buildOperatorCompletionTranscript(a.requestID, a.request.Enrollment.TokenHash,
+		a.request.Enrollment.InstanceID, a.fingerprints.Operator, a.fingerprints.CLI)
 	if err != nil {
 		return nil, err
 	}
-
-	var (
-		token, requestID          string
-		operatorFP, cliFP         string
-		operatorKeyPEM, cliKeyPEM string
-		operatorKey, cliKey       *ecdsa.PrivateKey
-	)
-
-	if pending != nil && !pending.ExpiresAt.IsZero() && !time.Now().Before(pending.ExpiresAt) {
-		c.logger.Info("operator enrollment: pending attempt expired; starting fresh", "request_id", pending.RequestID)
-		_ = c.removePendingState(pendingPath)
-		pending = nil
-	}
-
-	if pending != nil && pending.Token != "" {
-		// Resume the existing pending attempt. Do not generate new keys.
-		token = pending.Token
-		requestID = pending.RequestID
-		operatorFP = pending.OperatorFingerprint
-		cliFP = pending.CLIFingerprint
-		operatorKeyPEM = pending.OperatorKeyPEM
-		cliKeyPEM = pending.CLIKeyPEM
-		operatorKey, err = parseECPrivateKeyPEM(operatorKeyPEM)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: resume operator key: %w", err)
-		}
-		cliKey, err = parseECPrivateKeyPEM(cliKeyPEM)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: resume cli key: %w", err)
-		}
-		if requestID != "" {
-			c.logger.Info("operator enrollment: resuming pending attempt", "request_id", requestID)
-		} else {
-			createResp, submitErr := c.submitRequest(ctx, pending.OperatorCSRPEM, pending.CLICSRPEM, pending.SystemFingerprint, token)
-			if submitErr != nil {
-				return nil, submitErr
-			}
-			requestID = createResp.RequestID
-			pending.RequestID = requestID
-			pending.ExpiresAt = createResp.ExpiresAt
-			if err := c.persistPendingState(pendingPath, pending); err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		// Step 3: Generate keys and submit a new request.
-		operatorCSR, opKey, err := GenerateCSR(fmt.Sprintf("g8e-operator-%s", c.hostname))
-		if err != nil {
-			return nil, err
-		}
-		cliCSR, cliK, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", c.hostname))
-		if err != nil {
-			return nil, err
-		}
-		operatorKey = opKey
-		cliKey = cliK
-
-		operatorFP, err = csrFingerprint(operatorCSR)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: operator csr fingerprint: %w", err)
-		}
-		cliFP, err = csrFingerprint(cliCSR)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: cli csr fingerprint: %w", err)
-		}
-
-		operatorKeyPEM, err = encodeECPrivateKeyPEM(operatorKey)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: encode operator key: %w", err)
-		}
-		cliKeyPEM, err = encodeECPrivateKeyPEM(cliKey)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: encode cli key: %w", err)
-		}
-
-		systemFp, err := auth.GenerateOperatorFingerprint(c.logger, c.fingerprintOpts)
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: system fingerprint: %w", err)
-		}
-
-		token, err = models.NewPlatformEnrollmentToken()
-		if err != nil {
-			return nil, fmt.Errorf("operator enrollment: generate request token: %w", err)
-		}
-
-		// Persist pending state atomically with 0600 permissions.
-		pending = &operatorPendingState{
-			RequestID:           requestID,
-			Token:               token,
-			OperatorFingerprint: operatorFP,
-			CLIFingerprint:      cliFP,
-			OperatorKeyPEM:      operatorKeyPEM,
-			CLIKeyPEM:           cliKeyPEM,
-			InstanceID:          c.instanceID,
-			Hostname:            c.hostname,
-			OperatorCSRPEM:      operatorCSR,
-			CLICSRPEM:           cliCSR,
-			SystemFingerprint:   systemFp.Fingerprint,
-		}
-		if err := c.persistPendingState(pendingPath, pending); err != nil {
-			return nil, err
-		}
-		createResp, err := c.submitRequest(ctx, operatorCSR, cliCSR, systemFp.Fingerprint, token)
-		if err != nil {
-			return nil, err
-		}
-		requestID = createResp.RequestID
-		pending.RequestID = requestID
-		pending.ExpiresAt = createResp.ExpiresAt
-		if err := c.persistPendingState(pendingPath, pending); err != nil {
-			return nil, err
-		}
-
-		// Step 4: Print non-secret approval instructions.
-		c.logger.Info("operator enrollment: request submitted", "request_id", requestID)
-		c.logger.Info("operator enrollment: operator CSR fingerprint", "fingerprint", operatorFP)
-		c.logger.Info("operator enrollment: CLI CSR fingerprint", "fingerprint", cliFP)
-		if createResp.ApprovalURL != "" {
-			c.logger.Info("operator enrollment: approval URL", "url", createResp.ApprovalURL)
-		}
-	}
-	fmt.Fprintf(os.Stderr, "Approve with: g8e auth enroll approve %s\n", requestID)
-	if err := c.recordDeployment(ctx, models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhasePendingApproval, RequestID: requestID}); err != nil {
-		return nil, err
-	}
-
-	// Step 5: Hold one status request until the owner decides.
-	deadline := operatorEnrollDefaultDeadline
-	if pending != nil && !pending.ExpiresAt.IsZero() {
-		deadline = time.Until(pending.ExpiresAt)
-	}
-	if err := c.awaitApproval(ctx, token, deadline); err != nil {
-		return nil, err
-	}
-
-	// Step 6: Sign the completion transcript with both private keys.
-	tokenHashValue := models.PlatformEnrollmentTokenHash(token)
-	transcript, err := buildOperatorCompletionTranscript(requestID, tokenHashValue, c.instanceID, operatorFP, cliFP)
-	if err != nil {
-		return nil, err
-	}
-	operatorProof, err := signTranscript(operatorKey, transcript)
+	operatorProof, err := signTranscript(a.operatorKey, transcript)
 	if err != nil {
 		return nil, fmt.Errorf("operator enrollment: sign operator proof: %w", err)
 	}
-	cliProof, err := signTranscript(cliKey, transcript)
+	cliProof, err := signTranscript(a.cliKey, transcript)
 	if err != nil {
 		return nil, fmt.Errorf("operator enrollment: sign cli proof: %w", err)
 	}
+	return &models.PlatformEnrollmentProofs{Operator: operatorProof, CLI: cliProof}, nil
+}
 
-	// Step 7: Submit completion and validate the response.
-	completionResp, err := c.submitCompletion(ctx, token, operatorProof, cliProof)
+// identity pairs the delivered Operator certificate with the in-memory key.
+// The companion CLI certificate is not retained: the Operator never uses it.
+func (a *operatorBootstrapAttempt) identity(bundle *models.OperatorBootstrapBundle) (*OperatorIdentity, error) {
+	if bundle == nil || bundle.Credentials.OperatorCert == "" || bundle.Credentials.HubTrustBundle == "" ||
+		bundle.Credentials.OperatorID == "" || bundle.Credentials.OperatorSessionID == "" {
+		return nil, fmt.Errorf("operator enrollment: bundle missing the Operator certificate, trust, or session")
+	}
+	creds := bundle.Credentials
+	certPEM := creds.OperatorCert
+	if creds.OperatorCertChain != "" {
+		certPEM += "\n" + creds.OperatorCertChain
+	}
+	keyDER, err := x509.MarshalECPrivateKey(a.operatorKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("operator enrollment: encode operator key: %w", err)
 	}
-	if completionResp.Operator == nil {
-		return nil, fmt.Errorf("operator enrollment: completion response missing operator credentials")
+	cert, err := tls.X509KeyPair([]byte(certPEM), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrLoadCertKeyPair, err)
 	}
-	creds := completionResp.Operator
-	if creds.OperatorCert == "" || creds.CLICert == "" {
-		return nil, fmt.Errorf("operator enrollment: completion response missing certificates")
-	}
-
-	// Step 8: Write credentials atomically, then remove pending state.
-	if err := c.writeCredentials(creds, operatorKeyPEM, cliKeyPEM); err != nil {
-		return nil, err
-	}
-	if err := c.removePendingState(pendingPath); err != nil {
-		c.logger.Warn("operator enrollment: failed to remove pending state", "error", err)
-	}
-
-	c.logger.Info("operator enrollment: completed",
-		"operator_id", creds.OperatorID,
-		"operator_session_id", creds.OperatorSessionID,
-		"cli_session_id", creds.CLISessionID,
-	)
-
-	if err := c.recordDeployment(ctx, models.OperatorDeploymentState{Phase: models.OperatorDeploymentPhaseEnrolled, OperatorSessionID: creds.OperatorSessionID}); err != nil {
-		return nil, err
-	}
-
-	// Step 9: Return the resolved identity. Paths are relative to the
-	// runtime tree root; the caller loads them via the fileSvc-aware
-	// cert loader (loadClientCertPairViaFileSvc), not os.ReadFile.
-	return &OperatorEnrollmentResult{
-		OperatorCertPath:  c.operatorCertPath(),
-		OperatorKeyPath:   c.operatorKeyPath(),
-		CLICertPath:       c.cliCertPath(),
-		CLIKeyPath:        c.cliKeyPath(),
-		TrustBundlePath:   c.trustBundlePath(),
-		OperatorID:        creds.OperatorID,
-		OperatorSessionID: creds.OperatorSessionID,
-		CLISessionID:      creds.CLISessionID,
-		Posture:           creds.Posture,
+	return &OperatorIdentity{
+		Certificate:        cert,
+		CertificatePEM:     []byte(certPEM),
+		TrustBundlePEM:     []byte(creds.HubTrustBundle),
+		OperatorID:         creds.OperatorID,
+		OperatorSessionID:  creds.OperatorSessionID,
+		Posture:            creds.Posture,
+		SystemFingerprint:  a.request.Enrollment.SystemFingerprint,
+		MaxConcurrentTasks: bundle.MaxConcurrentTasks,
+		MaxMemoryMB:        bundle.MaxMemoryMB,
 	}, nil
 }
 
-// --- Path resolution ---
+// operatorRuntimeConfig is the runtime configuration the Operator declares
+// at enrollment; the Gateway records it for the issued Operator.
+func operatorRuntimeConfig(cfg *config.Config) (json.RawMessage, error) {
+	data, err := models.MarshalOperatorRuntimeConfig(&operatorv1.OperatorRuntimeConfig{
+		CloudMode:           cfg.CloudMode,
+		CloudProvider:       cfg.CloudProvider,
+		LocalStorageEnabled: cfg.ExecutionVaultEnabled,
+		NoGit:               cfg.NoGit,
+		LogLevel:            cfg.LogLevel,
 
-func (c *OperatorPlatformEnrollmentClient) pendingStatePath() string {
-	return filepath.Join(constants.PkiDirname, constants.PkiSubdirPendingEnroll, constants.PendingEnrollmentFileOperator)
+		HttpPort: int32(cfg.HTTPPort),
+		Roles:    models.OperatorRolesToProto(cfg.EffectiveOperatorRoles()),
+		LocalDir: cfg.WorkDir,
+		Account:  auth.ResolveCurrentAccount(),
+
+		InferenceEnabled:                   cfg.Inference.Enabled,
+		InferenceOllamaEndpoint:            cfg.Inference.OllamaEndpoint,
+		ProviderBoundaryObserverEnabled:    cfg.ProviderBoundaryObserver.Enabled,
+		ProvenanceOperatorEnabled:          cfg.ProvenanceOperator.Enabled,
+		ProvenanceOperatorModelStorageRoot: cfg.ProvenanceOperator.ModelStorageRoot,
+		Platform:                           runtime.GOOS,
+		HeartbeatIntervalMs:                uint32(cfg.HeartbeatInterval.Milliseconds()),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrOperatorRuntimeConfigMarshal, err)
+	}
+	return data, nil
 }
 
-func (c *OperatorPlatformEnrollmentClient) operatorCertPath() string {
-	return filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
-}
-
-func (c *OperatorPlatformEnrollmentClient) operatorKeyPath() string {
-	return filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
-}
-
-func (c *OperatorPlatformEnrollmentClient) cliCertPath() string {
-	return filepath.Join(constants.PkiDirname, constants.CliCertFilename)
-}
-
-func (c *OperatorPlatformEnrollmentClient) cliKeyPath() string {
-	return filepath.Join(constants.PkiDirname, constants.CliKeyFilename)
-}
-
-func (c *OperatorPlatformEnrollmentClient) trustBundlePath() string {
-	return filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-}
-
-// --- HTTP ---
-
-func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, operatorCSR, cliCSR, systemFingerprint, token string) (*models.PlatformEnrollmentCreateResponse, error) {
-	if err := c.awaitBootstrap(ctx); err != nil {
-		return nil, err
+// buildOperatorBootstrapURL returns the Gateway bootstrap websocket URL for
+// an endpoint flag value. An http(s) scheme maps to ws(s); an endpoint port
+// wins, otherwise httpPort (or the Operator HTTP default when zero) is used.
+func buildOperatorBootstrapURL(endpoint string, httpPort int) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
 	}
-	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentRequest
-	payload := models.PlatformEnrollmentCreateRequest{
-		ComponentKind:     models.PlatformComponentOperator,
-		InstanceID:        c.instanceID,
-		Hostname:          c.hostname,
-		SystemFingerprint: systemFingerprint,
-		DeploymentID:      c.deployment.LaunchID(),
-		TokenHash:         models.PlatformEnrollmentTokenHash(token),
-		Operator: &models.PlatformOperatorCSRPayload{
-			OperatorCSRPEM: operatorCSR,
-			CLICSRPEM:      cliCSR,
-		},
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := doHTTPRequest(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: submit request: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusCreated {
-		if resp.StatusCode == http.StatusConflict {
-			_ = c.removePendingState(c.pendingStatePath())
-			return nil, fmt.Errorf("operator enrollment: pending request conflicts with gateway state (HTTP 409); pending state cleared, start enrollment again to create a fresh request")
-		}
-		return nil, fmt.Errorf("operator enrollment: request rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-	var createResp models.PlatformEnrollmentCreateResponse
-	if err := json.Unmarshal(respBody, &createResp); err != nil {
-		return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
-	}
-	return &createResp, nil
-}
-
-// awaitBootstrap holds until the gateway has an owner, since request creation
-// is rejected before bootstrap. The gateway releases the held status response
-// on the user-created event.
-func (c *OperatorPlatformEnrollmentClient) awaitBootstrap(ctx context.Context) error {
-	status, err := c.bootstrapStatus(ctx, false)
-	if err != nil || status.Bootstrapped {
-		return err
-	}
-	c.logger.Info("operator enrollment: gateway not yet bootstrapped; waiting for owner enrollment")
-	_, err = c.bootstrapStatus(ctx, true)
-	return err
-}
-
-func (c *OperatorPlatformEnrollmentClient) bootstrapStatus(ctx context.Context, wait bool) (*models.BootstrapStatusResponse, error) {
-	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthBootstrapStatus
-	if wait {
-		endpoint += "?wait=true"
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: create bootstrap status request: %w", err)
-	}
-	req.Header.Set("Cache-Control", "no-store")
-	resp, err := doHTTPRequest(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: bootstrap status: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: read bootstrap status: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("operator enrollment: bootstrap status failed: HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-	var status models.BootstrapStatusResponse
-	if err := json.Unmarshal(respBody, &status); err != nil {
-		return nil, fmt.Errorf("operator enrollment: parse bootstrap status: %w", err)
-	}
-	return &status, nil
-}
-
-func (c *OperatorPlatformEnrollmentClient) awaitApproval(ctx context.Context, token string, deadline time.Duration) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if deadline <= 0 {
-		_ = c.removePendingState(c.pendingStatePath())
-		return fmt.Errorf("operator enrollment: approval deadline reached before approval")
-	}
-	waitCtx, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
-	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentStatus + "?wait=true&token=" + url.QueryEscape(token)
-	req, err := http.NewRequestWithContext(waitCtx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return fmt.Errorf("operator enrollment: create status request: %w", err)
-	}
-	req.Header.Set("Cache-Control", "no-store")
-	resp, err := doHTTPRequest(waitCtx, req)
-	if err != nil {
-		return fmt.Errorf("operator enrollment: await approval: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("operator enrollment: read status response: %w", err)
-	}
-	if resp.StatusCode == http.StatusGone {
-		_ = c.removePendingState(c.pendingStatePath())
-		return fmt.Errorf("operator enrollment: request has expired (HTTP 410)")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("operator enrollment: status query failed: HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-	var statusResp models.PlatformEnrollmentStatusResponse
-	if err := json.Unmarshal(respBody, &statusResp); err != nil {
-		return fmt.Errorf("operator enrollment: parse status response: %w", err)
-	}
-	switch statusResp.State {
-	case models.PlatformEnrollmentStateApproved, models.PlatformEnrollmentStateCompleted:
-		return nil
-	case models.PlatformEnrollmentStateDenied:
-		return fmt.Errorf("operator enrollment: request was denied by the owner")
-	case models.PlatformEnrollmentStateExpired:
-		_ = c.removePendingState(c.pendingStatePath())
-		return fmt.Errorf("operator enrollment: request has expired")
+	var base string
+	switch {
+	case strings.HasPrefix(endpoint, "https://"):
+		base = "wss://" + strings.TrimPrefix(endpoint, "https://")
+	case strings.HasPrefix(endpoint, "http://"):
+		base = "ws://" + strings.TrimPrefix(endpoint, "http://")
+	case strings.Contains(endpoint, "://"):
+		base = endpoint
 	default:
-		return fmt.Errorf("operator enrollment: unexpected approval state %s", statusResp.State)
-	}
-}
-
-func (c *OperatorPlatformEnrollmentClient) submitCompletion(ctx context.Context, token, operatorProof, cliProof string) (*models.PlatformEnrollmentCompleteResponse, error) {
-	endpoint := c.gatewayHTTPURL + constants.APIPaths.AuthPlatformEnrollmentComplete
-	payload := models.PlatformEnrollmentCompleteRequest{
-		Token: token,
-		Proofs: models.PlatformEnrollmentProofs{
-			Operator: operatorProof,
-			CLI:      cliProof,
-		},
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: marshal completion: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: create completion request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Cache-Control", "no-store")
-
-	resp, err := doHTTPRequest(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: submit completion: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: read completion response: %w", err)
-	}
-	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("operator enrollment: completion rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var completionResp models.PlatformEnrollmentCompleteResponse
-	if err := json.Unmarshal(respBody, &completionResp); err != nil {
-		return nil, fmt.Errorf("operator enrollment: parse completion response: %w", err)
-	}
-	return &completionResp, nil
-}
-
-// --- Credential writes ---
-
-func (c *OperatorPlatformEnrollmentClient) writeCredentials(creds *models.PlatformEnrollmentOperatorCredentials, operatorKeyPEM, cliKeyPEM string) error {
-	ctx := context.Background()
-
-	// Operator cert + chain.
-	operatorCertContent := creds.OperatorCert
-	if creds.OperatorCertChain != "" {
-		operatorCertContent = operatorCertContent + "\n" + creds.OperatorCertChain
-	}
-	if err := c.atomicWrite(ctx, c.operatorCertPath(), []byte(operatorCertContent), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("operator enrollment: write operator cert: %w", err)
-	}
-	if err := c.atomicWrite(ctx, c.operatorKeyPath(), []byte(operatorKeyPEM), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("operator enrollment: write operator key: %w", err)
-	}
-
-	// CLI cert + chain.
-	cliCertContent := creds.CLICert
-	if creds.CLICertChain != "" {
-		cliCertContent = cliCertContent + "\n" + creds.CLICertChain
-	}
-	if err := c.atomicWrite(ctx, c.cliCertPath(), []byte(cliCertContent), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("operator enrollment: write cli cert: %w", err)
-	}
-	if err := c.atomicWrite(ctx, c.cliKeyPath(), []byte(cliKeyPEM), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("operator enrollment: write cli key: %w", err)
-	}
-
-	// Preserve installed trust (including an explicitly authorized recovery CA).
-	// Enrollment over the bootstrap surface must not replace a pinned CA.
-	if creds.HubTrustBundle != "" {
-		exists, err := c.fileSvc.FileExists(ctx, c.trustBundlePath())
-		if err != nil {
-			return fmt.Errorf("operator enrollment: check pinned trust: %w", err)
-		}
-		if !exists {
-			if err := c.atomicWrite(ctx, c.trustBundlePath(), []byte(creds.HubTrustBundle), constants.PermFilePublic); err != nil {
-				return fmt.Errorf("operator enrollment: write trust bundle: %w", err)
+		if _, _, err := net.SplitHostPort(endpoint); err != nil {
+			if httpPort == 0 {
+				httpPort = constants.Ports.OperatorHttp
 			}
+			endpoint = net.JoinHostPort(endpoint, strconv.Itoa(httpPort))
 		}
+		base = "ws://" + endpoint
 	}
-
-	// Actuator public key (if issued).
-	if creds.ActuatorKeyID != "" && creds.ActuatorPubKey != "" {
-		signersDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners)
-		if err := c.fileSvc.MkdirAll(ctx, signersDir, constants.PermDirPrivate); err != nil {
-			return fmt.Errorf("operator enrollment: create trusted_signers dir: %w", err)
-		}
-		signerPath := filepath.Join(signersDir, creds.ActuatorKeyID+constants.PublicKeySuffix)
-		if err := c.atomicWrite(ctx, signerPath, []byte(creds.ActuatorPubKey), constants.PermFilePrivate); err != nil {
-			return fmt.Errorf("operator enrollment: write actuator pub key: %w", err)
-		}
-	}
-
-	c.logger.Info("operator enrollment: credentials saved",
-		"operator_cert", c.fileSvc.Resolve(c.operatorCertPath()),
-		"cli_cert", c.fileSvc.Resolve(c.cliCertPath()),
-		"trust_bundle", c.fileSvc.Resolve(c.trustBundlePath()),
-	)
-	return nil
+	return strings.TrimRight(base, "/") + constants.APIPaths.AuthOperatorBootstrapWebSocket
 }
-
-// atomicWrite writes data to a relative path under the runtime tree
-// using temp-file-plus-rename for atomicity.
-func (c *OperatorPlatformEnrollmentClient) atomicWrite(ctx context.Context, relPath string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(relPath)
-	if err := c.fileSvc.MkdirAll(ctx, dir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("create dir: %w", err)
-	}
-	if err := c.fileSvc.WriteFile(ctx, relPath, data, perm); err != nil {
-		return err
-	}
-	return nil
-}
-
-// --- Pending state ---
-
-func (c *OperatorPlatformEnrollmentClient) persistPendingState(relPath string, state *operatorPendingState) error {
-	data, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("operator enrollment: marshal pending state: %w", err)
-	}
-	return c.atomicWrite(context.Background(), relPath, data, constants.PermFilePrivate)
-}
-
-func (c *OperatorPlatformEnrollmentClient) loadPendingState(relPath string) (*operatorPendingState, error) {
-	exists, err := c.fileSvc.FileExists(context.Background(), relPath)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: check pending state: %w", err)
-	}
-	if !exists {
-		return nil, nil
-	}
-	data, err := c.fileSvc.ReadFile(context.Background(), relPath)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: read pending state: %w", err)
-	}
-	var state operatorPendingState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("operator enrollment: parse pending state: %w", err)
-	}
-	return &state, nil
-}
-
-func (c *OperatorPlatformEnrollmentClient) removePendingState(relPath string) error {
-	return c.fileSvc.Remove(context.Background(), relPath)
-}
-
-// --- Transcript construction and signing ---
 
 // buildOperatorCompletionTranscript constructs the canonical
 // PlatformEnrollmentCompletionTranscript as deterministic protobuf,
@@ -701,67 +465,4 @@ func signTranscript(privateKey *ecdsa.PrivateKey, transcript []byte) (string, er
 		return "", fmt.Errorf("sign transcript: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(signature), nil
-}
-
-// --- CSR fingerprint ---
-
-// csrFingerprint computes the SHA-256 fingerprint of the public key in
-// a CSR PEM.
-func csrFingerprint(csrPEM string) (string, error) {
-	return auth.CSRFingerprint(csrPEM)
-}
-
-// --- Helpers ---
-
-func parseECPrivateKeyPEM(keyPEM string) (*ecdsa.PrivateKey, error) {
-	block, _ := pem.Decode([]byte(keyPEM))
-	if block == nil {
-		return nil, fmt.Errorf("parse EC private key: no PEM block found")
-	}
-	var keyBytes []byte
-	switch block.Type {
-	case "EC PRIVATE KEY":
-		keyBytes = block.Bytes
-	case "PRIVATE KEY":
-		key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("parse PKCS8 private key: %w", err)
-		}
-		ecKey, ok := key.(*ecdsa.PrivateKey)
-		if !ok {
-			return nil, fmt.Errorf("parse PKCS8 private key: not an EC key")
-		}
-		return ecKey, nil
-	default:
-		return nil, fmt.Errorf("parse EC private key: unexpected PEM type %q", block.Type)
-	}
-	key, err := x509.ParseECPrivateKey(keyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse EC private key: %w", err)
-	}
-	return key, nil
-}
-
-func encodeECPrivateKeyPEM(key *ecdsa.PrivateKey) (string, error) {
-	keyBytes, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return "", err
-	}
-	pemBytes := pem.EncodeToMemory(&pem.Block{
-		Type:  "EC PRIVATE KEY",
-		Bytes: keyBytes,
-	})
-	return string(pemBytes), nil
-}
-
-func doHTTPRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
-	client := &http.Client{}
-	return client.Do(req.WithContext(ctx))
-}
-
-func trimTrailingSlash(s string) string {
-	for len(s) > 0 && s[len(s)-1] == '/' {
-		s = s[:len(s)-1]
-	}
-	return s
 }

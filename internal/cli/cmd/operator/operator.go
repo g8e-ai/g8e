@@ -328,8 +328,6 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 }
 
 func operatorStartCmd() *cobra.Command {
-	var key string
-	var clientCert string
 	var trustBundle string
 	var workingDir string
 	var deploymentID string
@@ -380,8 +378,6 @@ func operatorStartCmd() *cobra.Command {
 				HTTPPort:                        gatewayHTTPPort,
 				HTTPSPort:                       gatewayHTTPSPort,
 				TrustBundlePath:                 trustBundle,
-				PrivateKey:                      key,
-				ClientCert:                      clientCert,
 				WorkingDir:                      workingDir,
 				DeploymentID:                    deploymentID,
 				LaunchDir:                       workingDir,
@@ -426,9 +422,7 @@ func operatorStartCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&key, "key", "k", "", "Path to operator private key")
-	cmd.Flags().StringVar(&clientCert, "cert", "", "Path to operator client certificate")
-	cmd.Flags().StringVar(&trustBundle, "trust-bundle", "", "Path to CA trust bundle")
+	cmd.Flags().StringVar(&trustBundle, "trust-bundle", "", "Path to an explicit CA trust bundle (read-only; overrides the bundle delivered at enrollment)")
 	cmd.Flags().StringVar(&workingDir, "working-dir", "", "Working directory for command execution")
 	cmd.Flags().StringVar(&deploymentID, "deployment-id", "", "Launch identifier for structured deployment progress")
 	_ = cmd.Flags().MarkHidden("deployment-id")

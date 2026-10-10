@@ -11,7 +11,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -31,20 +30,15 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-// newStartableG8eoService builds a G8eoService wired to a real bootstrap
-// endpoint, runtime tree, and in-memory keyring so Start exercises the real
+// newStartableG8eoService builds a G8eoService carrying an enrolled in-memory
+// identity, runtime tree, and in-memory keyring so Start exercises the real
 // storage, governance, and pub/sub construction. mutate adjusts the config
 // before the service is built. Whatever Start managed to open is released on
 // cleanup, including when Start fails part-way.
 func newStartableG8eoService(t *testing.T, mutate func(cfg *config.Config)) *G8eoService {
 	t.Helper()
-	server := newG8eoBootstrapTestServer(t)
-	t.Cleanup(server.Close)
-
-	cfg := testutil.NewTestConfig(t)
+	cfg := enrolledTestConfig(t)
 	cfg.Endpoint = "127.0.0.1"
-	_, err := fmt.Sscanf(server.URL[len("https://"):], "127.0.0.1:%d", &cfg.HTTPSPort)
-	require.NoError(t, err)
 	cfg.PubSubURL = "wss://127.0.0.1:0"
 	cfg.NoGit = true
 	if mutate != nil {
@@ -63,7 +57,6 @@ func newStartableG8eoService(t *testing.T, mutate func(cfg *config.Config)) *G8e
 
 	service, err := NewG8eoService(cfg, testutil.NewTestLogger(), newTestTLSConfig(t), fileSvc, newTestPubSubClientFactory())
 	require.NoError(t, err)
-	service.bootstrap.SetHTTPClient(server.Client())
 	service.keystore = ks
 
 	t.Cleanup(func() {
@@ -121,8 +114,8 @@ func TestG8eoService_Start_ReceiptStateRootsUseLocalStore(t *testing.T) {
 	service := newStartableG8eoService(t, nil)
 	require.NoError(t, startWithTimeout(t, service))
 
-	// The bootstrap fixture serves no state endpoint. Receipt evidence must
-	// remain available locally once the Operator has its enrolled identity.
+	// No Gateway HTTP endpoint exists. Receipt evidence must remain available
+	// locally once the Operator has its enrolled identity.
 	provider := service.pubSubCommands.Actuator().StateRootProvider
 	require.NotNil(t, provider)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)

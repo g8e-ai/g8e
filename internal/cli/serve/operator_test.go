@@ -33,15 +33,6 @@ func TestNewOperatorRuntimeFileServiceUsesWorkingDir(t *testing.T) {
 	assert.Equal(t, filepath.Join(workingDir, constants.RuntimeDirname), fileSvc.Resolve(""))
 }
 
-func TestResolveEnrolledOperatorCredentialPaths(t *testing.T) {
-	workingDir := t.TempDir()
-	fileSvc, _, err := newOperatorRuntimeFileService(ServeOperatorOptions{WorkingDir: workingDir}, testLogger())
-	require.NoError(t, err)
-	assert.Equal(t,
-		filepath.Join(workingDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiFileOperatorCert),
-		fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)))
-}
-
 func TestOperatorFingerprintOptions_ProvenanceIncludesRuntimePort(t *testing.T) {
 	opts := ServeOperatorOptions{ProvenanceOperatorEnabled: true}
 
@@ -61,8 +52,6 @@ func TestServeOperatorOptions_ZeroValue(t *testing.T) {
 	assert.Equal(t, "", opts.LogLevel)
 	assert.Equal(t, "", opts.Endpoint)
 	assert.Equal(t, "", opts.TrustBundlePath)
-	assert.Equal(t, "", opts.PrivateKey)
-	assert.Equal(t, "", opts.ClientCert)
 	assert.Equal(t, "", opts.WorkingDir)
 	assert.Equal(t, "", opts.LaunchDir)
 	assert.False(t, opts.CloudMode)
@@ -83,8 +72,6 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 		LogLevel:              "debug",
 		Endpoint:              "192.168.1.10",
 		TrustBundlePath:       constants.DefaultPKIDir + "/" + constants.PkiFileGatewayBundle,
-		PrivateKey:            constants.DefaultOperatorKeyDesc,
-		ClientCert:            constants.DefaultOperatorCertDesc,
 		WorkingDir:            constants.DefaultDataDir,
 		LaunchDir:             constants.DefaultPKIDir,
 		CloudMode:             true,
@@ -103,8 +90,6 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 	assert.Equal(t, "debug", opts.LogLevel)
 	assert.Equal(t, "192.168.1.10", opts.Endpoint)
 	assert.Equal(t, constants.DefaultPKIDir+"/"+constants.PkiFileGatewayBundle, opts.TrustBundlePath)
-	assert.Equal(t, constants.DefaultOperatorKeyDesc, opts.PrivateKey)
-	assert.Equal(t, constants.DefaultOperatorCertDesc, opts.ClientCert)
 	assert.Equal(t, constants.DefaultDataDir, opts.WorkingDir)
 	assert.Equal(t, constants.DefaultPKIDir, opts.LaunchDir)
 	assert.True(t, opts.CloudMode)
@@ -124,8 +109,6 @@ func TestServeOperatorOptions_Equality(t *testing.T) {
 	a := ServeOperatorOptions{
 		LogLevel:       "info",
 		Endpoint:       constants.DefaultEndpoint,
-		PrivateKey:     constants.DefaultOperatorKeyDesc,
-		ClientCert:     constants.DefaultOperatorCertDesc,
 		WorkingDir:     constants.DefaultDataDir,
 		LaunchDir:      constants.DefaultPKIDir,
 		CloudMode:      false,
@@ -134,8 +117,6 @@ func TestServeOperatorOptions_Equality(t *testing.T) {
 	b := ServeOperatorOptions{
 		LogLevel:       "info",
 		Endpoint:       constants.DefaultEndpoint,
-		PrivateKey:     constants.DefaultOperatorKeyDesc,
-		ClientCert:     constants.DefaultOperatorCertDesc,
 		WorkingDir:     constants.DefaultDataDir,
 		LaunchDir:      constants.DefaultPKIDir,
 		CloudMode:      false,
@@ -150,15 +131,13 @@ func TestServeOperatorOptions_Equality(t *testing.T) {
 
 func TestServeOperatorOptions_PartialAssignment(t *testing.T) {
 	opts := ServeOperatorOptions{
-		LogLevel:   "info",
-		Endpoint:   "10.0.0.1",
-		PrivateKey: constants.DefaultOperatorKeyDesc,
+		LogLevel: "info",
+		Endpoint: "10.0.0.1",
 	}
 
 	assert.Equal(t, "info", opts.LogLevel)
 	assert.Equal(t, "10.0.0.1", opts.Endpoint)
-	assert.Equal(t, constants.DefaultOperatorKeyDesc, opts.PrivateKey)
-	assert.Equal(t, "", opts.ClientCert, "unassigned ClientCert should be zero value")
+	assert.Equal(t, "", opts.TrustBundlePath, "unassigned TrustBundlePath should be zero value")
 	assert.Equal(t, "", opts.WorkingDir, "unassigned WorkingDir should be zero value")
 	assert.Equal(t, "", opts.LaunchDir, "unassigned LaunchDir should be zero value")
 	assert.False(t, opts.CloudMode, "unassigned CloudMode should be false")
@@ -281,32 +260,6 @@ func TestResolveOperatorEndpoint_PreservesInternalWhitespace(t *testing.T) {
 		"only leading/trailing whitespace should be trimmed; internal whitespace preserved")
 }
 
-func TestBuildGatewayHTTPBaseURL(t *testing.T) {
-	tests := []struct {
-		name     string
-		endpoint string
-		httpPort int
-		expected string
-	}{
-		{"empty endpoint", "", 0, ""},
-		{"hostname only", "localhost", 0, "http://localhost:8080"},
-		{"hostname with port", "localhost:8081", 0, "http://localhost:8081"},
-		{"ip with port", "127.0.0.1:8443", 0, "http://127.0.0.1:8443"},
-		{"http scheme with port", "http://localhost:8081", 0, "http://localhost:8081"},
-		{"https scheme no port", "https://gateway.local", 0, "https://gateway.local"},
-		{"trailing slash removed", "http://localhost:8081/", 0, "http://localhost:8081"},
-		{"whitespace trimmed", "  localhost:8081  ", 0, "http://localhost:8081"},
-		{"configured port for bare host", "gateway.local", 9080, "http://gateway.local:9080"},
-		{"explicit endpoint port wins over configured port", "gateway.local:8081", 9080, "http://gateway.local:8081"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, buildGatewayHTTPBaseURL(tt.endpoint, tt.httpPort))
-		})
-	}
-}
-
 func TestResolveOperatorEndpoint_MixedWhitespaceTypes(t *testing.T) {
 	result := resolveOperatorEndpoint("\t\n\r  10.0.0.1  \r\n\t")
 	assert.Equal(t, "10.0.0.1", result)
@@ -361,8 +314,6 @@ func TestServeOperatorOptions_Equality_DifferInEachField(t *testing.T) {
 		LogLevel:          "info",
 		Endpoint:          constants.DefaultEndpoint,
 		TrustBundlePath:   constants.DefaultPKIDir + "/" + constants.PkiFileGatewayBundle,
-		PrivateKey:        constants.DefaultOperatorKeyDesc,
-		ClientCert:        constants.DefaultOperatorCertDesc,
 		WorkingDir:        constants.DefaultDataDir,
 		LaunchDir:         constants.DefaultPKIDir,
 		CloudMode:         true,
@@ -379,8 +330,6 @@ func TestServeOperatorOptions_Equality_DifferInEachField(t *testing.T) {
 		{"LogLevel", func(o *ServeOperatorOptions) { o.LogLevel = "debug" }},
 		{"Endpoint", func(o *ServeOperatorOptions) { o.Endpoint = "other" }},
 		{"TrustBundlePath", func(o *ServeOperatorOptions) { o.TrustBundlePath = "/other" }},
-		{"PrivateKey", func(o *ServeOperatorOptions) { o.PrivateKey = "/other" }},
-		{"ClientCert", func(o *ServeOperatorOptions) { o.ClientCert = "/other" }},
 		{"WorkingDir", func(o *ServeOperatorOptions) { o.WorkingDir = "/other" }},
 		{"LaunchDir", func(o *ServeOperatorOptions) { o.LaunchDir = "/other" }},
 		{"CloudMode", func(o *ServeOperatorOptions) { o.CloudMode = false }},
@@ -411,8 +360,6 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 		LogLevel:          "debug",
 		Endpoint:          "10.0.0.1",
 		TrustBundlePath:   constants.DefaultPKIDir + "/" + constants.PkiFileGatewayBundle,
-		PrivateKey:        constants.DefaultOperatorKeyDesc,
-		ClientCert:        constants.DefaultOperatorCertDesc,
 		WorkingDir:        constants.DefaultDataDir,
 		LaunchDir:         constants.DefaultPKIDir,
 		CloudMode:         true,

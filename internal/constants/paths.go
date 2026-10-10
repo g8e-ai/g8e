@@ -187,7 +187,6 @@ const (
 
 	// Pending platform enrollment state filenames (one per component,
 	// persisted under pki/pending-enrollment/ with 0600 permissions).
-	PendingEnrollmentFileOperator  = "g8eo.json"
 	PendingEnrollmentFileDashboard = "g8ed.json"
 	PendingEnrollmentFileEnsemble  = "g8ee.json"
 
@@ -452,11 +451,9 @@ const (
 
 // CLI default paths for config and help text (derived from primitives).
 const (
-	DefaultVaultDirDesc     = RuntimeDirname + "/" + VaultDirname
-	DefaultOperatorKeyDesc  = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorKey
-	DefaultClientKeyDesc    = RuntimeDirname + "/" + PkiDirname + "/" + CliKeyFilename
-	DefaultOperatorCertDesc = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorCert
-	DefaultClientCertDesc   = RuntimeDirname + "/" + PkiDirname + "/" + CliCertFilename
+	DefaultVaultDirDesc   = RuntimeDirname + "/" + VaultDirname
+	DefaultClientKeyDesc  = RuntimeDirname + "/" + PkiDirname + "/" + CliKeyFilename
+	DefaultClientCertDesc = RuntimeDirname + "/" + PkiDirname + "/" + CliCertFilename
 
 	DefaultDataDir    = RuntimeDirname + "/" + DataDirname
 	DefaultPKIDir     = RuntimeDirname + "/" + PkiDirname
