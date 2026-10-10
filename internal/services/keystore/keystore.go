@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -71,17 +72,32 @@ func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger, opts Options)
 	if fileSvc == nil {
 		return nil, fmt.Errorf("keystore: %w: runtime file service", constants.ErrMissingRequiredField)
 	}
+	masterKeyFile := strings.TrimSpace(opts.MasterKeyFile)
+	if masterKeyFile == "" {
+		masterKeyFile = strings.TrimSpace(os.Getenv(string(constants.EnvVar.MasterKeyFile)))
+	}
 	var keyring Keyring
 	var err error
-	if strings.TrimSpace(opts.MasterKeyFile) != "" {
-		keyring, err = newExternalFileKeyring(fileSvc, opts.MasterKeyFile)
+	if masterKeyFile != "" {
+		keyring, err = newExternalFileKeyring(fileSvc, masterKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("keystore: %w", err)
 		}
 	} else {
 		keyring, err = platformKeyring(fileSvc)
 		if err != nil {
-			return nil, fmt.Errorf("keystore: %w: %w (provision a master key with --master-key-file)", constants.ErrKeyStoreOSKeyringRequired, err)
+			if home, homeErr := os.UserHomeDir(); homeErr == nil {
+				defaultKeyPath := filepath.Join(home, ".g8e_master_key")
+				if info, statErr := os.Stat(defaultKeyPath); statErr == nil && !info.IsDir() {
+					if fileKeyring, fileErr := newExternalFileKeyring(fileSvc, defaultKeyPath); fileErr == nil {
+						keyring = fileKeyring
+						err = nil
+					}
+				}
+			}
+			if err != nil {
+				return nil, fmt.Errorf("keystore: %w: %w (provision a master key with --master-key-file)", constants.ErrKeyStoreOSKeyringRequired, err)
+			}
 		}
 	}
 	return &Keystore{

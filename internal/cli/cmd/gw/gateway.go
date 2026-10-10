@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -147,6 +148,17 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.VaultDir == "" {
 		f.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
+	}
+	if f.MasterKeyFile == "" {
+		f.MasterKeyFile = os.Getenv(string(constants.EnvVar.MasterKeyFile))
+	}
+	if f.MasterKeyFile == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			defaultKeyPath := filepath.Join(home, ".g8e_master_key")
+			if info, err := os.Stat(defaultKeyPath); err == nil && !info.IsDir() {
+				f.MasterKeyFile = defaultKeyPath
+			}
+		}
 	}
 	if f.ConsensusID == "" {
 		f.ConsensusID = os.Getenv(string(constants.EnvVar.ConsensusID))

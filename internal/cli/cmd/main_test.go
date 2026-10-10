@@ -219,7 +219,7 @@ func TestExecuteStderrErrorOutput(t *testing.T) {
 		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		rootCmd.SetArgs([]string{"invalid-command"})
-		err := rootCmd.Execute()
+		err := executeRootCmd(rootCmd)
 
 		require.Error(t, err)
 

@@ -64,6 +64,14 @@ func newLibsecretKeyring(run secretToolRunner) (Keyring, error) {
 	if err != nil && !errors.Is(err, constants.ErrKeyStoreKeyNotFound) {
 		return nil, err
 	}
+	if errors.Is(err, constants.ErrKeyStoreKeyNotFound) {
+		probeKey := "probe-session-check"
+		_, stderr, storeErr := run(strings.NewReader("probe"), "store", "--label=probe", keyStoreName, probeKey)
+		if storeErr != nil {
+			return nil, fmt.Errorf("%w: Secret Service not writable: %w: %s", constants.ErrKeyStoreSecretServiceDown, storeErr, strings.TrimSpace(string(stderr)))
+		}
+		_, _, _ = run(nil, "clear", keyStoreName, probeKey)
+	}
 	return k, nil
 }
 

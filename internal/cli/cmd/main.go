@@ -130,8 +130,15 @@ func ExecuteWithVersionInfo(vi serve.VersionInfo) {
 	rootCmd.SetOut(os.Stdout)
 	rootCmd.SetErr(os.Stderr)
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	if err := executeRootCmd(rootCmd); err != nil {
 		osExit(1)
 	}
+}
+
+func executeRootCmd(rootCmd *cobra.Command) error {
+	err := rootCmd.Execute()
+	if err != nil {
+		fmt.Fprintf(rootCmd.ErrOrStderr(), "Error: %v\n", err)
+	}
+	return err
 }
