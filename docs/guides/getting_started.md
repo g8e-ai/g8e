@@ -44,7 +44,7 @@ Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcomm
 
 ### Prerequisites
 
-- Go 1.26.6
+- Go 1.26.9
 - Make
 - Git
 - Node.js 22+ with npm (only to rebuild the Console or evaluation explorer; a fresh clone builds from the committed embeds)
@@ -70,7 +70,7 @@ Linux and macOS setup without `--build-only` also installs the contributor toolc
 ### Gateway-only track
 
 The Gateway-only track has no Python, Ollama, or model SDK requirement. It
-requires Git, Go 1.26.6, and Make. When `console/dist` and
+requires Git, Go 1.26.9, and Make. When `console/dist` and
 `evaluation-explorer/dist` are absent (a fresh clone), `make build` uses the
 committed Console and explorer embeds, so Node.js is not needed.
 Build and start the Gateway on localhost:
@@ -180,7 +180,7 @@ There are two ways to run g8e: **natively on your host** (compile and run direct
 
 | Requirement | Version | Notes |
 |---|---|---|
-| Go | 1.26.6 | Required to build from source |
+| Go | 1.26.9 | Required to build from source |
 | Make | Any recent | Required to run Makefile targets |
 | Git | Any recent | Required to clone the repository |
 | Node.js and npm | 22+ | Required only to rebuild the Console or evaluation explorer embeds; `make build` and `make up` use the committed embeds when `dist/` is absent |

@@ -69,7 +69,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 #### Prerequisites
 
-- **Go 1.26.6 or later**, as declared by the root Go module.
+- **Go 1.26.9 or later**, as declared by the root Go module.
 - **Make** on Linux and macOS. Windows builds use the repository's PowerShell workflow and still invoke Make.
 - **Node.js 22 or later** and **npm**, required by `make build` to build the Evaluation Explorer and Console embeds.
 - **PowerShell 7 or later (`pwsh`)** for the native Windows setup script.

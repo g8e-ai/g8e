@@ -67,7 +67,7 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-AIR-BUILD-01 | Native binary builds MUST use `GOTOOLCHAIN=local GOFLAGS=-mod=vendor` to ensure the checked-in vendor tree provides all dependencies. Go 1.26.6 must already be installed; automatic toolchain selection is prohibited. |
+| INV-AIR-BUILD-01 | Native binary builds MUST use `GOTOOLCHAIN=local GOFLAGS=-mod=vendor` to ensure the checked-in vendor tree provides all dependencies. Go 1.26.9 must already be installed; automatic toolchain selection is prohibited. |
 | INV-AIR-BUILD-02 | Container image builds on a connected host MUST complete fully (including `apt-get`, `pip`, and `npm` install steps) before transfer. Pre-pulling base images alone does not make Dockerfile builds offline. Final images MUST preserve exact repository names and tags for offline loading. |
 | INV-AIR-BUILD-03 | A source archive MUST include the committed Gateway frontend embeds. `make build` uses those embeds when local `dist/` trees are absent; release preparation rebuilds them explicitly. |
 | INV-AIR-BUILD-04 | `make test-airgap` verifies vendor tree presence and a vendored Go build, but does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. |
@@ -99,7 +99,7 @@ Three offline transfer models are supported:
 
 1. **Native binary**: Transfer a prebuilt `g8e` binary and its `.sha256` checksum sidecar for the target OS and architecture. No runtime compiler or build tools required. Simplest form factor for isolated hosts.
 
-2. **Offline source build**: Transfer the complete source tree including `vendor/`, the built evaluation-explorer asset, and a connected host where Go 1.26.6 is available. Allows rebuilds inside the air gap without external network access.
+2. **Offline source build**: Transfer the complete source tree including `vendor/`, the built evaluation-explorer asset, and a connected host where Go 1.26.9 is available. Allows rebuilds inside the air gap without external network access.
 
 3. **Container images**: Transfer fully built Docker images, `docker-compose.yml`, and the host-side `g8e` CLI. Enables multi-service deployments with automatic workload orchestration.
 
@@ -164,7 +164,7 @@ Build commands produce:
 - `make build`: Writes `bin/g8e-<os>-<arch>` (with `.exe` on Windows), a neighboring `.sha256` file, and copies the host binary to `./g8e`.
 - `make build-all`: Writes binaries and checksums for Linux (amd64, arm64, 386), Windows (amd64, arm64), and Darwin (amd64, arm64). Publishes `bin/g8e-binaries.json` only after the complete matrix validates.
 
-Go 1.26.6 must already be installed before running with `GOTOOLCHAIN=local`; this prevents Go from automatically downloading another toolchain version.
+Go 1.26.9 must already be installed before running with `GOTOOLCHAIN=local`; this prevents Go from automatically downloading another toolchain version.
 
 Transfer the target binary, its checksum, the complete manifest when using a full matrix, and any custom doctrine directory through the approved media-transfer process. Verify checksums from the directory containing the transferred artifacts:
 
@@ -282,7 +282,7 @@ This is a build and static-reference check. It does NOT verify container build o
 
 - Starting container builds with only base images pre-pulled, expecting Dockerfile package installs to work offline (INV-AIR-BUILD-02).
 - Building `make build` without first building the evaluation-explorer asset (INV-AIR-BUILD-03).
-- Using `GOTOOLCHAIN=auto` or installing Go 1.26.6 on-demand during offline builds; always use `GOTOOLCHAIN=local` with pre-installed toolchain (INV-AIR-BUILD-01).
+- Using `GOTOOLCHAIN=auto` or installing Go 1.26.9 on-demand during offline builds; always use `GOTOOLCHAIN=local` with pre-installed toolchain (INV-AIR-BUILD-01).
 - Configuring public LLM endpoints, identity providers, or MCP/A2A proxies inside the air gap (INV-AIR-ISO-02).
 - Relying on `make test-airgap` to prove offline runtime operation; verify network controls and endpoint configuration separately (INV-AIR-BUILD-04).
 - Storing vault backup keys separately from encrypted data; restore usability requires both (INV-AIR-RUNTIME-04).

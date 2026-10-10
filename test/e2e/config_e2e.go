@@ -13,7 +13,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
@@ -46,6 +48,48 @@ type e2eConfig struct {
 // check. A single GET to the gateway health endpoint must complete within this
 // window or the suite fails closed.
 const healthCheckTimeout = 10 * time.Second
+
+// Scenarios whose isolated Gateway listens on non-default ports (g8e test
+// scale) name them here; the suite and the CLI processes it starts then dial
+// those ports on localhost instead of the defaults.
+const (
+	e2eGatewayHTTPPortEnv  = "G8E_E2E_GATEWAY_HTTP_PORT"
+	e2eGatewayHTTPSPortEnv = "G8E_E2E_GATEWAY_HTTPS_PORT"
+)
+
+// e2eGatewayPorts returns the Gateway ports named by the environment, or
+// zeros when neither is set. Setting only one of them is an error.
+func e2eGatewayPorts() (httpPort, httpsPort int, err error) {
+	rawHTTP := strings.TrimSpace(os.Getenv(e2eGatewayHTTPPortEnv))
+	rawHTTPS := strings.TrimSpace(os.Getenv(e2eGatewayHTTPSPortEnv))
+	if rawHTTP == "" && rawHTTPS == "" {
+		return 0, 0, nil
+	}
+	parse := func(name, raw string) (int, error) {
+		port, err := strconv.Atoi(raw)
+		if err != nil || port < 1 || port > 65535 {
+			return 0, fmt.Errorf("%s must be a TCP port, got %q", name, raw)
+		}
+		return port, nil
+	}
+	if httpPort, err = parse(e2eGatewayHTTPPortEnv, rawHTTP); err != nil {
+		return 0, 0, err
+	}
+	if httpsPort, err = parse(e2eGatewayHTTPSPortEnv, rawHTTPS); err != nil {
+		return 0, 0, err
+	}
+	return httpPort, httpsPort, nil
+}
+
+// e2eGatewayEndpointArgs returns the global CLI flags that point a child g8e
+// process at the environment's Gateway ports, or nil for the defaults.
+func e2eGatewayEndpointArgs() ([]string, error) {
+	httpPort, httpsPort, err := e2eGatewayPorts()
+	if err != nil || httpPort == 0 {
+		return nil, err
+	}
+	return []string{"-e", net.JoinHostPort(constants.LocalhostHostname, strconv.Itoa(httpPort)), "-p", strconv.Itoa(httpsPort)}, nil
+}
 
 // loadE2EConfig resolves the repository root, loads CLI configuration from the
 // local .g8e/ runtime tree, and reads the owner CLI session ID from stored

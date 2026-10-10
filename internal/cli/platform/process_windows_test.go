@@ -331,7 +331,6 @@ func TestStopOperator_NoPIDFileSignalsNothing(t *testing.T) {
 	assert.Empty(t, mockExecutor.commandCalls, "StopOperator must not execute kill commands when no PID file exists")
 }
 
-
 func TestStopProcess_ZeroPID(t *testing.T) {
 	pm := &ProcessManager{}
 

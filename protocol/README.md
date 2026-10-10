@@ -6,7 +6,7 @@ The protocol directory contains the shared wire contracts, external constant reg
 
 ### Go
 
-The Go protocol packages are part of the root module `github.com/g8e-ai/g8e/v2`, which requires Go 1.26.6. Install the module with `go get github.com/g8e-ai/g8e/v2`. Import `github.com/g8e-ai/g8e/v2/protocol` for workload identity helpers or a generated package under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/.../v1` for protobuf messages and services.
+The Go protocol packages are part of the root module `github.com/g8e-ai/g8e/v2`, which requires Go 1.26.9. Install the module with `go get github.com/g8e-ai/g8e/v2`. Import `github.com/g8e-ai/g8e/v2/protocol` for workload identity helpers or a generated package under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/.../v1` for protobuf messages and services.
 
 ### Python
 

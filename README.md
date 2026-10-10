@@ -73,7 +73,7 @@ make up
 
 This builds the binary and starts the Gateway on localhost.
 
-This Gateway-only track needs Git, Go 1.26.6, and Make. Fresh clones use the committed Console and Evaluation Explorer embeds; Node.js 22+ and npm are needed only to rebuild those frontends. It has no Python, Ollama, or model SDK requirement.
+This Gateway-only track needs Git, Go 1.26.9, and Make. Fresh clones use the committed Console and Evaluation Explorer embeds; Node.js 22+ and npm are needed only to rebuild those frontends. It has no Python, Ollama, or model SDK requirement.
 For setup details, see the [Getting Started guide](docs/guides/getting_started.md#native-host-build).
 
 For interactive setup with the Operator roles and the first-party ensemble, use:

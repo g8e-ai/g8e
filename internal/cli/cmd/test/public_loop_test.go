@@ -21,4 +21,3 @@ func TestDefaultPublicLoopRoot_IsUnderLocalDevNeverTemp(t *testing.T) {
 	assert.Equal(t, filepath.Join(".local.dev", "public-loop", "2026-10-09T13-05-06Z"), root)
 	assert.False(t, filepath.IsAbs(root), "the default is relative to the working directory, not the OS temp directory")
 }
-

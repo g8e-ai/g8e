@@ -51,7 +51,7 @@ The reference implementation is the static `g8e` binary running in gateway mode.
 
 ### Prerequisites
 
-- **Go 1.26.6+** - Required for building the reference gateway. The root `go.mod` is authoritative; the Makefile may select a newer toolchain automatically unless `GOTOOLCHAIN=local` is set.
+- **Go 1.26.9+** - Required for building the reference gateway. The root `go.mod` is authoritative; the Makefile may select a newer toolchain automatically unless `GOTOOLCHAIN=local` is set.
 - **Make** - Required to run the root build targets.
 - **Node.js and npm** - Required by `make build`, which builds the Evaluation Explorer and Console and refreshes their committed embeds.
 - **Docker Engine and the Docker Compose plugin** - Required only for the container build and Compose deployment.

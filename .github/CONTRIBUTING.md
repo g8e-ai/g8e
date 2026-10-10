@@ -39,7 +39,7 @@ Look for issues labeled `first-run`, `good-first-task`, and `docs`. Experienced 
 
 Choose the smallest environment that fits your work:
 
-- **Gateway only:** clone the repository, then run `make up`. A native build needs Go 1.26.6 and Make. Fresh clones use the committed frontend embeds; Node.js 22+ and npm are needed only to rebuild the Console or Evaluation Explorer. Python, Ollama, and model SDKs are not needed for this track.
+- **Gateway only:** clone the repository, then run `make up`. A native build needs Go 1.26.9 and Make. Fresh clones use the committed frontend embeds; Node.js 22+ and npm are needed only to rebuild the Console or Evaluation Explorer. Python, Ollama, and model SDKs are not needed for this track.
 - **Full platform:** run `make ensemble-env` once, then `make full`. This
   provisions Python 3.12+ through `uv` and installs the Ensemble runtime
   dependencies. Use `make dev-python` when you also need Ensemble test and lint

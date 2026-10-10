@@ -30,6 +30,12 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
+// maxListResponseBytes bounds the operator registry listing, which grows with
+// fleet size (each Operator document carries its latest heartbeat) and with
+// retained stopped or stale registrations. A 500-Operator fleet alone exceeds
+// maxResponseBytes.
+const maxListResponseBytes = 64 << 20
+
 // dispatchRequestJSON is the typed JSON body for POST
 // /api/v1/operators/commands. Mirrors gateway.OperatorCommandRequest. Defined
 // locally to keep the E2E package decoupled from internal gateway types.

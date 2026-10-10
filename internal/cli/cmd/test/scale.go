@@ -664,7 +664,7 @@ func stopScaleWorker(ctx context.Context, pid int) {
 	if err != nil {
 		return // already gone (Windows opens a handle here)
 	}
-	defer proc.Release()
+	defer func() { _ = proc.Release() }()
 	if runtime.GOOS == "windows" {
 		_ = proc.Kill()
 		return

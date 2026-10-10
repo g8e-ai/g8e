@@ -48,7 +48,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
           check-latest: true
 
@@ -132,6 +132,9 @@ jobs:
 
       - name: Integration Tests
         run: make test-integration
+
+      - name: Enrollment burst timing contract
+        run: make test-enrollment-burst
 
       - name: Libsecret Keystore Tests (real D-Bus)
         run: |
@@ -240,7 +243,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
 
       - name: Set up Python
@@ -280,7 +283,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
 
       - name: Install go-licenses
@@ -344,7 +347,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
 
       - name: Pre-build Go gateway harness

@@ -263,6 +263,7 @@ help:
 		'  test                      Run unit and in-process integration tests' \
 		'  test-unit                 Run Tier 1 unit tests' \
 		'  test-integration          Run Tier 2 in-process integration tests' \
+		'  test-enrollment-burst     Run the enrollment timing contract without instrumentation' \
 		'  test-coverage             Run tests and enforce $(COVERAGE_THRESHOLD)% coverage (PKG=..., VERBOSE=true)' \
 		'  test-docker               Run Tier 3 Docker E2E tests' \
 		'  test-cross-enrollment     Run Tier 3 cross-enrollment E2E tests' \
@@ -823,6 +824,13 @@ test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
 	@go test $(if $(TEST_P),-p=$(TEST_P),) -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
 
+# Timing contracts run separately from race and coverage instrumentation.
+.PHONY: test-enrollment-burst
+test-enrollment-burst:
+	@echo "Running the uninstrumented enrollment burst timing contract..."
+	@go test -tags=integration $(TEST_COUNT) -timeout $(TEST_TIMEOUT) \
+		-run '^TestPlatformEnrollmentBurst$$' ./internal/services/gateway
+
 # Tier 3: Docker E2E Tests - requires a running platform.
 # Start the platform first (docker compose up or ./g8e gw start), approve all
 # enrollment requests, then run this target. The test binary connects to the
@@ -1309,6 +1317,7 @@ _ci-test: export G8E_STRICT_CONSTANTS_LINT := 1
 _ci-test:
 	@echo "=== unit tests ==="
 	@$(MAKE) test-unit
+	@$(MAKE) test-enrollment-burst
 	@echo "=== integration tests and coverage ==="
 	@$(MAKE) test-coverage
 

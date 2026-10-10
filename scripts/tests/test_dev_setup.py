@@ -98,9 +98,14 @@ fi
         )
 
     def run_make(self, target, *arguments):
+        # Native Windows Make cannot resolve /bin/bash. Select the same Bash
+        # used by the script tests and keep lookups inside the mocked tool PATH.
         return subprocess.run(
-            [MAKE, "--no-print-directory", target, "MAKE=make", *arguments],
-            cwd=self.root, env=self.env, capture_output=True, text=True, check=False,
+            [MAKE, "--no-print-directory", target, "MAKE=make",
+             f"SHELL={BASH}", ".SHELLFLAGS=--noprofile --norc -c",
+             f"PATH={self.env['PATH']}", *arguments],
+            cwd=self.root, env=self.env, capture_output=True, text=True,
+            encoding="utf-8", check=False,
         )
 
     def logged_calls(self):

@@ -134,7 +134,7 @@ All surfaces share the version recorded in `VERSION`. Go is versioned through ro
 
 ### Go protocol package and workload identity helpers
 
-The Go protocol package requires Go 1.26.6 or later and relies directly on `google.golang.org/grpc v1.84.0` and `google.golang.org/protobuf v1.36.12`.
+The Go protocol package requires Go 1.26.9 or later and relies directly on `google.golang.org/grpc v1.84.0` and `google.golang.org/protobuf v1.36.12`.
 
 SPIFFE workload identity generation and verification are implemented in `protocol/workload_identity.go` for the `g8e.local` trust domain (`protocol.TrustDomain`). Six workload identities are supported:
 
@@ -334,7 +334,7 @@ The target executes the following steps:
 
 #### CI release automation
 
-- **Platform Binary Pipeline (`release-binary.yml`)**: Triggered by `v*` tags. Builds cross-platform binaries using Go 1.26.6, generates SHA-256 checksums, signs assets with Cosign, and publishes GitHub releases.
+- **Platform Binary Pipeline (`release-binary.yml`)**: Triggered by `v*` tags. Builds cross-platform binaries using Go 1.26.9, generates SHA-256 checksums, signs assets with Cosign, and publishes GitHub releases.
 - **Python Protocol Pipeline (`release-python-protocol.yml`)**: Triggered by `protocol/v*` tags. Validates metadata with Python 3.14, bundles JSON constant registries into `protocol/python/g8e/_data/`, builds source distribution and wheels, publishes to PyPI via trusted publishing, and verifies cross-platform pip installation by polling the PyPI JSON API across Ubuntu, macOS, and Windows runners.
 
 ## Anti-patterns
